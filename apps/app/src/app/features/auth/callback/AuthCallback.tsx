@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchMeThunk, useAppDispatch } from '@org/store';
 import { PageLoader } from '@org/ui';
 import { toast } from 'sonner';
+import { consumeRedirectTarget } from '../redirect-target';
 
 export function AuthCallback() {
   const [params] = useSearchParams();
@@ -14,10 +15,10 @@ export function AuthCallback() {
     const method = params.get('method');
 
     if (status === 'authenticated') {
-      // Cookie is already set by the API — fetch user profile
       void dispatch(fetchMeThunk()).then(() => {
         toast.success(`Signed in with ${method ?? 'OAuth'}`);
-        navigate('/dashboard', { replace: true });
+        const next = consumeRedirectTarget() ?? '/dashboard';
+        navigate(next, { replace: true });
       });
     } else {
       toast.error('Authentication failed');

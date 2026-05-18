@@ -14,6 +14,11 @@ import { Login } from './features/auth/login/Login';
 import { Register } from './features/auth/register/Register';
 import { ResetPassword } from './features/auth/reset-password/ResetPassword';
 import { Dashboard } from './features/dashboard/Dashboard';
+import {
+  BuilderPage,
+  DocumentsList,
+  NewDocumentPicker,
+} from './features/documents';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -51,9 +56,21 @@ export function App() {
       >
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/documents" element={<DocumentsList />} />
+        <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Route>
+
+      {/* Builder runs full-bleed (no MainLayout) for max preview width. */}
+      <Route
+        path="/documents/:id/edit"
+        element={
+          <ProtectedRoute>
+            <BuilderPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

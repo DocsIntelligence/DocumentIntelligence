@@ -13,6 +13,10 @@ import { useForm } from 'react-hook-form';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { APP_ENV } from '../../../../config';
+import {
+  consumeRedirectTarget,
+  setRedirectTarget,
+} from '../redirect-target';
 
 const API_BASE_URL = APP_ENV.apiUrl;
 
@@ -29,15 +33,26 @@ export function Login() {
     formState: { errors },
   } = useForm<LoginDto>({ resolver: zodResolver(loginSchema) });
 
-  const target =
-    (location.state as { from?: { pathname: string } } | null)?.from
-      ?.pathname ?? '/dashboard';
+  // Mirror react-router's in-memory `from` into sessionStorage so OAuth
+  // round-trips (full-page navigation away and back) preserve it.
+  const fromState = (
+    location.state as { from?: { pathname: string; search?: string } } | null
+  )?.from;
+  if (fromState?.pathname) {
+    setRedirectTarget(
+      fromState.pathname + (fromState.search ?? ''),
+    );
+  }
+
+  function nextDestination(): string {
+    return consumeRedirectTarget() ?? '/dashboard';
+  }
 
   const onSubmit = handleSubmit(async (values) => {
     const result = await dispatch(loginThunk(values));
     if (loginThunk.fulfilled.match(result)) {
       toast.success('Welcome back!');
-      navigate(target, { replace: true });
+      navigate(nextDestination(), { replace: true });
     } else {
       toast.error('Invalid credentials');
     }
@@ -74,7 +89,7 @@ export function Login() {
       if (!verifyRes.ok) throw new Error('Verification failed');
 
       toast.success('Signed in with passkey!');
-      navigate(target, { replace: true });
+      navigate(nextDestination(), { replace: true });
     } catch (e: any) {
       if (e.name === 'NotAllowedError') {
         // User cancelled

@@ -6,49 +6,52 @@ import {
   Feature,
   FeatureAction,
 } from '@prisma/client';
+import { documentTypes } from './seed-data/document-types';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Free plan (inactive — assigned on wallet expiry)
+  // Free plan — currently unlimited for everyone (dev/MVP).
+  // Tighten quantities once pricing tiers go live. Wallet expiry is ~100 years
+  // out so users never roll off this plan automatically.
+  // upsert.update intentionally mirrors create so re-seeding picks up tier
+  // changes without manual cleanup; features are wiped + recreated via
+  // deleteMany to avoid drift from earlier seed shapes.
+  const freePlanFeatures = [
+    { name: Feature.documents, action: FeatureAction.reset, quantity: -1 },
+    { name: Feature.ai_tokens, action: FeatureAction.reset, quantity: -1 },
+    { name: Feature.ai_attempts, action: FeatureAction.reset, quantity: -1 },
+    { name: Feature.storage_mb, action: FeatureAction.reset, quantity: -1 },
+    { name: Feature.api_calls, action: FeatureAction.reset, quantity: -1 },
+  ];
+
   await prisma.plan.upsert({
     where: { id: 'free-plan' },
-    update: {},
+    update: {
+      name: 'Free',
+      description: 'Unlimited free access (MVP — pricing tiers TBD).',
+      type: PaymentType.one_time,
+      duration: 100,
+      interval: PlanInterval.yearly,
+      price: 0,
+      currency: Currency.INR,
+      active: true,
+      features: {
+        deleteMany: {},
+        create: freePlanFeatures,
+      },
+    },
     create: {
       id: 'free-plan',
       name: 'Free',
-      description: 'Basic access with limited features',
+      description: 'Unlimited free access (MVP — pricing tiers TBD).',
       type: PaymentType.one_time,
-      duration: 30,
-      interval: PlanInterval.daily,
+      duration: 100,
+      interval: PlanInterval.yearly,
       price: 0,
       currency: Currency.INR,
-      active: false,
-      features: {
-        create: [
-          { name: Feature.documents, action: FeatureAction.reset, quantity: 1 },
-          {
-            name: Feature.ai_tokens,
-            action: FeatureAction.reset,
-            quantity: 1000,
-          },
-          {
-            name: Feature.ai_attempts,
-            action: FeatureAction.reset,
-            quantity: 5,
-          },
-          {
-            name: Feature.storage_mb,
-            action: FeatureAction.reset,
-            quantity: 50,
-          },
-          {
-            name: Feature.api_calls,
-            action: FeatureAction.reset,
-            quantity: 100,
-          },
-        ],
-      },
+      active: true,
+      features: { create: freePlanFeatures },
     },
   });
 
@@ -150,6 +153,94 @@ async function main() {
     },
   });
 
+  // Starter Monthly (legal-docs entry tier)
+  await prisma.plan.upsert({
+    where: { id: 'starter-monthly' },
+    update: {},
+    create: {
+      id: 'starter-monthly',
+      name: 'Starter Monthly',
+      description:
+        'Up to 10 documents/month with AI assistance and basic sharing.',
+      type: PaymentType.subscription,
+      duration: 1,
+      interval: PlanInterval.monthly,
+      price: 199,
+      priceMultiplier: 100,
+      currency: Currency.INR,
+      active: true,
+      features: {
+        create: [
+          { name: Feature.documents, action: FeatureAction.reset, quantity: 10 },
+          {
+            name: Feature.ai_tokens,
+            action: FeatureAction.reset,
+            quantity: 20000,
+          },
+          {
+            name: Feature.ai_attempts,
+            action: FeatureAction.reset,
+            quantity: 100,
+          },
+          {
+            name: Feature.storage_mb,
+            action: FeatureAction.reset,
+            quantity: 200,
+          },
+          {
+            name: Feature.api_calls,
+            action: FeatureAction.reset,
+            quantity: 5000,
+          },
+        ],
+      },
+    },
+  });
+
+  // Agency Monthly (B2B: firms / agencies / advocates with clients)
+  await prisma.plan.upsert({
+    where: { id: 'agency-monthly' },
+    update: {},
+    create: {
+      id: 'agency-monthly',
+      name: 'Agency Monthly',
+      description:
+        'White-label, unlimited documents, marketplace publishing, seats add-on.',
+      type: PaymentType.subscription,
+      duration: 1,
+      interval: PlanInterval.monthly,
+      price: 2499,
+      priceMultiplier: 100,
+      currency: Currency.INR,
+      active: true,
+      features: {
+        create: [
+          { name: Feature.documents, action: FeatureAction.reset, quantity: -1 },
+          {
+            name: Feature.ai_tokens,
+            action: FeatureAction.reset,
+            quantity: -1,
+          },
+          {
+            name: Feature.ai_attempts,
+            action: FeatureAction.reset,
+            quantity: 5000,
+          },
+          {
+            name: Feature.storage_mb,
+            action: FeatureAction.reset,
+            quantity: 5000,
+          },
+          {
+            name: Feature.api_calls,
+            action: FeatureAction.reset,
+            quantity: -1,
+          },
+        ],
+      },
+    },
+  });
+
   console.log('✅ Plans seeded');
 
   // ─── Lookups ────────────────────────────────────────────────────────────
@@ -194,6 +285,69 @@ async function main() {
   }
 
   console.log('✅ Lookups seeded');
+
+  // ─── Document Types & Templates ────────────────────────────────────────
+  for (const type of documentTypes) {
+    const dt = await prisma.documentType.upsert({
+      where: { key: type.key },
+      update: {
+        name: type.name,
+        category: type.category,
+        description: type.description,
+        defaultPageSize: type.defaultPageSize,
+        jurisdictions: type.jurisdictions,
+        iconKey: type.iconKey,
+        sortOrder: type.sortOrder,
+        schema: type.schemaShape,
+        isActive: true,
+      },
+      create: {
+        key: type.key,
+        name: type.name,
+        category: type.category,
+        description: type.description,
+        defaultPageSize: type.defaultPageSize,
+        jurisdictions: type.jurisdictions,
+        iconKey: type.iconKey,
+        sortOrder: type.sortOrder,
+        schema: type.schemaShape,
+        isActive: true,
+      },
+    });
+
+    for (const tpl of type.templates) {
+      await prisma.documentTemplate.upsert({
+        where: {
+          documentTypeId_key: { documentTypeId: dt.id, key: tpl.key },
+        },
+        update: {
+          name: tpl.name,
+          componentKey: tpl.componentKey,
+          language: tpl.language,
+          jurisdictions: tpl.jurisdictions,
+          isPremium: tpl.isPremium ?? false,
+          isActive: true,
+        },
+        create: {
+          documentTypeId: dt.id,
+          key: tpl.key,
+          name: tpl.name,
+          componentKey: tpl.componentKey,
+          language: tpl.language,
+          jurisdictions: tpl.jurisdictions,
+          isPremium: tpl.isPremium ?? false,
+          isActive: true,
+          // system-owned: ownerType / ownerUserId / ownerOrgId left null
+        },
+      });
+    }
+
+    console.log(
+      `  ✓ DocumentType "${type.key}" with ${type.templates.length} template(s)`,
+    );
+  }
+
+  console.log('✅ Document types & templates seeded');
 }
 
 main()

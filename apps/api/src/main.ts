@@ -1,9 +1,10 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app/app.module';
 
@@ -28,11 +29,7 @@ async function bootstrap() {
   });
   app.use(helmet());
   app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new ZodValidationPipe());
   app.enableShutdownHooks();
 
   // ─── Swagger ────────────────────────────────────────────────────────────

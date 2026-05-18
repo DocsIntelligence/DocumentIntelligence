@@ -1,0 +1,8 @@
+{
+  "name": "@org/document-schema",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/document-schema/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {}
+}

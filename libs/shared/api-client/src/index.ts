@@ -1,3 +1,5 @@
 export * from './lib/http';
 export * from './lib/auth.service';
 export * from './lib/users.service';
+export * from './lib/documents.service';
+export * from './lib/legal-ai.service';

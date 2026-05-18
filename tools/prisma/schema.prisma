@@ -70,6 +70,64 @@ enum Currency {
   GBP
 }
 
+enum DocumentStatus {
+  draft
+  in_review
+  ready
+  signed
+  archived
+}
+
+enum DocumentOwnerType {
+  user
+  organisation
+}
+
+enum SignerRole {
+  party_a
+  party_b
+  witness
+  lawyer
+  custom
+}
+
+enum SignerStatus {
+  pending
+  invited
+  viewed
+  signed
+  declined
+}
+
+enum PageSize {
+  a4
+  legal
+  foolscap
+  stamp_paper_in_10
+  stamp_paper_in_20
+  stamp_paper_in_50
+  stamp_paper_in_100
+  stamp_paper_in_500
+}
+
+enum ShareMode {
+  view
+  comment
+  edit
+}
+
+enum OrgRole {
+  owner
+  admin
+  member
+}
+
+enum OrgType {
+  agency
+  law_firm
+  individual_lawyer
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // MODELS
 // ═══════════════════════════════════════════════════════════════════
@@ -77,17 +135,17 @@ enum Currency {
 // ─── User ──────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String    @unique
-  username      String    @unique
+  email         String   @unique
+  username      String   @unique
   picture       String?
-  provider      Provider  @default(email)
-  role          Role      @default(user)
-  emailVerified Boolean   @default(false)
-  locale        String    @default("en-US")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  provider      Provider @default(email)
+  role          Role     @default(user)
+  emailVerified Boolean  @default(false)
+  locale        String   @default("en-US")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
   secrets    Secrets?
@@ -96,22 +154,31 @@ model User {
   wallet     UserWallet?
   payments   Payment[]
 
+  // Documents domain
+  ownedDocuments    Document[]         @relation("DocumentOwnerUser")
+  documentVersions  DocumentVersion[]
+  documentShares    DocumentShare[]
+  documentComments  DocumentComment[]
+  orgMemberships    OrgMember[]
+  authoredTemplates DocumentTemplate[] @relation("TemplateAuthor")
+  brandingProfile   BrandingProfile?
+
   @@index([email])
 }
 
 // ─── Secrets (1:1 with User) ───────────────────────────────────
 
 model Secrets {
-  id                   String    @id @default(cuid())
-  userId               String    @unique
-  password             String?
-  refreshToken         String?
-  resetToken           String?
-  resetTokenExpiresAt  DateTime?
-  verificationToken    String?
-  lastSignedIn         DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  password            String?
+  refreshToken        String?
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  verificationToken   String?
+  lastSignedIn        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -292,19 +359,265 @@ model LookupValue {
 // ─── Mail Queue & Logs ─────────────────────────────────────────
 
 model MailLog {
-  id          String   @id @default(cuid())
-  to          String
-  subject     String
-  template    String?
-  body        String?
-  status      String   @default("queued") // "queued" | "sent" | "failed"
-  attempts    Int      @default(0)
-  error       String?
-  metadata    Json?
-  sentAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String    @id @default(cuid())
+  to        String
+  subject   String
+  template  String?
+  body      String?
+  status    String    @default("queued") // "queued" | "sent" | "failed"
+  attempts  Int       @default(0)
+  error     String?
+  metadata  Json?
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([status])
   @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DOCUMENTS DOMAIN
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── DocumentType ──────────────────────────────────────────────
+// Registry entry for a kind of legal document (e.g. rent_agreement, rti).
+// The actual form schema lives in libs/document-schema; the JSON column
+// stores a serialized snapshot for runtime-only validation contexts.
+
+model DocumentType {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  name            String
+  category        String
+  description     String?
+  schema          Json
+  defaultPageSize PageSize @default(a4)
+  jurisdictions   String[]
+  iconKey         String?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  templates DocumentTemplate[]
+  documents Document[]
+
+  @@index([category])
+}
+
+// ─── DocumentTemplate ──────────────────────────────────────────
+// One style/variant of a DocumentType. Multiple templates per type.
+
+model DocumentTemplate {
+  id             String             @id @default(cuid())
+  documentTypeId String
+  key            String
+  name           String
+  componentKey   String
+  thumbnailKey   String?
+  jurisdictions  String[]
+  language       String             @default("en")
+  styleTokens    Json?
+  isPremium      Boolean            @default(false)
+  isActive       Boolean            @default(true)
+  ownerType      DocumentOwnerType?
+  ownerUserId    String?
+  ownerOrgId     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  documentType DocumentType  @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  ownerUser    User?         @relation("TemplateAuthor", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerOrg     Organisation? @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
+  documents    Document[]
+
+  @@unique([documentTypeId, key])
+  @@index([ownerType, ownerUserId])
+  @@index([ownerType, ownerOrgId])
+}
+
+// ─── Document ──────────────────────────────────────────────────
+// A user's instance of a DocumentType. data is the validated form values.
+
+model Document {
+  id             String            @id @default(cuid())
+  title          String
+  status         DocumentStatus    @default(draft)
+  documentTypeId String
+  templateId     String
+  ownerType      DocumentOwnerType @default(user)
+  ownerUserId    String?
+  ownerOrgId     String?
+  data           Json
+  pageSize       PageSize          @default(a4)
+  language       String            @default("en")
+  jurisdiction   String?
+  lockedAt       DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  documentType DocumentType     @relation(fields: [documentTypeId], references: [id])
+  template     DocumentTemplate @relation(fields: [templateId], references: [id])
+  ownerUser    User?            @relation("DocumentOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerOrg     Organisation?    @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
+
+  versions DocumentVersion[]
+  shares   DocumentShare[]
+  signers  DocumentSigner[]
+  exports  DocumentExport[]
+  comments DocumentComment[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerOrgId, updatedAt])
+  @@index([documentTypeId])
+  @@index([status])
+}
+
+// ─── DocumentVersion ───────────────────────────────────────────
+// Immutable snapshot of Document.data at a point in time.
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  data        Json
+  templateId  String
+  pageSize    PageSize
+  label       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+}
+
+// ─── DocumentShare ─────────────────────────────────────────────
+
+model DocumentShare {
+  id           String    @id @default(cuid())
+  documentId   String
+  token        String    @unique
+  mode         ShareMode @default(view)
+  passwordHash String?
+  expiresAt    DateTime?
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+// ─── DocumentSigner ────────────────────────────────────────────
+
+model DocumentSigner {
+  id         String       @id @default(cuid())
+  documentId String
+  email      String?
+  name       String
+  role       SignerRole
+  status     SignerStatus @default(pending)
+  order      Int          @default(0)
+  provider   String? // "aadhaar_esign" | "draw" | "typed" | "dsc"
+  evidence   Json? // OTP txn id, certificate, IP, geolocation
+  signedAt   DateTime?
+  invitedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, order])
+  @@index([status])
+}
+
+// ─── DocumentExport ────────────────────────────────────────────
+
+model DocumentExport {
+  id         String   @id @default(cuid())
+  documentId String
+  format     String // "pdf" | "docx" | "png"
+  pageSize   PageSize
+  status     String   @default("pending") // "pending" | "ready" | "failed"
+  s3Key      String?
+  byteSize   Int?
+  checksum   String?
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt])
+}
+
+// ─── DocumentComment ───────────────────────────────────────────
+
+model DocumentComment {
+  id         String   @id @default(cuid())
+  documentId String
+  authorId   String?
+  authorName String
+  anchor     Json
+  body       String
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([documentId])
+}
+
+// ─── Organisation ──────────────────────────────────────────────
+
+model Organisation {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  type       OrgType  @default(agency)
+  brandingId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  members   OrgMember[]
+  branding  BrandingProfile?   @relation(fields: [brandingId], references: [id])
+  documents Document[]
+  templates DocumentTemplate[]
+
+  @@index([slug])
+}
+
+model OrgMember {
+  id     String  @id @default(cuid())
+  orgId  String
+  userId String
+  role   OrgRole @default(member)
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+}
+
+model BrandingProfile {
+  id               String   @id @default(cuid())
+  ownerUserId      String?  @unique
+  logoS3Key        String?
+  letterheadS3Key  String?
+  primaryColor     String?
+  footerText       String?
+  barCouncilNumber String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ownerUser    User?         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organisation Organisation?
 }

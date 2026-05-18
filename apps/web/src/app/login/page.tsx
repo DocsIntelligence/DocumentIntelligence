@@ -13,6 +13,7 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { SITE_NAME } from '../../lib/site';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { WEB_ENV } from '../../config';
@@ -181,7 +182,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">@org/web</h1>
+          <h1 className="text-2xl font-bold text-foreground">{SITE_NAME}</h1>
           <p className="text-sm text-foreground/60 mt-1">Welcome back</p>
         </div>
         <Suspense>

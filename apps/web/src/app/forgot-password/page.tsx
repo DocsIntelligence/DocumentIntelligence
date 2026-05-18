@@ -7,6 +7,7 @@ import { Button, Card, FormField, Input } from '@org/ui';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { SITE_NAME } from '../../lib/site';
 
 export default function ForgotPasswordPage() {
   const dispatch = useAppDispatch();
@@ -32,7 +33,7 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">@org/web</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{SITE_NAME}</h1>
           <p className="text-sm text-gray-500 mt-1">Password recovery</p>
         </div>
 

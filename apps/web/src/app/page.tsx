@@ -1,10 +1,11 @@
 import { cookies } from 'next/headers';
 import Link from 'next/link';
+import { SITE_NAME } from '../lib/site';
 import { AuthenticatedHome } from './authenticated-home';
 
 export const metadata = {
-  title: 'Welcome — @org',
-  description: 'Full-stack starter with cross-subdomain auth',
+  title: 'Welcome - NextJS',
+  description: 'Full-stack starter with cross-subdomain auth (public site).',
 };
 
 export default async function HomePage() {
@@ -19,7 +20,7 @@ export default async function HomePage() {
     <main className="min-h-screen flex flex-col items-center justify-center gap-10 p-8 bg-gradient-to-br from-primary/5 via-background to-secondary/10">
       <div className="text-center space-y-4">
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
-          @org/starter
+          {SITE_NAME}
         </h1>
         <p className="text-foreground/60 max-w-lg mx-auto text-lg leading-relaxed">
           Full-stack monorepo with NestJS API, Next.js landing, and React

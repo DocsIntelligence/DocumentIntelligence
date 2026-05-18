@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { SITE_NAME } from '../../lib/site';
 
 function ResetPasswordForm() {
   const params = useSearchParams();
@@ -83,7 +84,7 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">@org/web</h1>
+          <h1 className="text-2xl font-bold text-foreground">{SITE_NAME}</h1>
           <p className="text-sm text-foreground/60 mt-1">Password recovery</p>
         </div>
         <Suspense>

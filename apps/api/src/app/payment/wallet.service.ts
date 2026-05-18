@@ -46,6 +46,33 @@ export class WalletService {
     await this.createWallet(userId, freePlanId);
   }
 
+  /**
+   * Idempotent: if the user already has a wallet, leave it alone (never
+   * downgrade a paid user). Otherwise provision the free plan. Called on
+   * every signin so users created before pricing existed get a wallet on
+   * their next login.
+   *
+   * Best-effort: any error is logged and swallowed so a transient DB
+   * issue doesn't block signin.
+   */
+  async ensureFreeWallet(userId: string): Promise<void> {
+    try {
+      const existing = await this.db.userWallet.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (existing) return;
+      await this.activateFreeWallet(userId);
+      this.logger.debug(`Provisioned free wallet for user ${userId}`);
+    } catch (err) {
+      this.logger.warn(
+        `ensureFreeWallet failed for ${userId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
   async createWallet(userId: string, planId: string, paymentId?: string) {
     const plan = await this.db.plan.findUnique({
       where: { id: planId },

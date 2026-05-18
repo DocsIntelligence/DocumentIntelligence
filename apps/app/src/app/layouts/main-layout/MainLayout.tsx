@@ -7,6 +7,7 @@ import {
 } from '@org/store';
 import { UserAvatar } from '@org/ui';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { APP_ENV } from '../../../config';
 
 export function MainLayout() {
   const user = useAppSelector(selectUser);
@@ -39,7 +40,7 @@ export function MainLayout() {
             to="/dashboard"
             className="text-lg font-semibold text-foreground"
           >
-            @org/app
+            {APP_ENV.appName}
           </Link>
 
           {/* Profile dropdown */}
@@ -72,6 +73,13 @@ export function MainLayout() {
                     className="block px-4 py-2 text-sm text-foreground hover:bg-secondary/50 transition-colors"
                   >
                     Dashboard
+                  </Link>
+                  <Link
+                    to="/documents"
+                    onClick={() => setOpen(false)}
+                    className="block px-4 py-2 text-sm text-foreground hover:bg-secondary/50 transition-colors"
+                  >
+                    Documents
                   </Link>
                   <Link
                     to="/settings"

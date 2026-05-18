@@ -19,6 +19,7 @@ import { ErrorMessage } from '@org/utils';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { MailService } from '../mail/mail.service';
+import { WalletService } from '../payment/wallet.service';
 import { UsersService } from '../users/users.service';
 import type { JwtPayload } from './strategies/jwt';
 
@@ -31,6 +32,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
+    private readonly wallet: WalletService,
   ) {}
 
   async register(payload: RegisterDto): Promise<AuthResponse> {
@@ -96,6 +98,11 @@ export class AuthService {
   }
 
   private async issueTokens(user: User): Promise<AuthResponse> {
+    // Ensure every authenticating user has a wallet on the free plan.
+    // Idempotent; existing paid wallets are untouched. Best-effort:
+    // implementation logs and swallows errors so this never blocks signin.
+    await this.wallet.ensureFreeWallet(user.id);
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
