@@ -1,0 +1,6 @@
+{
+  "name": "transliteration",
+  "sourceRoot": "libs/shared/transliteration/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"]
+}

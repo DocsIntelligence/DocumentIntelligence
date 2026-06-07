@@ -10,19 +10,22 @@ import {
 import { PageSize } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { DatabaseService } from '../../database/database.service';
+import { PDF_RENDER_QUEUE } from './pdf-render.processor';
 import {
-  PDF_RENDER_QUEUE,
+  PdfRendererService,
   type PdfRenderJobPayload,
-} from './pdf-render.processor';
+} from './pdf-renderer.service';
 
 export const PDF_QUEUE_ENABLED = 'PDF_QUEUE_ENABLED';
 
 /**
- * Enqueues PDF export jobs and exposes status reads. If Redis isn't
- * configured, exports stay in "pending" forever — surface that to the
- * caller as a friendly error rather than silently dropping the job.
+ * Enqueues PDF export jobs and exposes status reads.
  *
- * The processor (pdf-render.processor.ts) handles the actual rendering.
+ *   REDIS_URL set     → enqueue on BullMQ, worker picks it up.
+ *   REDIS_URL not set → render inline via PdfRendererService, fire-and-
+ *                       forget. Status transitions exactly as in the
+ *                       queued case (pending → ready/failed), so the
+ *                       client polls the same way.
  */
 @Injectable()
 export class ExportsService {
@@ -33,6 +36,7 @@ export class ExportsService {
     @InjectQueue(PDF_RENDER_QUEUE)
     private readonly queue: Queue | null,
     @Inject(PDF_QUEUE_ENABLED) private readonly enabled: boolean,
+    private readonly renderer: PdfRendererService,
     private readonly db: DatabaseService,
   ) {}
 
@@ -55,16 +59,10 @@ export class ExportsService {
         documentId: doc.id,
         format: 'pdf',
         pageSize: targetPageSize,
-        status: this.enabled ? 'pending' : 'failed',
-        error: this.enabled
-          ? null
-          : 'PDF queue disabled: set REDIS_URL to enable exports.',
+        status: 'pending',
+        error: null,
       },
     });
-
-    if (!this.enabled || !this.queue) {
-      return exp;
-    }
 
     const payload: PdfRenderJobPayload = {
       exportId: exp.id,
@@ -73,13 +71,31 @@ export class ExportsService {
       componentKey: doc.template.componentKey,
     };
 
-    await this.queue.add('render', payload, {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 5000 },
-      removeOnComplete: 50,
-      removeOnFail: 200,
+    if (this.enabled && this.queue) {
+      await this.queue.add('render', payload, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 50,
+        removeOnFail: 200,
+      });
+      this.logger.debug(`Queued PDF render for export ${exp.id}`);
+      return exp;
+    }
+
+    // No Redis — kick off the render inline. We deliberately don't await:
+    // the HTTP response returns immediately with status='pending', and
+    // the client polls getExport() exactly as it does in the queued case.
+    // PdfRendererService writes the terminal status itself.
+    setImmediate(() => {
+      void this.renderer.render(payload).catch((e) => {
+        this.logger.error(
+          `Inline render failed for export ${exp.id}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      });
     });
-    this.logger.debug(`Queued PDF render for export ${exp.id}`);
+    this.logger.debug(`Rendering PDF inline for export ${exp.id} (no Redis)`);
     return exp;
   }
 

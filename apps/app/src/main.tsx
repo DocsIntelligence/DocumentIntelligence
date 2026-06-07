@@ -7,6 +7,7 @@ import {
   createUsersService,
 } from '@org/api-client';
 import { authActions, configureAppStore } from '@org/store';
+import { TooltipProvider } from '@org/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
@@ -71,12 +72,14 @@ root.render(
   <Provider store={store}>
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <ServicesProvider documents={documents} legalAi={legalAi}>
-          <BrowserRouter>
-            <App />
-            <Toaster richColors position="top-right" />
-          </BrowserRouter>
-        </ServicesProvider>
+        <TooltipProvider>
+          <ServicesProvider documents={documents} legalAi={legalAi}>
+            <BrowserRouter>
+              <App />
+              <Toaster richColors position="top-right" />
+            </BrowserRouter>
+          </ServicesProvider>
+        </TooltipProvider>
       </QueryClientProvider>
     </StrictMode>
   </Provider>,

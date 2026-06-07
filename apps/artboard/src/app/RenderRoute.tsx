@@ -62,7 +62,11 @@ export function RenderRoute() {
 
       try {
         if (dataParam) {
-          const json = JSON.parse(atob(dataParam));
+          // URL-encoded JSON (UTF-8 safe). Legacy callers that base64'd
+          // ASCII data still work because `decodeURIComponent` is a no-op
+          // on a clean base64 alphabet — but we recommend URL-encoded
+          // JSON going forward (set by pdf-renderer.service.ts).
+          const json = JSON.parse(decodeURIComponent(dataParam));
           if (!cancelled) setState({ data: json, pageSize });
           return;
         }
@@ -73,7 +77,7 @@ export function RenderRoute() {
 
         const apiBase =
           (import.meta as unknown as { env: Record<string, string> }).env
-            .VITE_API_URL ?? 'http://localhost:3000';
+            .VITE_API_URL ?? 'http://localhost:3000/api';
         const res = await fetch(
           `${apiBase}/documents/${encodeURIComponent(docId)}/render-payload`,
           {

@@ -7,14 +7,20 @@ export default defineConfig(() => ({
   cacheDir: '../../node_modules/.vite/apps/artboard',
   server: {
     port: 4210,
-    host: 'localhost',
+    host: true,
+    // Vite 5+ guards against DNS-rebinding by rejecting Host headers it
+    // doesn't recognise. The PDF render worker reaches us via Docker's
+    // host-gateway alias, so allow it explicitly. Adjust this list if
+    // you front the artboard with a different hostname in dev.
+    allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
     fs: {
       allow: [searchForWorkspaceRoot(process.cwd())],
     },
   },
   preview: {
     port: 4210,
-    host: 'localhost',
+    host: true,
+    allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
   },
   plugins: [react(), nxViteTsPaths()],
   build: {

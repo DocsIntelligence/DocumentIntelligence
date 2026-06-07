@@ -17,7 +17,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const status = useAppSelector(selectAuthStatus);
   const location = useLocation();
 
-  if (status === 'pending') {
+  // While the initial auth check is in progress (idle = not yet attempted,
+  // pending = request in flight), show a loader instead of redirecting.
+  if (status === 'idle' || status === 'pending') {
     return <PageLoader />;
   }
 

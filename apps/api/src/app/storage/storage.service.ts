@@ -9,8 +9,16 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 
 export interface UploadResult {
   key: string;
@@ -19,13 +27,31 @@ export interface UploadResult {
   contentType: string;
 }
 
+/**
+ * Storage abstraction with two backends:
+ *
+ *   S3      — when STORAGE_ENDPOINT/ACCESS_KEY/SECRET_KEY are set.
+ *             Production path. Uses presigned URLs.
+ *   Local   — fallback for dev. Writes to a directory on disk
+ *             (`STORAGE_LOCAL_ROOT`, default `.storage-local/` under
+ *             the API cwd). Downloads are served by the public
+ *             `/storage/local/{*key}` controller route.
+ *
+ * `isEnabled()` reports true in both modes — there's no longer a
+ * "storage disabled" state. Production-only code paths (presigned
+ * direct uploads from browser) still require S3 and will return a
+ * clear error if called in local mode.
+ */
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private client: S3Client | null = null;
   private readonly bucket: string;
   private readonly publicUrl: string;
-  private readonly enabled: boolean;
+  private readonly s3Enabled: boolean;
+  private readonly localRoot: string;
+  private readonly apiBaseUrl: string;
+  private readonly apiPrefix: string;
 
   constructor(private readonly config: ConfigService) {
     const endpoint = this.config.get<string>('STORAGE_ENDPOINT');
@@ -35,28 +61,45 @@ export class StorageService {
     this.publicUrl =
       this.config.get<string>('STORAGE_PUBLIC_URL') ?? endpoint ?? '';
 
-    this.enabled = Boolean(endpoint && accessKey && secretKey);
+    this.s3Enabled = Boolean(endpoint && accessKey && secretKey);
 
-    if (this.enabled) {
+    this.localRoot = resolve(
+      this.config.get<string>('STORAGE_LOCAL_ROOT') ??
+        join(process.cwd(), '.storage-local'),
+    );
+    this.apiBaseUrl =
+      this.config.get<string>('PUBLIC_URL') ?? 'http://localhost:3000';
+    this.apiPrefix = this.config.get<string>('GLOBAL_PREFIX') ?? 'api';
+
+    if (this.s3Enabled) {
       this.client = new S3Client({
         endpoint,
         region: this.config.get<string>('STORAGE_REGION') ?? 'us-east-1',
         credentials: { accessKeyId: accessKey!, secretAccessKey: secretKey! },
-        forcePathStyle: true, // Required for MinIO
+        forcePathStyle: true,
       });
-      this.logger.log(`Storage initialized (endpoint: ${endpoint})`);
+      this.logger.log(`Storage initialized (S3 endpoint: ${endpoint})`);
     } else {
-      this.logger.warn(
-        'Storage not configured — STORAGE_ENDPOINT/ACCESS_KEY/SECRET_KEY missing',
+      this.logger.log(
+        `Storage initialized (local fs at ${this.localRoot}). ` +
+          `Set STORAGE_ENDPOINT to switch to S3.`,
       );
     }
   }
 
   isEnabled(): boolean {
-    return this.enabled;
+    return true;
   }
 
-  /** Upload a file buffer */
+  /** Resolve a key to an absolute path under the local root, guarding against traversal. */
+  private localPath(key: string): string {
+    const target = resolve(this.localRoot, key);
+    if (!target.startsWith(this.localRoot + '/') && target !== this.localRoot) {
+      throw new BadRequestException('Invalid storage key');
+    }
+    return target;
+  }
+
   async upload(
     file: Buffer,
     options: {
@@ -66,38 +109,50 @@ export class StorageService {
       userId?: string;
     },
   ): Promise<UploadResult> {
-    if (!this.client) throw new BadRequestException('Storage not configured');
-
     const ext = extname(options.filename);
     const key = options.folder
       ? `${options.folder}/${randomUUID()}${ext}`
       : `${options.userId ?? 'public'}/${randomUUID()}${ext}`;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: file,
-        ContentType: options.contentType,
-      }),
-    );
+    if (this.client) {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: file,
+          ContentType: options.contentType,
+        }),
+      );
+      return {
+        key,
+        url: `${this.publicUrl}/${this.bucket}/${key}`,
+        size: file.length,
+        contentType: options.contentType,
+      };
+    }
 
+    // Local-fs branch.
+    const target = this.localPath(key);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, file);
     return {
       key,
-      url: `${this.publicUrl}/${this.bucket}/${key}`,
+      url: this.localDownloadUrl(key),
       size: file.length,
       contentType: options.contentType,
     };
   }
 
-  /** Get a presigned upload URL (client uploads directly to S3) */
   async getPresignedUploadUrl(
     key: string,
     contentType: string,
     expiresIn = 3600,
   ): Promise<{ url: string; key: string }> {
-    if (!this.client) throw new BadRequestException('Storage not configured');
-
+    if (!this.client) {
+      throw new BadRequestException(
+        'Presigned uploads require S3. Configure STORAGE_ENDPOINT.',
+      );
+    }
     const url = await getSignedUrl(
       this.client,
       new PutObjectCommand({
@@ -107,83 +162,149 @@ export class StorageService {
       }),
       { expiresIn },
     );
-
     return { url, key };
   }
 
-  /** Get a presigned download URL */
   async getPresignedDownloadUrl(
     key: string,
     expiresIn = 3600,
   ): Promise<string> {
-    if (!this.client) throw new BadRequestException('Storage not configured');
-
-    return getSignedUrl(
-      this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn },
-    );
-  }
-
-  /** Delete a file */
-  async delete(key: string): Promise<void> {
-    if (!this.client) throw new BadRequestException('Storage not configured');
-
-    await this.client.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
-    );
-    this.logger.debug(`Deleted: ${key}`);
-  }
-
-  /** Delete all files in a folder (e.g. user's folder) */
-  async deleteFolder(prefix: string): Promise<number> {
-    if (!this.client) throw new BadRequestException('Storage not configured');
-
-    const listed = await this.client.send(
-      new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix }),
-    );
-
-    const keys = listed.Contents?.map((obj) => obj.Key).filter(Boolean) ?? [];
-    for (const key of keys) {
-      await this.client.send(
-        new DeleteObjectCommand({ Bucket: this.bucket, Key: key! }),
+    if (this.client) {
+      return getSignedUrl(
+        this.client,
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+        { expiresIn },
       );
     }
-
-    this.logger.debug(`Deleted ${keys.length} objects in ${prefix}/`);
-    return keys.length;
+    // Local-fs branch: return the public streaming URL. No signing — dev
+    // only. Keys contain UUIDs so they're not trivially guessable.
+    return this.localDownloadUrl(key);
   }
 
-  /** Check if a file exists */
-  async exists(key: string): Promise<boolean> {
-    if (!this.client) return false;
-
-    try {
+  async delete(key: string): Promise<void> {
+    if (this.client) {
       await this.client.send(
-        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
       );
+      this.logger.debug(`Deleted: ${key}`);
+      return;
+    }
+    try {
+      await unlink(this.localPath(key));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+  }
+
+  async deleteFolder(prefix: string): Promise<number> {
+    if (this.client) {
+      const listed = await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix }),
+      );
+      const keys = listed.Contents?.map((obj) => obj.Key).filter(Boolean) ?? [];
+      for (const key of keys) {
+        await this.client.send(
+          new DeleteObjectCommand({ Bucket: this.bucket, Key: key! }),
+        );
+      }
+      this.logger.debug(`Deleted ${keys.length} objects in ${prefix}/`);
+      return keys.length;
+    }
+    // Local-fs branch.
+    const root = this.localPath(prefix);
+    let count = 0;
+    try {
+      const entries = await readdir(root, { withFileTypes: true });
+      for (const ent of entries) {
+        if (ent.isFile()) {
+          await unlink(join(root, ent.name));
+          count++;
+        }
+      }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+    return count;
+  }
+
+  async exists(key: string): Promise<boolean> {
+    if (this.client) {
+      try {
+        await this.client.send(
+          new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    try {
+      await stat(this.localPath(key));
       return true;
     } catch {
       return false;
     }
   }
 
-  /** List files in a folder */
   async list(prefix: string, maxKeys = 100) {
-    if (!this.client) throw new BadRequestException('Storage not configured');
+    if (this.client) {
+      const result = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          MaxKeys: maxKeys,
+        }),
+      );
+      return (result.Contents ?? []).map((obj) => ({
+        key: obj.Key!,
+        size: obj.Size ?? 0,
+        lastModified: obj.LastModified?.toISOString(),
+      }));
+    }
+    // Local-fs branch: walk the prefix directory.
+    const root = this.localPath(prefix);
+    const out: { key: string; size: number; lastModified?: string }[] = [];
+    try {
+      const entries = await readdir(root, { withFileTypes: true });
+      for (const ent of entries) {
+        if (out.length >= maxKeys) break;
+        if (!ent.isFile()) continue;
+        const full = join(root, ent.name);
+        const s = await stat(full);
+        out.push({
+          key: `${prefix.replace(/\/$/, '')}/${ent.name}`,
+          size: s.size,
+          lastModified: s.mtime.toISOString(),
+        });
+      }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+    return out;
+  }
 
-    const result = await this.client.send(
-      new ListObjectsV2Command({
-        Bucket: this.bucket,
-        Prefix: prefix,
-        MaxKeys: maxKeys,
-      }),
-    );
+  /**
+   * Read a stored object's bytes. Used by the local-fs download
+   * controller route. Refuses to leak files outside the local root.
+   */
+  async readBuffer(key: string): Promise<Buffer> {
+    if (this.client) {
+      throw new BadRequestException(
+        'readBuffer is only available in local-fs storage mode',
+      );
+    }
+    return readFile(this.localPath(key));
+  }
 
-    return (result.Contents ?? []).map((obj) => ({
-      key: obj.Key!,
-      size: obj.Size ?? 0,
-      lastModified: obj.LastModified?.toISOString(),
-    }));
+  /** True when running on the local-fs backend (used by the controller). */
+  isLocalBackend(): boolean {
+    return !this.client;
+  }
+
+  private localDownloadUrl(key: string): string {
+    const base = this.apiBaseUrl.replace(/\/$/, '');
+    const prefix = this.apiPrefix.replace(/^\//, '').replace(/\/$/, '');
+    const segments = key.split('/').map(encodeURIComponent).join('/');
+    return `${base}/${prefix}/storage/local/${segments}`;
   }
 }

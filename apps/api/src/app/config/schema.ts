@@ -89,6 +89,7 @@ export const envSchema = z.object({
   STORAGE_SECRET_KEY: z.string().min(1).optional(),
   STORAGE_BUCKET: z.string().min(1).optional(),
   STORAGE_PUBLIC_URL: z.string().url().optional(), // Public URL prefix for files
+  STORAGE_LOCAL_ROOT: z.string().min(1).optional(), // Dev-only: dir for local-fs fallback
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
