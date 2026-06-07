@@ -10,6 +10,7 @@ import {
 import { PageSize } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { DatabaseService } from '../../database/database.service';
+import { errorMessage } from '../../common/error.util';
 import { PDF_RENDER_QUEUE } from './pdf-render.processor';
 import {
   PdfRendererService,
@@ -89,9 +90,7 @@ export class ExportsService {
     setImmediate(() => {
       void this.renderer.render(payload).catch((e) => {
         this.logger.error(
-          `Inline render failed for export ${exp.id}: ${
-            e instanceof Error ? e.message : String(e)
-          }`,
+          `Inline render failed for export ${exp.id}: ${errorMessage(e)}`,
         );
       });
     });

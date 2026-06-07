@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { PageSizeKey } from './_internals/page-sizes';
 import { RentAgreementClassic } from './rent-agreement/classic';
+import { FreeformDocument } from './freeform';
 
 /**
  * Maps template `componentKey` (as stored on DocumentTemplate) to the
@@ -23,6 +24,8 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   // component lands. Replace when the bilingual template is implemented.
   'rent-agreement.bilingual':
     RentAgreementClassic as TemplateComponent<unknown>,
+  // Freeform / AI-drafted documents — editor HTML rendered to pages.
+  freeform: FreeformDocument as TemplateComponent<unknown>,
 };
 
 export function getTemplate<TData = unknown>(

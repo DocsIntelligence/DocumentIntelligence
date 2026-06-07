@@ -6,6 +6,7 @@ import type {
 } from './providers/ai-provider.interface';
 import { OpenAiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { ClaudeProvider } from './providers/claude.provider';
 
 @Injectable()
 export class AiService {
@@ -13,11 +14,12 @@ export class AiService {
   private readonly providers: AiProvider[];
 
   constructor(
+    private readonly claude: ClaudeProvider,
     private readonly openai: OpenAiProvider,
     private readonly gemini: GeminiProvider,
   ) {
-    // Priority order: OpenAI first, Gemini as fallback
-    this.providers = [openai, gemini];
+    // Priority order: Claude (default) → OpenAI → Gemini as fallbacks
+    this.providers = [claude, openai, gemini];
   }
 
   /** Get list of available providers */
@@ -33,7 +35,7 @@ export class AiService {
     const available = this.providers.filter((p) => p.isAvailable());
     if (available.length === 0) {
       throw new BadRequestException(
-        'No AI provider configured. Set OPENAI_API_KEY or GEMINI_API_KEY.',
+        'No AI provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.',
       );
     }
 

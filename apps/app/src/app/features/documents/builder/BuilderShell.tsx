@@ -5,7 +5,9 @@ import {
 import type { FieldClickEvent } from '@org/document-templates';
 import { useDebounce } from '@org/hooks';
 import { Button, Card } from '@org/ui';
+import { cn } from '@org/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useDocument, usePatchDocument } from '../queries';
 import { useLegalAiService } from '../services-context';
@@ -47,6 +49,8 @@ export function BuilderShell({ documentId }: Props) {
   const [aiBusyField, setAiBusyField] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null);
+  // Small screens show one pane at a time (form | preview); lg+ shows both.
+  const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form');
   const formRef = useRef<BuilderFormHandle | null>(null);
   const { state: exportState, start: startExport } = useExportPdf(documentId);
 
@@ -70,7 +74,6 @@ export function BuilderShell({ documentId }: Props) {
     setDraft(data);
     setDraftTitle(doc.title);
     lastSavedRef.current = JSON.stringify({ data, title: doc.title });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.id]);
 
   // Debounced autosave. Deps intentionally exclude `doc` and `patch` —
@@ -136,7 +139,7 @@ export function BuilderShell({ documentId }: Props) {
 
   if (isLoading || !doc) {
     return (
-      <div className="h-[calc(100vh-3.5rem)] flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center">
         <p className="text-foreground/60 text-sm">Loading document…</p>
       </div>
     );
@@ -144,8 +147,13 @@ export function BuilderShell({ documentId }: Props) {
 
   if (!bundle) {
     const key = doc.documentType?.key;
+    // Freeform / AI documents have no schema bundle — they live in the
+    // rich-text editor, not the structured builder. Send them there.
+    if (key === 'freeform') {
+      return <Navigate to={`/documents/${documentId}/draft`} replace />;
+    }
     return (
-      <div className="h-[calc(100vh-3.5rem)] flex items-center justify-center p-6">
+      <div className="h-screen flex items-center justify-center p-6">
         <Card className="rounded-xl p-6 max-w-lg">
           {key ? (
             <>
@@ -187,40 +195,72 @@ export function BuilderShell({ documentId }: Props) {
   }));
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col">
-      <header className="border-b bg-background px-4 py-2 flex items-center justify-between gap-4">
+    <div className="h-screen flex flex-col">
+      <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 sm:gap-3 sm:px-4">
+        <Link
+          to="/documents"
+          aria-label="Back to documents"
+          className="flex size-9 flex-none items-center justify-center rounded-md text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
+        >
+          <BackIcon />
+        </Link>
         <input
           value={draftTitle}
           onChange={(e) => setDraftTitle(e.target.value)}
-          className="flex-1 max-w-md text-base font-medium bg-transparent border-0 focus:outline-none focus:bg-foreground/5 rounded px-2 py-1"
+          className="min-w-0 flex-1 rounded px-2 py-1 text-base font-medium bg-transparent border-0 focus:bg-foreground/5 focus:outline-none"
           placeholder="Untitled document"
         />
-        <div className="flex items-center gap-2 text-xs text-foreground/50">
-          <span>
-            {patch.isPending
-              ? 'Saving…'
-              : patch.isError
-                ? 'Save failed'
-                : 'Saved'}
-          </span>
-          <Button variant="outline" size="sm" disabled>
-            Share
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              if (exportState.phase !== 'queued') void startExport();
-            }}
-            disabled={exportState.phase === 'queued'}
-          >
-            {exportState.phase === 'queued' ? 'Rendering…' : 'Export PDF'}
-          </Button>
+
+        {/* Mobile pane switcher */}
+        <div className="flex items-center rounded-lg border border-border p-0.5 lg:hidden">
+          {(['form', 'preview'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setMobileTab(t)}
+              className={cn(
+                'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors',
+                mobileTab === t
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-foreground/55 hover:text-foreground',
+              )}
+            >
+              {t}
+            </button>
+          ))}
         </div>
+
+        <span className="hidden items-center gap-1.5 text-xs text-foreground/50 sm:flex">
+          <span
+            className={cn(
+              'inline-block size-1.5 rounded-full',
+              patch.isPending
+                ? 'bg-amber-400'
+                : patch.isError
+                  ? 'bg-error'
+                  : 'bg-emerald-500',
+            )}
+          />
+          {patch.isPending ? 'Saving…' : patch.isError ? 'Save failed' : 'Saved'}
+        </span>
+        <Button variant="outline" size="sm" disabled className="hidden sm:inline-flex">
+          Share
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            if (exportState.phase !== 'queued') void startExport();
+          }}
+          disabled={exportState.phase === 'queued'}
+          className="flex-none"
+        >
+          {exportState.phase === 'queued' ? 'Rendering…' : 'Export PDF'}
+        </Button>
       </header>
 
-      <div className="flex-1 grid grid-cols-[200px_minmax(0,1fr)_minmax(0,1fr)] grid-rows-1 min-h-0">
-        {/* Left: sections + risks */}
-        <aside className="border-r bg-background/60 flex flex-col min-h-0">
+      <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Left: sections + risks (desktop only) */}
+        <aside className="hidden min-h-0 flex-col border-r border-border bg-background/60 lg:flex">
           <div className="flex-1 overflow-y-auto">
             <SectionsTree
               sections={sections}
@@ -248,7 +288,13 @@ export function BuilderShell({ documentId }: Props) {
         </aside>
 
         {/* Middle: form */}
-        <main className="bg-background min-h-0">
+        <main
+          className={cn(
+            'h-full min-h-0 bg-background',
+            mobileTab === 'form' ? 'block' : 'hidden',
+            'lg:block',
+          )}
+        >
           <BuilderForm
             ref={formRef}
             data={draft}
@@ -261,7 +307,13 @@ export function BuilderShell({ documentId }: Props) {
         </main>
 
         {/* Right: live preview */}
-        <section className="border-l min-h-0">
+        <section
+          className={cn(
+            'h-full min-h-0 bg-secondary/20 lg:border-l lg:border-border',
+            mobileTab === 'preview' ? 'block' : 'hidden',
+            'lg:block',
+          )}
+        >
           <ArtboardIframe
             componentKey={doc.template?.key ? mapTemplateToComponent(doc) : 'rent-agreement.classic'}
             data={draft}
@@ -340,4 +392,21 @@ function mapTemplateToComponent(doc: {
   if (tk === 'rent-bilingual') return 'rent-agreement.bilingual';
   // Generic fallback: assume "<docType>.<templateKey>".
   return `${dt}.${tk}`;
+}
+
+function BackIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
 }

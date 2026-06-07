@@ -26,6 +26,8 @@ export type FieldWidget =
   | 'pan'
   | 'pincode'
   | 'address'
+  | 'boolean'
+  | 'inventory'
   | 'partyBlock'
   | 'witnessBlock'
   | 'lookup';

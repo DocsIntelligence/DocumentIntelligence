@@ -6,15 +6,44 @@ import {
 } from '@nestjs/common';
 import { Feature } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import { requireBundle, type PromptDefinition } from '@org/document-schema';
+import {
+  requireBundle,
+  getBundle,
+  type PromptDefinition,
+} from '@org/document-schema';
 import { AiService } from '../ai/ai.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
-import type { ClauseRewriteDto, RuleSuggestDto } from './legal-ai.dto';
+import type {
+  ClauseRewriteDto,
+  RuleSuggestDto,
+  GenerateDocumentDto,
+  ReviseDocumentDto,
+} from './legal-ai.dto';
 
 const DISCLAIMER =
   '\n\n— AI-suggested. Review with a qualified advocate before binding use.';
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Cross-document drafting guardrails. The model NEVER authors statute section
+// numbers — a curated citation library fills those later (see docs). It also
+// must not impersonate a court. Output is editor-ready HTML with {{placeholders}}.
+const GENERATE_SYSTEM = `You are an expert Indian legal document drafter. Produce a clean, professional, ready-to-edit document as semantic HTML.
+
+Rules:
+- Output ONLY the document body as HTML (use h1, h2, h3, p, ol, ul, li, strong, em). No markdown, no <html>/<head>/<body> wrappers, and no code fences.
+- For any party-specific or fill-in value you do not know (names, addresses, dates, amounts, etc.), insert a placeholder token of the form {{snake_case_key}} — e.g. {{landlord_name}}, {{monthly_rent}}, {{agreement_date}}. Reuse the same key whenever the same value recurs.
+- Insert <div data-page-break></div> between major sections that should begin on a new page.
+- Do NOT cite specific statute section numbers or case law. Where a legal reference is needed, write the neutral placeholder {{applicable_law}} — a qualified human inserts the correct citation.
+- Never impersonate a court or issue a judicial order.
+- Indian context: use ₹ for currency, Indian date conventions, and Indian legal drafting style.`;
+
+const REVISE_SYSTEM = `You are editing an existing Indian legal document supplied as HTML. Apply the user's instruction and return the COMPLETE updated document as HTML, preserving everything the instruction does not change.
+
+Rules:
+- Keep existing {{placeholder}} tokens intact unless the instruction is specifically to fill or change them.
+- Output ONLY the HTML document body — no code fences, no commentary, no explanation.
+- Same drafting rules as generation: no statute section numbers (use {{applicable_law}}), Indian context, page breaks via <div data-page-break></div>.`;
 
 interface CacheEntry {
   text: string;
@@ -58,6 +87,95 @@ export class LegalAiService {
       city: dto.city,
       existingRules: dto.existingRules.join('; ') || 'none',
     });
+  }
+
+  // ─── Whole-document drafting (feeds the freeform editor) ─────────────────
+
+  /** Draft a complete document as editor-ready HTML from a natural-language brief. */
+  async generateDocument(
+    userId: string,
+    dto: GenerateDocumentDto,
+  ): Promise<{
+    html: string;
+    model: string;
+    cached: boolean;
+    placeholders: string[];
+    disclaimer: string;
+  }> {
+    const bundle = dto.documentTypeKey
+      ? getBundle(dto.documentTypeKey)
+      : undefined;
+    let system = GENERATE_SYSTEM;
+    if (bundle) {
+      system += `\n\nThis document is a "${bundle.key}". Typical sections (guidance — adapt to the brief): ${bundle.sectionOrder.join(', ')}.`;
+    }
+    const userMessage =
+      (dto.title ? `Title: ${dto.title}\n` : '') +
+      `Output language: ${dto.language}\n\nBrief:\n${dto.brief}`;
+
+    const { html, model, cached } = await this.generateHtml(
+      userId,
+      system,
+      userMessage,
+      `gen:${dto.documentTypeKey ?? 'freeform'}`,
+    );
+    return {
+      html,
+      model,
+      cached,
+      placeholders: extractPlaceholders(html),
+      disclaimer: DISCLAIMER.trim(),
+    };
+  }
+
+  /** Apply a natural-language instruction to an existing document's HTML. */
+  async reviseDocument(
+    userId: string,
+    dto: ReviseDocumentDto,
+  ): Promise<{ html: string; model: string; cached: boolean; placeholders: string[] }> {
+    const bundle = dto.documentTypeKey
+      ? getBundle(dto.documentTypeKey)
+      : undefined;
+    let system = REVISE_SYSTEM;
+    if (bundle) system += `\n\nDocument type: "${bundle.key}".`;
+    const userMessage = `Instruction:\n${dto.instruction}\n\nCurrent document HTML:\n${dto.html}`;
+
+    const { html, model, cached } = await this.generateHtml(
+      userId,
+      system,
+      userMessage,
+      `rev:${dto.documentTypeKey ?? 'freeform'}`,
+    );
+    return { html, model, cached, placeholders: extractPlaceholders(html) };
+  }
+
+  /** Shared HTML-generation path: quota → cache → AI → strip fences → meter. */
+  private async generateHtml(
+    userId: string,
+    system: string,
+    userMessage: string,
+    seed: string,
+  ): Promise<{ html: string; model: string; cached: boolean }> {
+    const ok = await this.walletUsage.checkQuota(userId, Feature.ai_attempts);
+    if (!ok) {
+      throw new ForbiddenException(
+        'AI quota exhausted. Upgrade your plan for more AI attempts.',
+      );
+    }
+
+    const cacheKey = hashKey(seed, 'v1', `${system}\n${userMessage}`);
+    const cachedHtml = this.readCache(cacheKey);
+    if (cachedHtml) return { html: cachedHtml, model: 'cached', cached: true };
+
+    const res = await this.ai.generate(userMessage, {
+      systemPrompt: system,
+      maxTokens: 16000,
+    });
+    const html = stripCodeFences(res.text).trim();
+
+    this.writeCache(cacheKey, html);
+    await this.walletUsage.trackUsage(userId, Feature.ai_attempts, 1);
+    return { html, model: res.model, cached: false };
   }
 
   // ─── Core ──────────────────────────────────────────────────────────────
@@ -144,4 +262,27 @@ function fillPlaceholders(
 
 function hashKey(id: string, version: string, input: string): string {
   return createHash('sha256').update(`${id}|${version}|${input}`).digest('hex');
+}
+
+/** Strip a leading ```lang fence and trailing ``` that some models wrap output in. */
+function stripCodeFences(s: string): string {
+  return s
+    .trim()
+    .replace(/^```[a-zA-Z]*\s*\n?/, '')
+    .replace(/\n?```\s*$/, '');
+}
+
+/** Pull every {{key}} from an HTML string. Order preserved, duplicates removed. */
+function extractPlaceholders(html: string): string[] {
+  const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      out.push(m[1]);
+    }
+  }
+  return out;
 }

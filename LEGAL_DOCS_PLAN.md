@@ -1,5 +1,12 @@
 # Legal Documents Platform — Plan & Market Analysis
 
+> ⚠️ **Superseded / extended by [`docs/`](docs/) as of 2026-06-07.** This original plan is now
+> ~70% implemented. For the *current* state, refreshed market analysis, and the next-phase roadmap
+> (AI document **generation/update**, **court documents**, **multi-format export**, **Claude
+> integration**), start at [`docs/README.md`](docs/README.md) and
+> [`docs/04-progress-tracker.md`](docs/04-progress-tracker.md). This file is kept as the founding
+> strategy record.
+
 Reference: MyLiveCV (`/Users/anu/Desktop/PersonalProjects/ResumeBuilder/MyLiveCV`)
 Target codebase: this Nx workspace (`apps/api` NestJS, `apps/app` React/Vite SPA, `apps/web` Next.js landing, Prisma/Postgres, BullMQ, S3, Razorpay, LangChain OpenAI + Gemini).
 

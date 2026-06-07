@@ -81,6 +81,8 @@ export const envSchema = z.object({
   OPENAI_MODEL: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_MODEL: z.string().min(1).optional(), // default: claude-opus-4-8
 
   // ── Storage: S3-compatible (optional — warn if missing)
   STORAGE_ENDPOINT: z.string().url().optional(),
@@ -133,6 +135,7 @@ const OPTIONAL_GROUPS = [
   { name: 'Redis (Queue)', fields: ['REDIS_URL'] },
   { name: 'OpenAI', fields: ['OPENAI_API_KEY'] },
   { name: 'Gemini', fields: ['GEMINI_API_KEY'] },
+  { name: 'Anthropic (Claude)', fields: ['ANTHROPIC_API_KEY'] },
   {
     name: 'Storage (S3)',
     fields: [

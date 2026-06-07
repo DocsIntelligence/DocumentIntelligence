@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import puppeteer, { type Browser } from 'puppeteer-core';
 import { DatabaseService } from '../../database/database.service';
 import { StorageService } from '../../storage/storage.service';
+import { errorMessage, errorDetail } from '../../common/error.util';
 
 export interface PdfRenderJobPayload {
   exportId: string;
@@ -118,8 +119,10 @@ export class PdfRendererService {
         `✓ Exported document ${documentId} (${(buffer.byteLength / 1024).toFixed(1)} KB)`,
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      this.logger.error(`✗ Render failed for ${documentId}: ${msg}`);
+      const msg = errorMessage(e);
+      // Log the full error (stack / deep inspect) so non-Error rejections
+      // from the browser transport or SDKs aren't swallowed.
+      this.logger.error(`✗ Render failed for ${documentId}: ${msg}`, errorDetail(e));
       await this.fail(exportId, msg);
       throw e;
     } finally {
@@ -160,11 +163,22 @@ export class PdfRendererService {
             token,
           )}`
         : chromeUrl;
-      const browser = await puppeteer.connect({
-        browserWSEndpoint: endpoint,
-        acceptInsecureCerts:
-          process.env.CHROME_IGNORE_HTTPS_ERRORS === 'true',
-      });
+      let browser: Browser;
+      try {
+        browser = await puppeteer.connect({
+          browserWSEndpoint: endpoint,
+          acceptInsecureCerts:
+            process.env.CHROME_IGNORE_HTTPS_ERRORS === 'true',
+        });
+      } catch (e) {
+        // puppeteer.connect to a dead/refusing WS endpoint can reject with a
+        // non-Error transport object — wrap it so the stored message is useful.
+        throw new Error(
+          `Could not connect to headless browser at ${chromeUrl} — is the Browserless/Chrome endpoint (CHROME_URL) running and reachable? (${errorMessage(
+            e,
+          )})`,
+        );
+      }
       return { browser, dispose: () => browser.disconnect() };
     }
 
@@ -175,16 +189,25 @@ export class PdfRendererService {
       );
     }
     const extraArgs = parseLaunchArgs(process.env.PUPPETEER_LAUNCH_ARGS);
-    const browser = await puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        ...extraArgs,
-      ],
-    });
+    let browser: Browser;
+    try {
+      browser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          ...extraArgs,
+        ],
+      });
+    } catch (e) {
+      throw new Error(
+        `Could not launch local Chromium at ${executablePath} (PUPPETEER_EXECUTABLE_PATH) — is the binary present? (${errorMessage(
+          e,
+        )})`,
+      );
+    }
     return { browser, dispose: () => browser.close() };
   }
 

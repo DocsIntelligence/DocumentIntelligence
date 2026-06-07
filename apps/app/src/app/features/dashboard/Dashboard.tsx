@@ -1,72 +1,230 @@
 import { selectUser, useAppSelector } from '@org/store';
-import { Card, UserAvatar } from '@org/ui';
+import { Button, Card } from '@org/ui';
+import { cn } from '@org/utils';
+import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useDocumentList } from '../documents/queries';
+import { documentHref } from '../documents/document-href';
 
 export function Dashboard() {
   const user = useAppSelector(selectUser);
+  const { data: docs, isLoading } = useDocumentList();
+  const recent = (docs ?? []).slice(0, 5);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Greeting */}
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
-        <p className="text-foreground/60 mt-1">Welcome back, {user?.name}</p>
-      </div>
-
-      {/* Profile card */}
-      <Card className="rounded-xl p-6">
-        <div className="flex items-center gap-4">
-          <UserAvatar name={user?.name} src={user?.picture} size="lg" />
-          <div>
-            <p className="font-medium text-foreground">{user?.name}</p>
-            <p className="text-sm text-foreground/60">{user?.email}</p>
-            <p className="text-xs text-foreground/40">@{user?.username}</p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="rounded-xl p-5">
-          <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
-            Role
-          </p>
-          <p className="text-lg font-semibold text-foreground mt-1 capitalize">
-            {user?.role}
-          </p>
-        </Card>
-        <Card className="rounded-xl p-5">
-          <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
-            Member since
-          </p>
-          <p className="text-lg font-semibold text-foreground mt-1">
-            {user?.createdAt
-              ? new Date(user.createdAt).toLocaleDateString()
-              : '—'}
-          </p>
-        </Card>
-        <Card className="rounded-xl p-5">
-          <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
-            Email verified
-          </p>
-          <p className="text-lg font-semibold text-foreground mt-1">
-            {user?.emailVerified ? '✓ Yes' : '✗ No'}
-          </p>
-        </Card>
-      </div>
-
-      {/* Placeholder content */}
-      <Card className="rounded-xl p-6">
-        <h3 className="font-medium text-foreground mb-2">Getting Started</h3>
-        <p className="text-sm text-foreground/60 leading-relaxed">
-          This is your dashboard. The React app runs at{' '}
-          <code className="text-xs bg-secondary/50 px-1.5 py-0.5 rounded">
-            dashboard.xyz.com
-          </code>{' '}
-          in production and handles all authenticated functionality. Add your
-          features here.
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {greeting()}
+          {user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+        </h1>
+        <p className="mt-1 text-foreground/60">
+          Draft, edit, and export legal documents — with AI assistance.
         </p>
-      </Card>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <ActionCard
+          to="/documents/new"
+          accent
+          icon={<SparklesIcon />}
+          title="Draft with AI"
+          desc="Describe what you need in plain English and get a full draft."
+        />
+        <ActionCard
+          to="/editor"
+          icon={<PenIcon />}
+          title="Blank editor"
+          desc="Write from scratch with transliteration and live preview."
+        />
+        <ActionCard
+          to="/documents"
+          icon={<DocsIcon />}
+          title="My documents"
+          desc="Open, export, and manage your drafts and signed copies."
+        />
+      </div>
+
+      {/* Recent documents */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Recent</h2>
+          {recent.length > 0 && (
+            <Link
+              to="/documents"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              View all
+            </Link>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                className="h-[88px] animate-pulse rounded-xl bg-secondary/40"
+              />
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <Card className="rounded-xl border-dashed p-8 text-center">
+            <p className="text-foreground/70">No documents yet.</p>
+            <p className="mt-1 text-sm text-foreground/50">
+              Start with a rent agreement, RTI, legal notice — or an AI draft.
+            </p>
+            <Button asChild className="mt-4">
+              <Link to="/documents/new">Create your first document</Link>
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {recent.map((d) => (
+              <Link
+                key={d.id}
+                to={documentHref(d)}
+                className="group rounded-xl border border-border bg-background p-4 transition-all hover:border-primary/40 hover:shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[11px] font-medium uppercase tracking-wide text-foreground/50">
+                    {d.documentType?.name ?? 'Document'}
+                  </span>
+                  <StatusPill status={d.status} />
+                </div>
+                <p className="mt-1 truncate font-medium text-foreground group-hover:text-primary">
+                  {d.title || 'Untitled'}
+                </p>
+                <p className="mt-0.5 text-xs text-foreground/45">
+                  Updated {new Date(d.updatedAt).toLocaleDateString()}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
 export default Dashboard;
+
+// ─── pieces ──────────────────────────────────────────────────────────────
+
+function ActionCard({
+  to,
+  icon,
+  title,
+  desc,
+  accent,
+}: {
+  to: string;
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  accent?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'group flex flex-col rounded-xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md',
+        accent
+          ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
+          : 'border-border bg-background hover:border-primary/30',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-flex size-9 items-center justify-center rounded-lg',
+          accent
+            ? 'bg-primary/15 text-primary'
+            : 'bg-secondary/60 text-foreground/70 group-hover:text-primary',
+        )}
+      >
+        {icon}
+      </span>
+      <p className="mt-3 font-semibold text-foreground">{title}</p>
+      <p className="mt-1 text-sm text-foreground/55">{desc}</p>
+    </Link>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone: Record<string, string> = {
+    draft: 'bg-amber-100 text-amber-800',
+    in_review: 'bg-blue-100 text-blue-800',
+    ready: 'bg-emerald-100 text-emerald-800',
+    signed: 'bg-emerald-100 text-emerald-800',
+    archived: 'bg-foreground/10 text-foreground/60',
+  };
+  return (
+    <span
+      className={cn(
+        'flex-none rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+        tone[status] ?? 'bg-foreground/10 text-foreground/60',
+      )}
+    >
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+// ─── icons ───────────────────────────────────────────────────────────────
+
+function SparklesIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+      <path d="M19 14l.9 2.7 2.7.9-2.7.9-.9 2.7-.9-2.7-2.7-.9 2.7-.9.9-2.7z" />
+    </svg>
+  );
+}
+function PenIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
+function DocsIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}

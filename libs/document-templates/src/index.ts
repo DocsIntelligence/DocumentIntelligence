@@ -24,3 +24,4 @@ export {
 export { TemplateRenderer } from './TemplateRenderer';
 
 export { RentAgreementClassic } from './rent-agreement/classic';
+export { FreeformDocument, type FreeformData } from './freeform';

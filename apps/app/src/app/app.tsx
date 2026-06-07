@@ -19,7 +19,7 @@ import {
   DocumentsList,
   NewDocumentPicker,
 } from './features/documents';
-import { EditorDemo } from './features/editor';
+import { EditorDemo, DraftEditorPage } from './features/editor';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -60,11 +60,26 @@ export function App() {
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/editor" element={<EditorDemo />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Route>
 
-      {/* Builder runs full-bleed (no MainLayout) for max preview width. */}
+      {/* Editors run full-bleed (no app shell) for max working area. */}
+      <Route
+        path="/editor"
+        element={
+          <ProtectedRoute>
+            <EditorDemo />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/documents/:id/draft"
+        element={
+          <ProtectedRoute>
+            <DraftEditorPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/documents/:id/edit"
         element={

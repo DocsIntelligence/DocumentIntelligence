@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -17,6 +19,9 @@ import {
   PLACEHOLDER_HIGHLIGHT_META,
   extractPlaceholderKeys,
   renderTemplateHtml,
+  TransliterationExtension,
+  type TransliterationState,
+  SuggestionPopover,
 } from '@org/ui';
 import { TransliterationProvider, useTransliteration } from '@org/transliteration';
 import { cn } from '@org/utils';
@@ -29,20 +34,110 @@ import { PaginatedPreview } from './components/PaginatedPreview';
 import { PageNavigator } from './components/PageNavigator';
 import { TEMPLATES, getTemplateById } from './templates/registry';
 import type { DocumentTemplate, PlaceholderDef } from './templates/types';
+import { downloadWordDoc } from './export-word';
 
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
+const DRAFT_KEY = 'legaldraft:editor:draft:v1';
 
-function TemplateEditorInner() {
-  const { enabled } = useTransliteration();
-  const initialTemplate = useMemo(
-    () => getTemplateById(DEFAULT_TEMPLATE_ID) ?? TEMPLATES[0],
-    [],
-  );
-  const [template, setTemplate] = useState<DocumentTemplate>(initialTemplate);
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    seedValues(initialTemplate.placeholders),
-  );
-  const [html, setHtml] = useState<string>(initialTemplate.html);
+/** Snapshot of editor state handed to persistence callbacks. */
+export type EditorDraftState = {
+  templateId: string;
+  title: string;
+  html: string;
+  values: Record<string, string>;
+};
+
+/**
+ * Where the editor reads/writes its working draft.
+ *  - `local`: localStorage (the `/editor` scratchpad — survives refresh, no login coupling).
+ *  - `bound`: a backend Document (the `/documents/:id/draft` route) — autosaves via `onSave`.
+ */
+export type EditorPersistence =
+  | { mode: 'local' }
+  | {
+      mode: 'bound';
+      initial: {
+        templateId?: string;
+        title?: string;
+        html: string;
+        values: Record<string, string>;
+      };
+      onSave: (s: EditorDraftState) => void;
+      savedAt?: number | null;
+      saving?: boolean;
+    };
+
+export interface TemplateEditorProps {
+  persistence?: EditorPersistence;
+  /** When set, the top bar shows a back link to this route. */
+  backHref?: string;
+  /** Local mode only — renders a "Save to my documents" action when provided. */
+  onSaveToCloud?: (s: EditorDraftState) => void;
+  savingToCloud?: boolean;
+  /** When provided, a "Draft with AI" action prompts for a brief and replaces the document. */
+  onAiGenerate?: (brief: string) => Promise<{ html: string; disclaimer?: string }>;
+  /** When provided, a "Revise with AI" action applies an instruction to the current HTML. */
+  onAiRevise?: (instruction: string, html: string) => Promise<{ html: string }>;
+  /** When provided, the PDF button uses this (the reliable backend export) instead of window.print. */
+  onExportPdf?: () => void;
+  exportingPdf?: boolean;
+}
+
+function TemplateEditorInner({
+  persistence,
+  backHref,
+  onSaveToCloud,
+  savingToCloud,
+  onAiGenerate,
+  onAiRevise,
+  onExportPdf,
+  exportingPdf,
+}: {
+  persistence: EditorPersistence;
+  backHref?: string;
+  onSaveToCloud?: (s: EditorDraftState) => void;
+  savingToCloud?: boolean;
+  onAiGenerate?: (brief: string) => Promise<{ html: string; disclaimer?: string }>;
+  onAiRevise?: (instruction: string, html: string) => Promise<{ html: string }>;
+  onExportPdf?: () => void;
+  exportingPdf?: boolean;
+}) {
+  const { enabled, language } = useTransliteration();
+  const bound = persistence.mode === 'bound';
+  // Recover any in-progress local draft (local mode only).
+  const restored = useMemo(() => (bound ? null : loadDraft()), [bound]);
+  // Initial seed is computed once — useState ignores later changes to `init`.
+  const init = useMemo<{
+    template: DocumentTemplate;
+    values: Record<string, string>;
+    html: string;
+    savedAt: number | null;
+  }>(() => {
+    if (persistence.mode === 'bound') {
+      const t =
+        getTemplateById(persistence.initial.templateId ?? '') ??
+        synthesizeTemplate(persistence.initial);
+      return {
+        template: t,
+        values: persistence.initial.values,
+        html: persistence.initial.html,
+        savedAt: persistence.savedAt ?? null,
+      };
+    }
+    const t =
+      getTemplateById(restored?.templateId ?? DEFAULT_TEMPLATE_ID) ??
+      TEMPLATES[0];
+    return {
+      template: t,
+      values: restored?.values ?? seedValues(t.placeholders),
+      html: restored?.html ?? t.html,
+      savedAt: restored?.savedAt ?? null,
+    };
+  }, []);
+  const [template, setTemplate] = useState<DocumentTemplate>(init.template);
+  const [values, setValues] = useState<Record<string, string>>(init.values);
+  const [html, setHtml] = useState<string>(init.html);
+  const [savedAt, setSavedAt] = useState<number | null>(init.savedAt);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'fields' | 'pages'>('fields');
   const [showPreview, setShowPreview] = useState(true);
@@ -57,6 +152,27 @@ function TemplateEditorInner() {
     setSidebarTab('fields');
     requestAnimationFrame(() => formRef.current?.focusField(key));
   }, []);
+
+  // --- Transliteration (type in English, get Indic script) ---
+  const [translitState, setTranslitState] =
+    useState<TransliterationState | null>(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+
+  const handleSuggestions = useCallback((state: TransliterationState) => {
+    setTranslitState({ ...state });
+    const container = editorScrollRef.current;
+    const sel = window.getSelection();
+    if (container && sel && sel.rangeCount > 0) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      setPopoverPosition({
+        top: rect.bottom - cRect.top + container.scrollTop + 4,
+        left: rect.left - cRect.left + container.scrollLeft,
+      });
+    }
+  }, []);
+
+  const handleDismissSuggestions = useCallback(() => setTranslitState(null), []);
 
   const editor: Editor | null = useEditor({
     extensions: [
@@ -75,8 +191,15 @@ function TemplateEditorInner() {
         values: {},
         onTokenClick: handleTokenClick,
       }),
+      TransliterationExtension.configure({
+        language,
+        enabled,
+        debounceMs: 150,
+        onSuggestions: handleSuggestions,
+        onDismiss: handleDismissSuggestions,
+      }),
     ],
-    content: initialTemplate.html,
+    content: init.html,
     onUpdate: ({ editor: ed }) => {
       setHtml(ed.getHTML());
     },
@@ -101,6 +224,92 @@ function TemplateEditorInner() {
     }
   }, [editor, values]);
 
+  // Keep the transliteration extension's live state in sync with the toolbar.
+  useEffect(() => {
+    if (!editor) return;
+    const ext = editor.extensionManager.extensions.find(
+      (e) => e.name === 'transliteration',
+    );
+    if (ext) {
+      const state = ext.storage.state as TransliterationState;
+      state.enabled = enabled;
+      state.language = language;
+    }
+    if (!enabled) setTranslitState(null);
+  }, [editor, enabled, language]);
+
+  const handleSuggestionSelect = useCallback(
+    (suggestion: string) => {
+      if (!editor) return;
+      const ext = editor.extensionManager.extensions.find(
+        (e) => e.name === 'transliteration',
+      );
+      if (ext) {
+        const state = ext.storage.state as TransliterationState;
+        editor
+          .chain()
+          .focus()
+          .deleteRange({
+            from: state.bufferStart,
+            to: state.bufferStart + state.buffer.length,
+          })
+          .insertContentAt(state.bufferStart, suggestion)
+          .run();
+        state.buffer = '';
+        state.bufferStart = 0;
+        state.suggestions = [];
+        state.showSuggestions = false;
+        state.selectedIndex = 0;
+      }
+      setTranslitState(null);
+    },
+    [editor],
+  );
+
+  // One-time notice if we recovered a draft from a previous visit.
+  useEffect(() => {
+    if (restored) {
+      toast.message('Restored your last draft', {
+        description: 'Your in-progress document was recovered from this browser.',
+      });
+    }
+  }, []);
+
+  // Stable ref to the latest persistence config so the autosave effect depends
+  // ONLY on content — avoids a re-save loop when the parent re-renders.
+  const persistenceRef = useRef(persistence);
+  persistenceRef.current = persistence;
+  const skipFirstSave = useRef(true);
+
+  // Debounced autosave: localStorage (local) or the backend `onSave` (bound).
+  useEffect(() => {
+    if (skipFirstSave.current) {
+      skipFirstSave.current = false;
+      return;
+    }
+    const p = persistenceRef.current;
+    const t = setTimeout(() => {
+      if (p.mode === 'bound') {
+        p.onSave({ templateId: template.id, title: template.name, html, values });
+      } else {
+        const now = Date.now();
+        saveDraft({ templateId: template.id, html, values, savedAt: now });
+        setSavedAt(now);
+      }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [template.id, template.name, html, values]);
+
+  // Bound mode: reflect the parent-reported save time in the status bar.
+  const boundSavedAt =
+    persistence.mode === 'bound' ? persistence.savedAt ?? null : null;
+  useEffect(() => {
+    if (persistence.mode === 'bound') setSavedAt(boundSavedAt);
+  }, [persistence.mode, boundSavedAt]);
+
+  const isSaving =
+    persistence.mode === 'bound' ? !!persistence.saving : !!savingToCloud;
+
   const loadTemplate = useCallback(
     (t: DocumentTemplate) => {
       setTemplate(t);
@@ -116,15 +325,65 @@ function TemplateEditorInner() {
 
   const handleGenerate = useCallback(async () => {
     if (!editor) return;
-    // Simulate an AI generation by re-loading the current template's html.
-    toast.message('Generating draft...');
-    await new Promise((r) => setTimeout(r, 800));
+    // Fallback when no AI provider is wired: re-seed from the template.
+    toast.message('Reloading template...');
+    await new Promise((r) => setTimeout(r, 400));
     editor.commands.setContent(template.html);
     setHtml(template.html);
     setValues(seedValues(template.placeholders));
     setActivePage(0);
-    toast.success('Draft generated');
+    toast.success('Template reloaded');
   }, [editor, template]);
+
+  const [aiBusy, setAiBusy] = useState(false);
+
+  const handleAiGenerate = useCallback(async () => {
+    if (!editor || !onAiGenerate) return;
+    const brief = window.prompt(
+      'Describe the document you want to draft (e.g. "Rent agreement, landlord Ramesh, tenant Priya, 2BHK Pune, ₹25,000/mo, 11-month term").',
+    );
+    if (!brief?.trim()) return;
+    setAiBusy(true);
+    toast.message('Drafting with AI…');
+    try {
+      const { html: out, disclaimer } = await onAiGenerate(brief.trim());
+      editor.commands.setContent(out);
+      setHtml(out);
+      setValues({});
+      setActivePage(0);
+      toast.success(
+        'Draft generated',
+        disclaimer ? { description: disclaimer } : undefined,
+      );
+    } catch {
+      toast.error('AI generation failed. Check your AI provider / quota.');
+    } finally {
+      setAiBusy(false);
+    }
+  }, [editor, onAiGenerate]);
+
+  const handleAiRevise = useCallback(async () => {
+    if (!editor || !onAiRevise) return;
+    const instruction = window.prompt(
+      'How should the AI revise this document? (e.g. "make the deposit 2 months", "add a no-pets clause", "make it more tenant-friendly")',
+    );
+    if (!instruction?.trim()) return;
+    setAiBusy(true);
+    toast.message('Revising with AI…');
+    try {
+      const { html: out } = await onAiRevise(instruction.trim(), html);
+      editor.commands.setContent(out);
+      setHtml(out);
+      setActivePage(0);
+      toast.success('Document revised', {
+        description: 'Press Ctrl/Cmd+Z to undo if needed.',
+      });
+    } catch {
+      toast.error('AI revision failed. Check your AI provider / quota.');
+    } finally {
+      setAiBusy(false);
+    }
+  }, [editor, onAiRevise, html]);
 
   const handleInsertPlaceholder = useCallback(() => {
     if (!editor) return;
@@ -237,17 +496,15 @@ function TemplateEditorInner() {
     }
   }, [html, values]);
 
-  const handleDownload = useCallback(() => {
-    const rendered = renderTemplateHtml(html, values);
-    const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeAttr(template.name)}</title><style>${PRINT_CSS}</style></head><body>${rendered}</body></html>`;
-    const blob = new Blob([fullHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${slugify(template.name)}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [html, values, template]);
+  const handleExportWord = useCallback(() => {
+    downloadWordDoc({
+      filename: template.name,
+      title: template.name,
+      html,
+      values,
+    });
+    toast.success('Word document downloaded');
+  }, [template.name, html, values]);
 
   const handlePrint = useCallback(() => {
     const rendered = renderTemplateHtml(html, values);
@@ -277,10 +534,19 @@ function TemplateEditorInner() {
   }, [template, discoveredKeys]);
 
   return (
-    <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-secondary/10">
+    <div className="flex h-screen flex-col overflow-hidden bg-secondary/10">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
+          {backHref && (
+            <Link
+              to={backHref}
+              aria-label="Back"
+              className="flex size-8 flex-none items-center justify-center rounded text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
+            >
+              <BackIcon />
+            </Link>
+          )}
           <div className="flex size-8 flex-none items-center justify-center rounded bg-secondary/60 text-lg">
             {template.icon}
           </div>
@@ -304,15 +570,59 @@ function TemplateEditorInner() {
             <GalleryIcon />
             Templates
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGenerate}
-            className="gap-1.5 text-xs"
-          >
-            <SparklesIcon />
-            Regenerate
-          </Button>
+          {persistence.mode === 'local' && onSaveToCloud && (
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={isSaving}
+              onClick={() =>
+                onSaveToCloud({
+                  templateId: template.id,
+                  title: template.name,
+                  html,
+                  values,
+                })
+              }
+              className="gap-1.5 text-xs"
+            >
+              <CloudIcon />
+              Save to my documents
+            </Button>
+          )}
+          {onAiGenerate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={aiBusy}
+              onClick={handleAiGenerate}
+              className="gap-1.5 text-xs"
+            >
+              <SparklesIcon />
+              Draft with AI
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerate}
+              className="gap-1.5 text-xs"
+            >
+              <SparklesIcon />
+              Reload template
+            </Button>
+          )}
+          {onAiRevise && (
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={aiBusy}
+              onClick={handleAiRevise}
+              className="gap-1.5 text-xs"
+            >
+              <SparklesIcon />
+              Revise with AI
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -325,20 +635,33 @@ function TemplateEditorInner() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleDownload}
+            onClick={handleExportWord}
             className="gap-1.5 text-xs"
           >
             <DownloadIcon />
-            Download
+            Word
           </Button>
-          <Button
-            size="sm"
-            onClick={handlePrint}
-            className="gap-1.5 text-xs"
-          >
-            <PrintIcon />
-            Print / PDF
-          </Button>
+          {onExportPdf ? (
+            <Button
+              size="sm"
+              isLoading={exportingPdf}
+              onClick={onExportPdf}
+              className="gap-1.5 text-xs"
+            >
+              <PrintIcon />
+              Export PDF
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              className="gap-1.5 text-xs"
+            >
+              <PrintIcon />
+              Print
+            </Button>
+          )}
           <Tooltip content={showPreview ? 'Hide preview' : 'Show preview'}>
             <Button
               variant={showPreview ? 'primary' : 'outline'}
@@ -352,9 +675,16 @@ function TemplateEditorInner() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <Group orientation="horizontal" className="flex-1">
         {/* Left sidebar */}
-        <aside className="flex w-[300px] flex-none flex-col border-r border-border bg-background">
+        <Panel
+          id="sidebar"
+          defaultSize="22%"
+          minSize="15%"
+          maxSize="36%"
+          className="min-w-0"
+        >
+        <aside className="flex h-full w-full flex-col border-r border-border bg-background">
           <Tabs
             value={sidebarTab}
             onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
@@ -413,14 +743,20 @@ function TemplateEditorInner() {
             </div>
           </Tabs>
         </aside>
+        </Panel>
+
+        <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+          <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+        </Separator>
 
         {/* Editor pane */}
-        <section
-          className={cn(
-            'flex flex-col overflow-hidden border-r border-border bg-background',
-            showPreview ? 'flex-1 min-w-0' : 'flex-1',
-          )}
+        <Panel
+          id="editor"
+          defaultSize={showPreview ? '40%' : '78%'}
+          minSize="28%"
+          className="min-w-0"
         >
+        <section className="flex h-full flex-col overflow-hidden bg-background">
           {editor && (
             <EditorToolbar
               editor={editor}
@@ -430,11 +766,20 @@ function TemplateEditorInner() {
           )}
           <div
             ref={editorScrollRef}
-            className="flex-1 overflow-y-auto bg-background"
+            className="relative flex-1 overflow-y-auto bg-background"
           >
             <div className="mx-auto max-w-3xl px-8 py-6">
               <EditorContent editor={editor} />
             </div>
+            {translitState && (
+              <SuggestionPopover
+                suggestions={translitState.suggestions}
+                selectedIndex={translitState.selectedIndex}
+                onSelect={handleSuggestionSelect}
+                visible={translitState.showSuggestions}
+                position={popoverPosition}
+              />
+            )}
           </div>
           <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
             <span>
@@ -444,16 +789,37 @@ function TemplateEditorInner() {
                 : 0}{' '}
               words · Page {activePage + 1}
             </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  'inline-block size-1.5 rounded-full',
+                  savedAt ? 'bg-emerald-500' : 'bg-amber-400',
+                )}
+              />
+              {isSaving
+                ? 'Saving…'
+                : savedAt
+                ? `${bound ? 'Saved to cloud' : 'Saved'} ${formatTime(savedAt)}`
+                : bound
+                ? 'Saving…'
+                : 'Not saved yet'}
+            </span>
           </div>
         </section>
+        </Panel>
 
         {/* Preview pane */}
         {showPreview && (
-          <section className="flex w-[46%] min-w-[420px] flex-none overflow-y-auto">
-            <PaginatedPreview html={html} values={values} className="flex-1" />
-          </section>
+          <>
+            <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+              <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+            </Separator>
+            <Panel id="preview" defaultSize="38%" minSize="20%" className="min-w-0">
+              <PaginatedPreview html={html} values={values} className="h-full" />
+            </Panel>
+          </>
         )}
-      </div>
+      </Group>
 
       <TemplateGallery
         open={galleryOpen}
@@ -465,15 +831,91 @@ function TemplateEditorInner() {
   );
 }
 
-export function TemplateEditor() {
+export function TemplateEditor({
+  persistence = { mode: 'local' },
+  backHref,
+  onSaveToCloud,
+  savingToCloud,
+  onAiGenerate,
+  onAiRevise,
+  onExportPdf,
+  exportingPdf,
+}: TemplateEditorProps = {}) {
   return (
     <TransliterationProvider defaultLanguage="hi" defaultEnabled={false}>
-      <TemplateEditorInner />
+      <TemplateEditorInner
+        persistence={persistence}
+        backHref={backHref}
+        onSaveToCloud={onSaveToCloud}
+        savingToCloud={savingToCloud}
+        onAiGenerate={onAiGenerate}
+        onAiRevise={onAiRevise}
+        onExportPdf={onExportPdf}
+        exportingPdf={exportingPdf}
+      />
     </TransliterationProvider>
   );
 }
 
 // --- helpers ---
+
+/** A backend doc (or AI draft) may not map to a gallery template — wrap its
+ * HTML in a minimal template so the editor can render it. Discovered {{keys}}
+ * still surface in the Fields panel as custom fields. */
+function synthesizeTemplate(init: {
+  templateId?: string;
+  title?: string;
+  html: string;
+}): DocumentTemplate {
+  return {
+    id: init.templateId ?? 'freeform',
+    name: init.title ?? 'Document',
+    description: '',
+    category: 'Document',
+    icon: '📄',
+    html: init.html,
+    placeholders: [],
+  };
+}
+
+type DraftData = {
+  templateId: string;
+  html: string;
+  values: Record<string, string>;
+  savedAt: number;
+};
+
+function loadDraft(): DraftData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftData;
+    if (!parsed || typeof parsed.html !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(d: DraftData): void {
+  try {
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* localStorage unavailable or over quota — autosave is best-effort */
+  }
+}
+
+function formatTime(ts: number): string {
+  try {
+    return new Date(ts).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
 
 function seedValues(defs: PlaceholderDef[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -495,15 +937,6 @@ function stripHtmlToText(html: string): string {
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
   return tmp.innerText;
-}
-
-function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'document'
-  );
 }
 
 function escapeAttr(s: string): string {
@@ -616,6 +1049,37 @@ function SplitIcon() {
     >
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <line x1="12" y1="3" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+function CloudIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
     </svg>
   );
 }
