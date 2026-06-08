@@ -10,6 +10,7 @@ import {
   Label,
 } from '@org/ui';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { ShareMode } from '@org/api-client';
 import { useCreateShare } from './queries';
@@ -35,6 +36,7 @@ export function ShareDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const create = useCreateShare();
   const [mode, setMode] = useState<ShareMode>('view');
   const [password, setPassword] = useState('');
@@ -67,9 +69,9 @@ export function ShareDialog({
     if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied');
+      toast.success(t('share.copied', 'Link copied'));
     } catch {
-      toast.error('Could not copy');
+      toast.error(t('share.copyError', 'Could not copy'));
     }
   }
 
@@ -83,17 +85,19 @@ export function ShareDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share document</DialogTitle>
+          <DialogTitle>{t('share.title', 'Share document')}</DialogTitle>
           <DialogDescription>
-            Create a link anyone can open. Optionally protect it with a password
-            or an expiry.
+            {t(
+              'share.description',
+              'Create a link anyone can open. Optionally protect it with a password or an expiry.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         {!url ? (
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">
-              <Label htmlFor="share-mode">Access</Label>
+              <Label htmlFor="share-mode">{t('share.access', 'Access')}</Label>
               <select
                 id="share-mode"
                 value={mode}
@@ -102,26 +106,34 @@ export function ShareDialog({
               >
                 {MODES.map((m) => (
                   <option key={m.value} value={m.value}>
-                    {m.label}
+                    {t(`share.mode.${m.value}`, m.label)}
                   </option>
                 ))}
               </select>
               <p className="text-xs text-foreground/50">
-                {MODES.find((m) => m.value === mode)?.hint}
+                {t(
+                  `share.modeHint.${mode}`,
+                  MODES.find((m) => m.value === mode)?.hint ?? '',
+                )}
               </p>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="share-password">Password (optional)</Label>
+              <Label htmlFor="share-password">
+                {t('share.password', 'Password (optional)')}
+              </Label>
               <Input
                 id="share-password"
                 type="password"
-                placeholder="Leave blank for no password"
+                placeholder={t(
+                  'share.passwordPlaceholder',
+                  'Leave blank for no password',
+                )}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="share-expiry">Expires</Label>
+              <Label htmlFor="share-expiry">{t('share.expires', 'Expires')}</Label>
               <select
                 id="share-expiry"
                 value={expiryDays}
@@ -130,7 +142,7 @@ export function ShareDialog({
               >
                 {EXPIRY.map((e) => (
                   <option key={e.value} value={e.value}>
-                    {e.label}
+                    {t(`share.expiry.${e.value}`, e.label)}
                   </option>
                 ))}
               </select>
@@ -138,16 +150,19 @@ export function ShareDialog({
           </div>
         ) : (
           <div className="grid gap-2 py-2">
-            <Label>Shareable link</Label>
+            <Label>{t('share.linkLabel', 'Shareable link')}</Label>
             <div className="flex items-center gap-2">
               <Input readOnly value={url} className="text-xs" />
               <Button size="sm" onClick={copy} className="flex-none">
-                Copy
+                {t('share.copy', 'Copy')}
               </Button>
             </div>
             {password.trim() && (
               <p className="text-xs text-foreground/50">
-                Share the password separately — it isn't in the link.
+                {t(
+                  'share.passwordNote',
+                  "Share the password separately — it isn't in the link.",
+                )}
               </p>
             )}
           </div>
@@ -161,19 +176,19 @@ export function ShareDialog({
                 size="sm"
                 onClick={() => onOpenChange(false)}
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button
                 size="sm"
                 isLoading={create.isPending}
                 onClick={createLink}
               >
-                Create link
+                {t('share.createLink', 'Create link')}
               </Button>
             </>
           ) : (
             <Button size="sm" onClick={() => onOpenChange(false)}>
-              Done
+              {t('common.done', 'Done')}
             </Button>
           )}
         </DialogFooter>

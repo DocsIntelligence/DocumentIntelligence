@@ -9,6 +9,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAddComment, useComments, useResolveComment } from './queries';
 
 /**
@@ -24,6 +25,7 @@ export function CommentsDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const comments = useComments(documentId, open);
   const add = useAddComment(documentId);
   const resolve = useResolveComment(documentId);
@@ -40,20 +42,24 @@ export function CommentsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Comments</DialogTitle>
+          <DialogTitle>{t('comments.title', 'Comments')}</DialogTitle>
           <DialogDescription>
-            Discussion on this document. Comments from people you share a
-            comment/edit link with appear here too.
+            {t(
+              'comments.description',
+              'Discussion on this document. Comments from people you share a comment/edit link with appear here too.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-72 space-y-2 overflow-y-auto py-1">
           {comments.isLoading && (
-            <p className="text-sm text-foreground/55">Loading…</p>
+            <p className="text-sm text-foreground/55">
+              {t('common.loading', 'Loading…')}
+            </p>
           )}
           {!comments.isLoading && items.length === 0 && (
             <p className="py-6 text-center text-sm text-foreground/55">
-              No comments yet.
+              {t('comments.empty', 'No comments yet.')}
             </p>
           )}
           {items.map((c) => (
@@ -82,7 +88,9 @@ export function CommentsDialog({
                 }
                 className="mt-1.5 text-xs font-medium text-primary hover:underline"
               >
-                {c.resolved ? 'Reopen' : 'Resolve'}
+                {c.resolved
+                  ? t('comments.reopen', 'Reopen')
+                  : t('comments.resolve', 'Resolve')}
               </button>
             </div>
           ))}
@@ -90,7 +98,7 @@ export function CommentsDialog({
 
         <div className="space-y-2 border-t border-border pt-3">
           <Textarea
-            placeholder="Write a comment…"
+            placeholder={t('comments.placeholder', 'Write a comment…')}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={3}
@@ -102,7 +110,7 @@ export function CommentsDialog({
               disabled={!body.trim()}
               onClick={submit}
             >
-              Comment
+              {t('comments.submit', 'Comment')}
             </Button>
           </div>
         </div>

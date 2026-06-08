@@ -17,6 +17,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   useAddSigner,
   useRemoveSigner,
@@ -56,6 +57,7 @@ export function SignaturesDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const signers = useSigners(documentId, open);
   const add = useAddSigner(documentId);
   const remove = useRemoveSigner(documentId);
@@ -84,21 +86,24 @@ export function SignaturesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Signatures</DialogTitle>
+          <DialogTitle>{t('signatures.title', 'Signatures')}</DialogTitle>
           <DialogDescription>
-            Add the people who need to sign, then capture each signature by
-            drawing or typing it. The document is marked signed once everyone
-            has signed.
+            {t(
+              'signatures.description',
+              'Add the people who need to sign, then capture each signature by drawing, uploading, or typing it. The document is marked signed once everyone has signed.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-72 space-y-2 overflow-y-auto py-1">
           {signers.isLoading && (
-            <p className="text-sm text-foreground/55">Loading…</p>
+            <p className="text-sm text-foreground/55">
+              {t('common.loading', 'Loading…')}
+            </p>
           )}
           {!signers.isLoading && items.length === 0 && (
             <p className="py-6 text-center text-sm text-foreground/55">
-              No signers yet.
+              {t('signatures.empty', 'No signers yet.')}
             </p>
           )}
           {items.map((s) => (
@@ -120,10 +125,12 @@ export function SignaturesDialog({
         </div>
 
         <div className="space-y-2 border-t border-border pt-3">
-          <Label className="text-xs text-foreground/60">Add a signer</Label>
+          <Label className="text-xs text-foreground/60">
+            {t('signatures.addSigner', 'Add a signer')}
+          </Label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
-              placeholder="Full name"
+              placeholder={t('signatures.fullName', 'Full name')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="sm:flex-1"
@@ -135,14 +142,14 @@ export function SignaturesDialog({
               <SelectContent>
                 {(Object.keys(ROLE_LABELS) as SignerRole[]).map((r) => (
                   <SelectItem key={r} value={r}>
-                    {ROLE_LABELS[r]}
+                    {t(`signerRole.${r}`, ROLE_LABELS[r])}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <Input
-            placeholder="Email (optional)"
+            placeholder={t('signatures.emailOptional', 'Email (optional)')}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -154,7 +161,7 @@ export function SignaturesDialog({
               disabled={!name.trim()}
               onClick={addSigner}
             >
-              Add signer
+              {t('signatures.addSignerBtn', 'Add signer')}
             </Button>
           </div>
         </div>
@@ -183,6 +190,7 @@ function SignerRow({
   }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const signed = signer.status === 'signed';
   const evidenceImage =
     typeof signer.evidence?.['image'] === 'string'
@@ -201,7 +209,7 @@ function SignerRow({
             {signer.name}
           </span>
           <span className="ml-2 text-[11px] text-foreground/45">
-            {ROLE_LABELS[signer.role]}
+            {t(`signerRole.${signer.role}`, ROLE_LABELS[signer.role])}
             {signer.email ? ` · ${signer.email}` : ''}
           </span>
         </div>
@@ -209,7 +217,7 @@ function SignerRow({
           variant={STATUS_VARIANT[signer.status] ?? 'secondary'}
           outline={signer.status !== 'signed'}
         >
-          {signer.status}
+          {t(`signerStatus.${signer.status}`, signer.status)}
         </Badge>
       </div>
 
@@ -218,7 +226,9 @@ function SignerRow({
           {evidenceImage ? (
             <img
               src={evidenceImage}
-              alt={`${signer.name} signature`}
+              alt={t('signatures.signatureAlt', '{{name}} signature', {
+                name: signer.name,
+              })}
               className="h-14 rounded border border-border bg-white object-contain"
             />
           ) : (
@@ -238,14 +248,18 @@ function SignerRow({
           onClick={onToggleSign}
           className="text-xs font-medium text-primary hover:underline"
         >
-          {isSigning ? 'Cancel' : signed ? 'Re-sign' : 'Sign'}
+          {isSigning
+            ? t('common.cancel', 'Cancel')
+            : signed
+              ? t('signatures.resign', 'Re-sign')
+              : t('signatures.sign', 'Sign')}
         </button>
         <button
           type="button"
           onClick={onRemove}
           className="text-xs font-medium text-error hover:underline"
         >
-          Remove
+          {t('signatures.remove', 'Remove')}
         </button>
       </div>
 
@@ -274,6 +288,7 @@ function SignatureCapture({
     font?: string;
   }) => void;
 }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'draw' | 'upload' | 'typed'>('draw');
   const [typed, setTyped] = useState(defaultName);
   const [uploaded, setUploaded] = useState<string | null>(null);
@@ -287,7 +302,7 @@ function SignatureCapture({
   function handleFile(file: File) {
     setUploadError(null);
     if (!file.type.startsWith('image/')) {
-      setUploadError('Please choose an image file.');
+      setUploadError(t('signatures.errNotImage', 'Please choose an image file.'));
       return;
     }
     const reader = new FileReader();
@@ -303,16 +318,18 @@ function SignatureCapture({
         c.height = h;
         const g = c.getContext('2d');
         if (!g) {
-          setUploadError('Could not process image.');
+          setUploadError(t('signatures.errProcess', 'Could not process image.'));
           return;
         }
         g.drawImage(img, 0, 0, w, h);
         setUploaded(c.toDataURL('image/png'));
       };
-      img.onerror = () => setUploadError('Could not read that image.');
+      img.onerror = () =>
+        setUploadError(t('signatures.errReadImage', 'Could not read that image.'));
       img.src = reader.result as string;
     };
-    reader.onerror = () => setUploadError('Could not read that file.');
+    reader.onerror = () =>
+      setUploadError(t('signatures.errReadFile', 'Could not read that file.'));
     reader.readAsDataURL(file);
   }
 
@@ -382,7 +399,11 @@ function SignatureCapture({
                 : 'text-foreground/60 hover:bg-secondary',
             )}
           >
-            {m === 'draw' ? 'Draw' : m === 'upload' ? 'Upload' : 'Type'}
+            {m === 'draw'
+              ? t('signatures.draw', 'Draw')
+              : m === 'upload'
+                ? t('signatures.upload', 'Upload')
+                : t('signatures.type', 'Type')}
           </button>
         ))}
       </div>
@@ -404,7 +425,7 @@ function SignatureCapture({
             onClick={clear}
             className="text-xs text-foreground/55 hover:underline"
           >
-            Clear
+            {t('signatures.clear', 'Clear')}
           </button>
         </div>
       ) : mode === 'upload' ? (
@@ -422,7 +443,7 @@ function SignatureCapture({
           {uploaded && (
             <img
               src={uploaded}
-              alt="Uploaded signature"
+              alt={t('signatures.uploadedAlt', 'Uploaded signature')}
               className="h-16 rounded border border-border bg-white object-contain"
             />
           )}
@@ -432,14 +453,14 @@ function SignatureCapture({
           <Input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            placeholder="Type your name"
+            placeholder={t('signatures.typeNamePlaceholder', 'Type your name')}
           />
           <div className="flex h-14 items-center rounded border border-border bg-white px-3">
             <span
               className="text-2xl text-gray-900"
               style={{ fontFamily: 'cursive' }}
             >
-              {typed || 'Preview'}
+              {typed || t('signatures.preview', 'Preview')}
             </span>
           </div>
         </div>
@@ -452,7 +473,7 @@ function SignatureCapture({
           disabled={!canSave}
           onClick={submit}
         >
-          Save signature
+          {t('signatures.save', 'Save signature')}
         </Button>
       </div>
     </div>

@@ -175,3 +175,15 @@ Court-document scaffolding + citation library (BNS/BNSS/BSA), sharing/comments, 
 - **Bug fixed:** in NewDocumentPicker the catalog `.map((t) => …)` param shadowed the translation `t` — renamed to `ct` so `t('newDoc.templateCount', …)` resolves correctly.
 - **Reworded** the preset modal description to drop a literal `{{placeholders}}` token (i18next would have interpolated it) → "replace the placeholder tokens".
 - Verified: app `tsc` exit 0, eslint clean (DocumentsList + NewDocumentPicker), both locale JSONs valid. Remaining #7 surfaces: editors + dialogs, auth, Settings finish, other toasts; + native-speaker QA.
+
+### 2026-06-08 — Hindi UI i18n (cont.): document dialogs (Share / Version / Comments / Signatures)
+- Wrapped all UI chrome in these four dialogs with `t('key','English default')`. **Locale JSON intentionally NOT edited** — owner is populating all locale files manually; inline English defaults keep the app working, and `pnpm i18n:extract` (i18next-parser) can harvest the keys.
+- New key namespaces introduced (English defaults live in code):
+  - `share.*` — title, description, access, password, passwordPlaceholder, expires, linkLabel, copy, copied, copyError, passwordNote, createLink; `share.mode.{view,comment,edit}`, `share.modeHint.{view,comment,edit}`, `share.expiry.{0,7,30}`
+  - `versions.*` — title, description, count (plural), manualSave, saveCurrent, empty, snapshot, restore
+  - `comments.*` — title, description, empty, reopen, resolve, placeholder, submit
+  - `signatures.*` — title, description, empty, addSigner, fullName, emailOptional, addSignerBtn, signatureAlt, resign, sign, remove, draw, upload, type, clear, uploadedAlt, typeNamePlaceholder, preview, save, errNotImage, errProcess, errReadImage, errReadFile
+  - `signerRole.{party_a,party_b,witness,lawyer,custom}`, `signerStatus.{pending,invited,viewed,signed,declined}`
+  - `common.done` (added)
+- Verified: app `tsc` exit 0, eslint clean on all four dialogs.
+- Remaining #7: editor toolbars (BuilderShell + TemplateEditor), auth pages, Settings finish, SharedDocumentView, stray toasts; + native-speaker QA.

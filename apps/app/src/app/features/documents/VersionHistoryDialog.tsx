@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@org/ui';
+import { useTranslation } from 'react-i18next';
 import {
   useDocumentVersions,
   useRestoreVersion,
@@ -26,6 +27,7 @@ export function VersionHistoryDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const versions = useDocumentVersions(documentId, open);
   const snapshot = useSnapshotDocument(documentId);
   const restore = useRestoreVersion(documentId);
@@ -35,34 +37,41 @@ export function VersionHistoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Version history</DialogTitle>
+          <DialogTitle>{t('versions.title', 'Version history')}</DialogTitle>
           <DialogDescription>
-            Snapshots of this document. Restoring first saves the current state,
-            so you can always undo.
+            {t(
+              'versions.description',
+              'Snapshots of this document. Restoring first saves the current state, so you can always undo.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-between py-1">
           <span className="text-xs text-foreground/55">
-            {items.length} version{items.length === 1 ? '' : 's'}
+            {t('versions.count', '{{count}} version', { count: items.length })}
           </span>
           <Button
             size="sm"
             variant="outline"
             isLoading={snapshot.isPending}
-            onClick={() => snapshot.mutate('Manual save')}
+            onClick={() => snapshot.mutate(t('versions.manualSave', 'Manual save'))}
           >
-            Save current as version
+            {t('versions.saveCurrent', 'Save current as version')}
           </Button>
         </div>
 
         <div className="max-h-80 space-y-1.5 overflow-y-auto">
           {versions.isLoading && (
-            <p className="text-sm text-foreground/55">Loading…</p>
+            <p className="text-sm text-foreground/55">
+              {t('common.loading', 'Loading…')}
+            </p>
           )}
           {!versions.isLoading && items.length === 0 && (
             <p className="py-6 text-center text-sm text-foreground/55">
-              No versions yet. Save one above, or they accrue as you restore.
+              {t(
+                'versions.empty',
+                'No versions yet. Save one above, or they accrue as you restore.',
+              )}
             </p>
           )}
           {items.map((v) => (
@@ -72,7 +81,7 @@ export function VersionHistoryDialog({
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {v.label || 'Snapshot'}
+                  {v.label || t('versions.snapshot', 'Snapshot')}
                 </p>
                 <p className="text-xs text-foreground/50">
                   {new Date(v.createdAt).toLocaleString()} ·{' '}
@@ -86,7 +95,7 @@ export function VersionHistoryDialog({
                 onClick={() => restore.mutate(v.id)}
                 className="flex-none"
               >
-                Restore
+                {t('versions.restore', 'Restore')}
               </Button>
             </div>
           ))}
