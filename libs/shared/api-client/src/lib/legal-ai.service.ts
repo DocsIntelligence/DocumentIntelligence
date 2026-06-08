@@ -42,6 +42,8 @@ export interface ReviseDocumentPayload {
   html: string;
   instruction: string;
   documentTypeKey?: string;
+  /** When set, translate/rewrite the whole document into this language. */
+  language?: string;
 }
 
 export interface ReviseDocumentResponse {

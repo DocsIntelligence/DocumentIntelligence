@@ -17,16 +17,20 @@ export function EditorDemo() {
   const legalAi = useLegalAiService();
 
   const handleAiGenerate = useCallback(
-    async (brief: string) => {
-      const r = await legalAi.generate({ brief, documentTypeKey: 'freeform' });
+    async (brief: string, language: string) => {
+      const r = await legalAi.generate({
+        brief,
+        language,
+        documentTypeKey: 'freeform',
+      });
       return { html: r.html, disclaimer: r.disclaimer };
     },
     [legalAi],
   );
 
   const handleAiRevise = useCallback(
-    async (instruction: string, html: string) => {
-      const r = await legalAi.revise({ instruction, html });
+    async (instruction: string, html: string, language?: string) => {
+      const r = await legalAi.revise({ instruction, html, language });
       return { html: r.html };
     },
     [legalAi],

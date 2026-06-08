@@ -29,8 +29,8 @@ const GenerateDocumentSchema = z.object({
   /** Optional — grounds the draft in a known document type's sections. */
   documentTypeKey: z.string().min(1).optional(),
   title: z.string().max(200).optional(),
-  /** Reserved for future localisation of generated headings. */
-  language: z.string().min(2).max(8).default('en'),
+  /** Human language name to write the document in (e.g. "English", "Hindi", "Tamil"). */
+  language: z.string().min(2).max(40).default('English'),
 });
 
 export class GenerateDocumentDto extends createZodDto(GenerateDocumentSchema) {}
@@ -40,6 +40,8 @@ const ReviseDocumentSchema = z.object({
   html: z.string().min(1).max(120000),
   instruction: z.string().min(1).max(2000),
   documentTypeKey: z.string().min(1).optional(),
+  /** Optional target language — when set, the whole document is translated into it. */
+  language: z.string().min(2).max(40).optional(),
 });
 
 export class ReviseDocumentDto extends createZodDto(ReviseDocumentSchema) {}

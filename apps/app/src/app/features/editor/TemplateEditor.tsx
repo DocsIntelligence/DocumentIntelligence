@@ -9,10 +9,19 @@ import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  Textarea,
   Tooltip,
   PageBreakExtension,
   PlaceholderHighlightExtension,
@@ -23,18 +32,27 @@ import {
   type TransliterationState,
   SuggestionPopover,
 } from '@org/ui';
-import { TransliterationProvider, useTransliteration } from '@org/transliteration';
+import {
+  TransliterationProvider,
+  useTransliteration,
+} from '@org/transliteration';
 import { cn } from '@org/utils';
 import { toast } from 'sonner';
 
 import { EditorToolbar } from './components/EditorToolbar';
-import { PlaceholderForm, type PlaceholderFormHandle } from './components/PlaceholderForm';
+import {
+  PlaceholderForm,
+  type PlaceholderFormHandle,
+} from './components/PlaceholderForm';
 import { TemplateGallery } from './components/TemplateGallery';
 import { PaginatedPreview } from './components/PaginatedPreview';
 import { PageNavigator } from './components/PageNavigator';
 import { TEMPLATES, getTemplateById } from './templates/registry';
 import type { DocumentTemplate, PlaceholderDef } from './templates/types';
 import { downloadWordDoc } from './export-word';
+import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
+import { PageSizeSelect } from '../../lib/page-sizes';
+import type { PageSizeKey } from '@org/document-templates';
 
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
 const DRAFT_KEY = 'legaldraft:editor:draft:v1';
@@ -61,8 +79,11 @@ export type EditorPersistence =
         title?: string;
         html: string;
         values: Record<string, string>;
+        pageSize?: PageSizeKey;
       };
       onSave: (s: EditorDraftState) => void;
+      /** Called when the user changes the paper size (bound mode persists it). */
+      onPageSizeChange?: (size: PageSizeKey) => void;
       savedAt?: number | null;
       saving?: boolean;
     };
@@ -74,10 +95,17 @@ export interface TemplateEditorProps {
   /** Local mode only — renders a "Save to my documents" action when provided. */
   onSaveToCloud?: (s: EditorDraftState) => void;
   savingToCloud?: boolean;
-  /** When provided, a "Draft with AI" action prompts for a brief and replaces the document. */
-  onAiGenerate?: (brief: string) => Promise<{ html: string; disclaimer?: string }>;
-  /** When provided, a "Revise with AI" action applies an instruction to the current HTML. */
-  onAiRevise?: (instruction: string, html: string) => Promise<{ html: string }>;
+  /** When provided, a "Draft with AI" action prompts for a brief + language and replaces the document. */
+  onAiGenerate?: (
+    brief: string,
+    language: string,
+  ) => Promise<{ html: string; disclaimer?: string }>;
+  /** When provided, a "Revise with AI" action applies an instruction (and optional target language) to the current HTML. */
+  onAiRevise?: (
+    instruction: string,
+    html: string,
+    language?: string,
+  ) => Promise<{ html: string }>;
   /** When provided, the PDF button uses this (the reliable backend export) instead of window.print. */
   onExportPdf?: () => void;
   exportingPdf?: boolean;
@@ -97,8 +125,15 @@ function TemplateEditorInner({
   backHref?: string;
   onSaveToCloud?: (s: EditorDraftState) => void;
   savingToCloud?: boolean;
-  onAiGenerate?: (brief: string) => Promise<{ html: string; disclaimer?: string }>;
-  onAiRevise?: (instruction: string, html: string) => Promise<{ html: string }>;
+  onAiGenerate?: (
+    brief: string,
+    language: string,
+  ) => Promise<{ html: string; disclaimer?: string }>;
+  onAiRevise?: (
+    instruction: string,
+    html: string,
+    language?: string,
+  ) => Promise<{ html: string }>;
   onExportPdf?: () => void;
   exportingPdf?: boolean;
 }) {
@@ -112,6 +147,7 @@ function TemplateEditorInner({
     values: Record<string, string>;
     html: string;
     savedAt: number | null;
+    pageSize: PageSizeKey;
   }>(() => {
     if (persistence.mode === 'bound') {
       const t =
@@ -122,6 +158,7 @@ function TemplateEditorInner({
         values: persistence.initial.values,
         html: persistence.initial.html,
         savedAt: persistence.savedAt ?? null,
+        pageSize: persistence.initial.pageSize ?? 'a4',
       };
     }
     const t =
@@ -132,12 +169,22 @@ function TemplateEditorInner({
       values: restored?.values ?? seedValues(t.placeholders),
       html: restored?.html ?? t.html,
       savedAt: restored?.savedAt ?? null,
+      pageSize: restored?.pageSize ?? 'a4',
     };
   }, []);
   const [template, setTemplate] = useState<DocumentTemplate>(init.template);
   const [values, setValues] = useState<Record<string, string>>(init.values);
   const [html, setHtml] = useState<string>(init.html);
   const [savedAt, setSavedAt] = useState<number | null>(init.savedAt);
+  const [pageSize, setPageSize] = useState<PageSizeKey>(init.pageSize);
+
+  const handlePageSizeChange = useCallback(
+    (size: PageSizeKey) => {
+      setPageSize(size);
+      if (persistence.mode === 'bound') persistence.onPageSizeChange?.(size);
+    },
+    [persistence],
+  );
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'fields' | 'pages'>('fields');
   const [showPreview, setShowPreview] = useState(true);
@@ -172,7 +219,10 @@ function TemplateEditorInner({
     }
   }, []);
 
-  const handleDismissSuggestions = useCallback(() => setTranslitState(null), []);
+  const handleDismissSuggestions = useCallback(
+    () => setTranslitState(null),
+    [],
+  );
 
   const editor: Editor | null = useEditor({
     extensions: [
@@ -270,7 +320,8 @@ function TemplateEditorInner({
   useEffect(() => {
     if (restored) {
       toast.message('Restored your last draft', {
-        description: 'Your in-progress document was recovered from this browser.',
+        description:
+          'Your in-progress document was recovered from this browser.',
       });
     }
   }, []);
@@ -290,19 +341,30 @@ function TemplateEditorInner({
     const p = persistenceRef.current;
     const t = setTimeout(() => {
       if (p.mode === 'bound') {
-        p.onSave({ templateId: template.id, title: template.name, html, values });
+        p.onSave({
+          templateId: template.id,
+          title: template.name,
+          html,
+          values,
+        });
       } else {
         const now = Date.now();
-        saveDraft({ templateId: template.id, html, values, savedAt: now });
+        saveDraft({
+          templateId: template.id,
+          html,
+          values,
+          pageSize,
+          savedAt: now,
+        });
         setSavedAt(now);
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [template.id, template.name, html, values]);
+  }, [template.id, template.name, html, values, pageSize]);
 
   // Bound mode: reflect the parent-reported save time in the status bar.
   const boundSavedAt =
-    persistence.mode === 'bound' ? persistence.savedAt ?? null : null;
+    persistence.mode === 'bound' ? (persistence.savedAt ?? null) : null;
   useEffect(() => {
     if (persistence.mode === 'bound') setSavedAt(boundSavedAt);
   }, [persistence.mode, boundSavedAt]);
@@ -337,16 +399,27 @@ function TemplateEditorInner({
 
   const [aiBusy, setAiBusy] = useState(false);
 
-  const handleAiGenerate = useCallback(async () => {
+  // --- Modal state for AI Generate ---
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [generateBrief, setGenerateBrief] = useState('');
+  const [generateLanguage, setGenerateLanguage] = useState(DEFAULT_LANGUAGE);
+
+  const handleAiGenerateOpen = useCallback(() => {
     if (!editor || !onAiGenerate) return;
-    const brief = window.prompt(
-      'Describe the document you want to draft (e.g. "Rent agreement, landlord Ramesh, tenant Priya, 2BHK Pune, ₹25,000/mo, 11-month term").',
-    );
-    if (!brief?.trim()) return;
+    setGenerateBrief('');
+    setGenerateModalOpen(true);
+  }, [editor, onAiGenerate]);
+
+  const handleAiGenerateSubmit = useCallback(async () => {
+    if (!editor || !onAiGenerate || !generateBrief.trim()) return;
+    setGenerateModalOpen(false);
     setAiBusy(true);
     toast.message('Drafting with AI…');
     try {
-      const { html: out, disclaimer } = await onAiGenerate(brief.trim());
+      const { html: out, disclaimer } = await onAiGenerate(
+        generateBrief.trim(),
+        generateLanguage,
+      );
       editor.commands.setContent(out);
       setHtml(out);
       setValues({});
@@ -360,18 +433,37 @@ function TemplateEditorInner({
     } finally {
       setAiBusy(false);
     }
-  }, [editor, onAiGenerate]);
+  }, [editor, onAiGenerate, generateBrief, generateLanguage]);
 
-  const handleAiRevise = useCallback(async () => {
+  // --- Modal state for AI Revise ---
+  const [reviseModalOpen, setReviseModalOpen] = useState(false);
+  const [reviseInstruction, setReviseInstruction] = useState('');
+  const [reviseLanguage, setReviseLanguage] = useState('');
+
+  const handleAiReviseOpen = useCallback(() => {
     if (!editor || !onAiRevise) return;
-    const instruction = window.prompt(
-      'How should the AI revise this document? (e.g. "make the deposit 2 months", "add a no-pets clause", "make it more tenant-friendly")',
-    );
-    if (!instruction?.trim()) return;
+    setReviseInstruction('');
+    setReviseLanguage('');
+    setReviseModalOpen(true);
+  }, [editor, onAiRevise]);
+
+  const handleAiReviseSubmit = useCallback(async () => {
+    if (!editor || !onAiRevise) return;
+    // Allow translate-only: if a target language is picked, an empty
+    // instruction still works.
+    const instruction =
+      reviseInstruction.trim() ||
+      (reviseLanguage ? `Translate this document into ${reviseLanguage}.` : '');
+    if (!instruction) return;
+    setReviseModalOpen(false);
     setAiBusy(true);
     toast.message('Revising with AI…');
     try {
-      const { html: out } = await onAiRevise(instruction.trim(), html);
+      const { html: out } = await onAiRevise(
+        instruction,
+        html,
+        reviseLanguage || undefined,
+      );
       editor.commands.setContent(out);
       setHtml(out);
       setActivePage(0);
@@ -383,19 +475,28 @@ function TemplateEditorInner({
     } finally {
       setAiBusy(false);
     }
-  }, [editor, onAiRevise, html]);
+  }, [editor, onAiRevise, reviseInstruction, reviseLanguage, html]);
 
-  const handleInsertPlaceholder = useCallback(() => {
+  // --- Modal state for Insert Placeholder ---
+  const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
+  const [placeholderKey, setPlaceholderKey] = useState('');
+
+  const handleInsertPlaceholderOpen = useCallback(() => {
     if (!editor) return;
-    const key = window.prompt('Field key (letters / numbers / underscore):');
-    if (!key) return;
-    const cleaned = key.trim().replace(/[^a-zA-Z0-9_]/g, '');
+    setPlaceholderKey('');
+    setPlaceholderModalOpen(true);
+  }, [editor]);
+
+  const handleInsertPlaceholderSubmit = useCallback(() => {
+    if (!editor) return;
+    const cleaned = placeholderKey.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!cleaned) {
       toast.error('Invalid field key');
       return;
     }
+    setPlaceholderModalOpen(false);
     editor.chain().focus().insertContent(`{{${cleaned}}}`).run();
-  }, [editor]);
+  }, [editor, placeholderKey]);
 
   const handleInsertPageBreak = useCallback(() => {
     editor?.chain().focus().insertPageBreak().run();
@@ -441,12 +542,7 @@ function TemplateEditorInner({
       const breakIdx = pageIndex === 0 ? 0 : pageIndex - 1;
       const breakPos = positions[breakIdx];
       if (breakPos == null) return;
-      editor
-        .chain()
-        .focus()
-        .setNodeSelection(breakPos)
-        .deleteSelection()
-        .run();
+      editor.chain().focus().setNodeSelection(breakPos).deleteSelection().run();
       setActivePage((p) => Math.max(0, Math.min(p, positions.length - 1)));
     },
     [editor],
@@ -551,7 +647,9 @@ function TemplateEditorInner({
             {template.icon}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{template.name}</div>
+            <div className="truncate text-sm font-semibold">
+              {template.name}
+            </div>
             <div className="truncate text-[11px] text-foreground/55">
               {template.category} · {completionStats.filled}/
               {completionStats.total} fields filled
@@ -594,7 +692,7 @@ function TemplateEditorInner({
               variant="outline"
               size="sm"
               isLoading={aiBusy}
-              onClick={handleAiGenerate}
+              onClick={handleAiGenerateOpen}
               className="gap-1.5 text-xs"
             >
               <SparklesIcon />
@@ -616,7 +714,7 @@ function TemplateEditorInner({
               variant="outline"
               size="sm"
               isLoading={aiBusy}
-              onClick={handleAiRevise}
+              onClick={handleAiReviseOpen}
               className="gap-1.5 text-xs"
             >
               <SparklesIcon />
@@ -632,6 +730,11 @@ function TemplateEditorInner({
             <CopyIcon />
             Copy
           </Button>
+          <PageSizeSelect
+            value={pageSize}
+            onChange={handlePageSizeChange}
+            className="hidden sm:block"
+          />
           <Button
             variant="outline"
             size="sm"
@@ -684,65 +787,65 @@ function TemplateEditorInner({
           maxSize="36%"
           className="min-w-0"
         >
-        <aside className="flex h-full w-full flex-col border-r border-border bg-background">
-          <Tabs
-            value={sidebarTab}
-            onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
-            className="flex flex-1 flex-col overflow-hidden"
-          >
-            <div className="border-b border-border px-3 py-2">
-              <TabsList className="w-full">
-                <TabsTrigger value="fields" className="flex-1 text-xs">
-                  Fields
+          <aside className="flex h-full w-full flex-col border-r border-border bg-background">
+            <Tabs
+              value={sidebarTab}
+              onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
+              <div className="border-b border-border px-3 py-2">
+                <TabsList className="w-full">
+                  <TabsTrigger value="fields" className="flex-1 text-xs">
+                    Fields
+                    {completionStats.total > 0 && (
+                      <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                        {completionStats.filled}/{completionStats.total}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="pages" className="flex-1 text-xs">
+                    Pages
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <TabsContent value="fields" className="!mt-0">
                   {completionStats.total > 0 && (
-                    <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
-                      {completionStats.filled}/{completionStats.total}
-                    </span>
+                    <div className="border-b border-border bg-secondary/15 px-4 py-2">
+                      <div className="flex items-center justify-between text-[11px] text-foreground/60">
+                        <span>Completion</span>
+                        <span>{completionStats.pct}%</span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
+                        <div
+                          className="h-full bg-emerald-500 transition-all"
+                          style={{ width: `${completionStats.pct}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
-                </TabsTrigger>
-                <TabsTrigger value="pages" className="flex-1 text-xs">
-                  Pages
-                </TabsTrigger>
-              </TabsList>
-            </div>
+                  <PlaceholderForm
+                    ref={formRef}
+                    fields={fieldsFromTemplate}
+                    values={values}
+                    onChange={handleValueChange}
+                    unknownKeys={discoveredKeys}
+                  />
+                </TabsContent>
 
-            <div className="flex-1 overflow-y-auto">
-              <TabsContent value="fields" className="!mt-0">
-                {completionStats.total > 0 && (
-                  <div className="border-b border-border bg-secondary/15 px-4 py-2">
-                    <div className="flex items-center justify-between text-[11px] text-foreground/60">
-                      <span>Completion</span>
-                      <span>{completionStats.pct}%</span>
-                    </div>
-                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
-                      <div
-                        className="h-full bg-emerald-500 transition-all"
-                        style={{ width: `${completionStats.pct}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                <PlaceholderForm
-                  ref={formRef}
-                  fields={fieldsFromTemplate}
-                  values={values}
-                  onChange={handleValueChange}
-                  unknownKeys={discoveredKeys}
-                />
-              </TabsContent>
-
-              <TabsContent value="pages" className="!mt-0">
-                <PageNavigator
-                  html={html}
-                  activePage={activePage}
-                  onJumpToPage={handleJumpToPage}
-                  onAddPage={handleAddPage}
-                  onRemovePage={handleRemovePage}
-                />
-              </TabsContent>
-            </div>
-          </Tabs>
-        </aside>
+                <TabsContent value="pages" className="!mt-0">
+                  <PageNavigator
+                    html={html}
+                    activePage={activePage}
+                    onJumpToPage={handleJumpToPage}
+                    onAddPage={handleAddPage}
+                    onRemovePage={handleRemovePage}
+                  />
+                </TabsContent>
+              </div>
+            </Tabs>
+          </aside>
         </Panel>
 
         <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
@@ -756,56 +859,56 @@ function TemplateEditorInner({
           minSize="28%"
           className="min-w-0"
         >
-        <section className="flex h-full flex-col overflow-hidden bg-background">
-          {editor && (
-            <EditorToolbar
-              editor={editor}
-              onInsertPlaceholder={handleInsertPlaceholder}
-              onInsertPageBreak={handleInsertPageBreak}
-            />
-          )}
-          <div
-            ref={editorScrollRef}
-            className="relative flex-1 overflow-y-auto bg-background"
-          >
-            <div className="mx-auto max-w-3xl px-8 py-6">
-              <EditorContent editor={editor} />
-            </div>
-            {translitState && (
-              <SuggestionPopover
-                suggestions={translitState.suggestions}
-                selectedIndex={translitState.selectedIndex}
-                onSelect={handleSuggestionSelect}
-                visible={translitState.showSuggestions}
-                position={popoverPosition}
+          <section className="flex h-full flex-col overflow-hidden bg-background">
+            {editor && (
+              <EditorToolbar
+                editor={editor}
+                onInsertPlaceholder={handleInsertPlaceholderOpen}
+                onInsertPageBreak={handleInsertPageBreak}
               />
             )}
-          </div>
-          <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
-            <span>
-              {editor?.getText().length ?? 0} chars ·{' '}
-              {editor
-                ? editor.getText().split(/\s+/).filter(Boolean).length
-                : 0}{' '}
-              words · Page {activePage + 1}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  'inline-block size-1.5 rounded-full',
-                  savedAt ? 'bg-emerald-500' : 'bg-amber-400',
-                )}
-              />
-              {isSaving
-                ? 'Saving…'
-                : savedAt
-                ? `${bound ? 'Saved to cloud' : 'Saved'} ${formatTime(savedAt)}`
-                : bound
-                ? 'Saving…'
-                : 'Not saved yet'}
-            </span>
-          </div>
-        </section>
+            <div
+              ref={editorScrollRef}
+              className="relative flex-1 overflow-y-auto bg-background"
+            >
+              <div className="mx-auto max-w-3xl px-8 py-6">
+                <EditorContent editor={editor} />
+              </div>
+              {translitState && (
+                <SuggestionPopover
+                  suggestions={translitState.suggestions}
+                  selectedIndex={translitState.selectedIndex}
+                  onSelect={handleSuggestionSelect}
+                  visible={translitState.showSuggestions}
+                  position={popoverPosition}
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
+              <span>
+                {editor?.getText().length ?? 0} chars ·{' '}
+                {editor
+                  ? editor.getText().split(/\s+/).filter(Boolean).length
+                  : 0}{' '}
+                words · Page {activePage + 1}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    'inline-block size-1.5 rounded-full',
+                    savedAt ? 'bg-emerald-500' : 'bg-amber-400',
+                  )}
+                />
+                {isSaving
+                  ? 'Saving…'
+                  : savedAt
+                    ? `${bound ? 'Saved to cloud' : 'Saved'} ${formatTime(savedAt)}`
+                    : bound
+                      ? 'Saving…'
+                      : 'Not saved yet'}
+              </span>
+            </div>
+          </section>
         </Panel>
 
         {/* Preview pane */}
@@ -814,8 +917,18 @@ function TemplateEditorInner({
             <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
               <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
             </Separator>
-            <Panel id="preview" defaultSize="38%" minSize="20%" className="min-w-0">
-              <PaginatedPreview html={html} values={values} className="h-full" />
+            <Panel
+              id="preview"
+              defaultSize="38%"
+              minSize="20%"
+              className="min-w-0"
+            >
+              <PaginatedPreview
+                html={html}
+                values={values}
+                pageSize={pageSize}
+                className="h-full"
+              />
             </Panel>
           </>
         )}
@@ -827,6 +940,159 @@ function TemplateEditorInner({
         onSelect={loadTemplate}
         activeId={template.id}
       />
+
+      {/* AI Generate Modal */}
+      <Dialog open={generateModalOpen} onOpenChange={setGenerateModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Draft with AI</DialogTitle>
+            <DialogDescription>
+              Describe the document you want to draft. Be specific about
+              parties, terms, and key details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-3">
+            <Label htmlFor="ai-generate-brief">Document description</Label>
+            <Textarea
+              id="ai-generate-brief"
+              placeholder='e.g. "Rent agreement, landlord Ramesh, tenant Priya, 2BHK Pune, ₹25,000/mo, 11-month term"'
+              value={generateBrief}
+              onChange={(e) => setGenerateBrief(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  handleAiGenerateSubmit();
+                }
+              }}
+              rows={4}
+              autoFocus
+            />
+            <Label htmlFor="ai-generate-language" className="mt-1">
+              Language
+            </Label>
+            <LanguageSelect
+              id="ai-generate-language"
+              value={generateLanguage}
+              onChange={setGenerateLanguage}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setGenerateModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!generateBrief.trim()}
+              onClick={handleAiGenerateSubmit}
+            >
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Revise Modal */}
+      <Dialog open={reviseModalOpen} onOpenChange={setReviseModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Revise with AI</DialogTitle>
+            <DialogDescription>
+              Tell the AI how to modify the current document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-3">
+            <Label htmlFor="ai-revise-instruction">Revision instruction</Label>
+            <Textarea
+              id="ai-revise-instruction"
+              placeholder='e.g. "make the deposit 2 months", "add a no-pets clause", "make it more tenant-friendly"'
+              value={reviseInstruction}
+              onChange={(e) => setReviseInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  handleAiReviseSubmit();
+                }
+              }}
+              rows={3}
+              autoFocus
+            />
+            <Label htmlFor="ai-revise-language" className="mt-1">
+              Translate to (optional)
+            </Label>
+            <LanguageSelect
+              id="ai-revise-language"
+              value={reviseLanguage}
+              onChange={setReviseLanguage}
+              includeKeepOption
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setReviseModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!reviseInstruction.trim() && !reviseLanguage}
+              onClick={handleAiReviseSubmit}
+            >
+              Revise
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insert Placeholder Modal */}
+      <Dialog
+        open={placeholderModalOpen}
+        onOpenChange={setPlaceholderModalOpen}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Insert field placeholder</DialogTitle>
+            <DialogDescription>
+              Enter a key for the placeholder field. Use letters, numbers, or
+              underscores only.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-3">
+            <Label htmlFor="placeholder-key">Field key</Label>
+            <Input
+              id="placeholder-key"
+              placeholder="e.g. tenant_name"
+              value={placeholderKey}
+              onChange={(e) => setPlaceholderKey(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleInsertPlaceholderSubmit();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPlaceholderModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!placeholderKey.trim()}
+              onClick={handleInsertPlaceholderSubmit}
+            >
+              Insert
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -882,6 +1148,7 @@ type DraftData = {
   templateId: string;
   html: string;
   values: Record<string, string>;
+  pageSize?: PageSizeKey;
   savedAt: number;
 };
 

@@ -4,12 +4,24 @@ import {
 } from '@org/document-schema';
 import type { FieldClickEvent } from '@org/document-templates';
 import { useDebounce } from '@org/hooks';
-import { Button, Card } from '@org/ui';
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
+} from '@org/ui';
 import { cn } from '@org/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useDocument, usePatchDocument } from '../queries';
+import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
+import { PageSizeSelect } from '../../../lib/page-sizes';
+import { useCreateDocument, useDocument, usePatchDocument } from '../queries';
 import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
@@ -43,6 +55,14 @@ export function BuilderShell({ documentId }: Props) {
   const patch = usePatchDocument(documentId);
   const { mutate: patchMutate } = patch;
   const legalAi = useLegalAiService();
+  const createDoc = useCreateDocument();
+  const navigate = useNavigate();
+
+  // "Generate in another language" — bridge the structured data to a
+  // freeform, fully-translated draft (the structured templates are English).
+  const [langModalOpen, setLangModalOpen] = useState(false);
+  const [targetLang, setTargetLang] = useState(DEFAULT_LANGUAGE);
+  const [langBusy, setLangBusy] = useState(false);
 
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [draftTitle, setDraftTitle] = useState('');
@@ -134,6 +154,41 @@ export function BuilderShell({ documentId }: Props) {
       );
     } finally {
       setAiBusyField(null);
+    }
+  }
+
+  // Generate a freeform, fully-translated copy of this structured document.
+  async function generateInLanguage() {
+    if (!doc) return;
+    setLangModalOpen(false);
+    setLangBusy(true);
+    try {
+      const typeName = doc.documentType?.name ?? 'legal document';
+      const brief =
+        `Produce a complete, formal ${typeName} in proper Indian legal drafting style, ` +
+        `using the following details. Render every section in full prose (do not just list the data).\n\n` +
+        `Details (JSON):\n${JSON.stringify(draft, null, 2)}`;
+      const gen = await legalAi.generate({
+        brief,
+        language: targetLang,
+        documentTypeKey: doc.documentType?.key,
+      });
+      const newDoc = await createDoc.mutateAsync({
+        title: `${draftTitle || typeName} (${targetLang})`,
+        documentTypeKey: 'freeform',
+        templateKey: 'freeform',
+        data: { html: gen.html, values: {}, templateId: 'freeform' },
+      });
+      toast.success(`Draft created in ${targetLang}`, {
+        description: gen.disclaimer,
+      });
+      navigate(`/documents/${newDoc.id}/draft`);
+    } catch {
+      toast.error(
+        'Could not generate in that language. Check your AI provider / quota.',
+      );
+    } finally {
+      setLangBusy(false);
     }
   }
 
@@ -243,7 +298,23 @@ export function BuilderShell({ documentId }: Props) {
           />
           {patch.isPending ? 'Saving…' : patch.isError ? 'Save failed' : 'Saved'}
         </span>
-        <Button variant="outline" size="sm" disabled className="hidden sm:inline-flex">
+        <PageSizeSelect
+          value={doc.pageSize}
+          onChange={(size) => patchMutate({ pageSize: size })}
+          className="hidden flex-none sm:block"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          isLoading={langBusy}
+          onClick={() => setLangModalOpen(true)}
+          className="hidden flex-none gap-1.5 sm:inline-flex"
+          title="Generate this document in another language"
+        >
+          <GlobeIcon />
+          <span className="hidden md:inline">Language</span>
+        </Button>
+        <Button variant="outline" size="sm" disabled className="hidden lg:inline-flex">
           Share
         </Button>
         <Button
@@ -327,6 +398,40 @@ export function BuilderShell({ documentId }: Props) {
         </section>
       </div>
 
+      {/* Generate-in-language modal */}
+      <Dialog open={langModalOpen} onOpenChange={setLangModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate in another language</DialogTitle>
+            <DialogDescription>
+              AI will draft a full, editable copy of this document in the
+              chosen language using your entered details. It opens as a
+              freeform draft you can refine and export.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-3">
+            <Label htmlFor="builder-lang">Language</Label>
+            <LanguageSelect
+              id="builder-lang"
+              value={targetLang}
+              onChange={setTargetLang}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLangModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" isLoading={langBusy} onClick={generateInLanguage}>
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {inlineEdit && (
         <InlineEditPopover
           fieldRect={inlineEdit.event.rect}
@@ -407,6 +512,24 @@ function BackIcon() {
     >
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
   );
 }

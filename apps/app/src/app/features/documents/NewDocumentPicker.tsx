@@ -1,9 +1,21 @@
-import { Button, Card } from '@org/ui';
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
+  Textarea,
+} from '@org/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCreateDocument, useDocumentCatalog } from './queries';
 import { useLegalAiService } from './services-context';
+import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
 
 export function NewDocumentPicker() {
   const { data: catalog, isLoading } = useDocumentCatalog();
@@ -12,18 +24,20 @@ export function NewDocumentPicker() {
   const legalAi = useLegalAiService();
   const [typeKey, setTypeKey] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiBrief, setAiBrief] = useState('');
+  const [aiLanguage, setAiLanguage] = useState(DEFAULT_LANGUAGE);
 
   const selectedType = catalog?.find((t) => t.key === typeKey) ?? null;
 
   async function draftWithAI() {
-    const brief = window.prompt(
-      'Describe the document you want to draft (e.g. "Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months").',
-    );
-    if (!brief?.trim()) return;
+    if (!aiBrief.trim()) return;
+    setAiModalOpen(false);
     setAiBusy(true);
     try {
       const gen = await legalAi.generate({
-        brief: brief.trim(),
+        brief: aiBrief.trim(),
+        language: aiLanguage,
         documentTypeKey: 'freeform',
       });
       const doc = await create.mutateAsync({
@@ -75,7 +89,10 @@ export function NewDocumentPicker() {
             </p>
             <Button
               isLoading={aiBusy}
-              onClick={draftWithAI}
+              onClick={() => {
+                setAiBrief('');
+                setAiModalOpen(true);
+              }}
               className="mt-1"
             >
               {aiBusy ? 'Drafting…' : 'Draft with AI'}
@@ -172,6 +189,55 @@ export function NewDocumentPicker() {
           </div>
         </div>
       )}
+
+      {/* AI Draft Modal */}
+      <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Draft with AI</DialogTitle>
+            <DialogDescription>
+              Describe the document you need in plain English. Be specific about
+              parties, terms, and key details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-3">
+            <Label htmlFor="new-doc-ai-brief">Document description</Label>
+            <Textarea
+              id="new-doc-ai-brief"
+              placeholder='e.g. "Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months"'
+              value={aiBrief}
+              onChange={(e) => setAiBrief(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  draftWithAI();
+                }
+              }}
+              rows={4}
+              autoFocus
+            />
+            <Label htmlFor="new-doc-ai-language" className="mt-1">
+              Language
+            </Label>
+            <LanguageSelect
+              id="new-doc-ai-language"
+              value={aiLanguage}
+              onChange={setAiLanguage}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAiModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" disabled={!aiBrief.trim()} onClick={draftWithAI}>
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

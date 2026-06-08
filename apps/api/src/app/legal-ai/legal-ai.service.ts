@@ -109,9 +109,10 @@ export class LegalAiService {
     if (bundle) {
       system += `\n\nThis document is a "${bundle.key}". Typical sections (guidance — adapt to the brief): ${bundle.sectionOrder.join(', ')}.`;
     }
+    system += `\n\nLanguage: write the ENTIRE document — every heading, clause, label, and sentence — in ${dto.language}. The ONLY exception: keep {{placeholder}} tokens exactly as given (Latin snake_case keys, e.g. {{landlord_name}}); never translate the keys themselves. If ${dto.language} is not English, still keep ₹ and Indian legal conventions.`;
     const userMessage =
       (dto.title ? `Title: ${dto.title}\n` : '') +
-      `Output language: ${dto.language}\n\nBrief:\n${dto.brief}`;
+      `Brief:\n${dto.brief}`;
 
     const { html, model, cached } = await this.generateHtml(
       userId,
@@ -138,6 +139,9 @@ export class LegalAiService {
       : undefined;
     let system = REVISE_SYSTEM;
     if (bundle) system += `\n\nDocument type: "${bundle.key}".`;
+    if (dto.language) {
+      system += `\n\nLanguage: rewrite/translate the ENTIRE document into ${dto.language}, preserving meaning, structure, and all {{placeholder}} keys (keep keys in Latin snake_case).`;
+    }
     const userMessage = `Instruction:\n${dto.instruction}\n\nCurrent document HTML:\n${dto.html}`;
 
     const { html, model, cached } = await this.generateHtml(

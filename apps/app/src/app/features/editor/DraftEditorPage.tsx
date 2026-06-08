@@ -32,17 +32,22 @@ export function DraftEditorPage() {
 
   const docTypeKey = doc?.documentType?.key;
   const handleAiGenerate = useCallback(
-    async (brief: string) => {
-      const r = await legalAi.generate({ brief, documentTypeKey: docTypeKey });
+    async (brief: string, language: string) => {
+      const r = await legalAi.generate({
+        brief,
+        language,
+        documentTypeKey: docTypeKey,
+      });
       return { html: r.html, disclaimer: r.disclaimer };
     },
     [legalAi, docTypeKey],
   );
   const handleAiRevise = useCallback(
-    async (instruction: string, html: string) => {
+    async (instruction: string, html: string, language?: string) => {
       const r = await legalAi.revise({
         instruction,
         html,
+        language,
         documentTypeKey: docTypeKey,
       });
       return { html: r.html };
@@ -95,8 +100,10 @@ export function DraftEditorPage() {
           title: doc.title,
           html: data.html ?? '<p></p>',
           values: data.values ?? {},
+          pageSize: doc.pageSize,
         },
         onSave: handleSave,
+        onPageSizeChange: (size) => patch.mutate({ pageSize: size }),
         savedAt,
         saving: patch.isPending,
       }}
