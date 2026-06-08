@@ -29,6 +29,10 @@ This is an India-first legal-document drafting platform. Before editing, read:
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** — repo map, setup, and the golden rules.
 - **[`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md)** — TS/React/NestJS conventions, module
   boundaries, i18n/translations, error handling, and "recipes" for adding a doc type / lib / module / route.
+- **[`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md)** — pluggable/interface-first
+  services: every external/provider seam goes through interface → registry → factory → config-driven
+  selection with capability negotiation + observable fallbacks. Follow for any new integration (AI/OCR/
+  extraction/storage/payment/mail). Interface the seams, not single-implementation internals.
 - **[`docs/BUILD_LOG.md`](docs/BUILD_LOG.md)** — dated journal of what changed and why (resume point).
 - **[`docs/`](docs/)** — market analysis, product roadmap, technical design, progress tracker.
 
