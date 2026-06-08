@@ -6,7 +6,11 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
-import type { CreateShareDto, UnlockShareDto } from './shares.dto';
+import type {
+  CreateShareDto,
+  PublicCommentDto,
+  UnlockShareDto,
+} from './shares.dto';
 
 @Injectable()
 export class SharesService {
@@ -75,8 +79,24 @@ export class SharesService {
     });
 
     const { document } = share;
+    // Comments are visible on comment/edit shares only.
+    const comments =
+      share.mode === 'view'
+        ? []
+        : await this.db.documentComment.findMany({
+            where: { documentId: document.id },
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              authorName: true,
+              body: true,
+              resolved: true,
+              createdAt: true,
+            },
+          });
     return {
       mode: share.mode,
+      comments,
       document: {
         id: document.id,
         title: document.title,
@@ -88,6 +108,38 @@ export class SharesService {
         documentType: { key: document.documentType.key, name: document.documentType.name },
         template: { key: document.template.key, name: document.template.name, componentKey: document.template.componentKey },
       },
+    };
+  }
+
+  async addPublicComment(token: string, dto: PublicCommentDto) {
+    const share = await this.db.documentShare.findUnique({ where: { token } });
+    if (!share) throw new NotFoundException('Share link not found');
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      throw new ForbiddenException('Share link expired');
+    }
+    if (share.mode === 'view') {
+      throw new ForbiddenException('This link does not allow comments');
+    }
+    if (share.passwordHash) {
+      if (!dto.password) throw new ForbiddenException('Password required');
+      const ok = await bcrypt.compare(dto.password, share.passwordHash);
+      if (!ok) throw new ForbiddenException('Wrong password');
+    }
+    const comment = await this.db.documentComment.create({
+      data: {
+        documentId: share.documentId,
+        authorId: null,
+        authorName: dto.authorName,
+        anchor: {},
+        body: dto.body,
+      },
+    });
+    return {
+      id: comment.id,
+      authorName: comment.authorName,
+      body: comment.body,
+      resolved: comment.resolved,
+      createdAt: comment.createdAt,
     };
   }
 }

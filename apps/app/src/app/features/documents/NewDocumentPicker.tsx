@@ -13,9 +13,23 @@ import {
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import {
+  DOCUMENT_PRESETS,
+  type DocumentPreset,
+  type DocumentPresetCategory,
+} from '@org/legal-reference';
 import { useCreateDocument, useDocumentCatalog } from './queries';
 import { useLegalAiService } from './services-context';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
+
+const PRESET_CATEGORIES: DocumentPresetCategory[] = [
+  'Court Filings',
+  'Notices',
+  'Agreements',
+  'Personal',
+  'Affidavits',
+  'Information',
+];
 
 export function NewDocumentPicker() {
   const { data: catalog, isLoading } = useDocumentCatalog();
@@ -27,8 +41,15 @@ export function NewDocumentPicker() {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiBrief, setAiBrief] = useState('');
   const [aiLanguage, setAiLanguage] = useState(DEFAULT_LANGUAGE);
+  const [preset, setPreset] = useState<DocumentPreset | null>(null);
 
   const selectedType = catalog?.find((t) => t.key === typeKey) ?? null;
+
+  function openAiModal(p: DocumentPreset | null) {
+    setPreset(p);
+    setAiBrief(p?.sampleBrief ?? '');
+    setAiModalOpen(true);
+  }
 
   async function draftWithAI() {
     if (!aiBrief.trim()) return;
@@ -39,9 +60,10 @@ export function NewDocumentPicker() {
         brief: aiBrief.trim(),
         language: aiLanguage,
         documentTypeKey: 'freeform',
+        presetKey: preset?.key,
       });
       const doc = await create.mutateAsync({
-        title: 'AI draft',
+        title: preset?.name ?? 'AI draft',
         documentTypeKey: 'freeform',
         templateKey: 'freeform',
         data: { html: gen.html, values: {}, templateId: 'freeform' },
@@ -89,10 +111,7 @@ export function NewDocumentPicker() {
             </p>
             <Button
               isLoading={aiBusy}
-              onClick={() => {
-                setAiBrief('');
-                setAiModalOpen(true);
-              }}
+              onClick={() => openAiModal(null)}
               className="mt-1"
             >
               {aiBusy ? 'Drafting…' : 'Draft with AI'}
@@ -115,6 +134,42 @@ export function NewDocumentPicker() {
               Open editor
             </Button>
           </Card>
+        </div>
+      )}
+
+      {!typeKey && (
+        <div className="space-y-5">
+          <div className="pt-2 text-sm font-medium text-foreground/60">
+            Draft any document with AI — pick a starting point
+          </div>
+          {PRESET_CATEGORIES.map((cat) => {
+            const items = DOCUMENT_PRESETS.filter((p) => p.category === cat);
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+                  {cat}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {items.map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => openAiModal(p)}
+                      className="group rounded-xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm"
+                    >
+                      <h4 className="font-semibold text-foreground group-hover:text-primary">
+                        {p.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-foreground/55 line-clamp-2">
+                        {p.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -194,10 +249,11 @@ export function NewDocumentPicker() {
       <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Draft with AI</DialogTitle>
+            <DialogTitle>{preset ? preset.name : 'Draft with AI'}</DialogTitle>
             <DialogDescription>
-              Describe the document you need in plain English. Be specific about
-              parties, terms, and key details.
+              {preset
+                ? 'Fill in the details below (replace the {{placeholders}}), then generate. You can refine and translate it in the editor.'
+                : 'Describe the document you need in plain English. Be specific about parties, terms, and key details.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">

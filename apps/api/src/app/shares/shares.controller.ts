@@ -16,7 +16,11 @@ import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CreateShareDto, UnlockShareDto } from './shares.dto';
+import {
+  CreateShareDto,
+  PublicCommentDto,
+  UnlockShareDto,
+} from './shares.dto';
 import { SharesService } from './shares.service';
 
 @ApiTags('shares')
@@ -42,5 +46,13 @@ export class SharesController {
   })
   resolve(@Param('token') token: string, @Body() body: UnlockShareDto) {
     return this.shares.getPublicByToken(token, body);
+  }
+
+  @Post('public/:token/comments')
+  @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @ApiOperation({ summary: 'Add a comment to a shared document (comment/edit links)' })
+  comment(@Param('token') token: string, @Body() body: PublicCommentDto) {
+    return this.shares.addPublicComment(token, body);
   }
 }

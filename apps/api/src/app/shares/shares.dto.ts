@@ -19,3 +19,11 @@ const UnlockShareSchema = z.object({
 });
 
 export class UnlockShareDto extends createZodDto(UnlockShareSchema) {}
+
+const PublicCommentSchema = z.object({
+  authorName: z.string().min(1).max(120),
+  body: z.string().min(1).max(4000),
+  password: z.string().min(4).max(64).optional(),
+});
+
+export class PublicCommentDto extends createZodDto(PublicCommentSchema) {}

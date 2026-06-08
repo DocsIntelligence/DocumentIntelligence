@@ -103,6 +103,22 @@ export class DocumentsController {
     return this.documents.snapshot(user.id, id, body?.label);
   }
 
+  @Get(':id/versions')
+  @ApiOperation({ summary: 'List version snapshots for a document' })
+  listVersions(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.documents.listVersions(user.id, id);
+  }
+
+  @Post(':id/versions/:versionId/restore')
+  @ApiOperation({ summary: 'Restore a document to a previous version' })
+  restoreVersion(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+  ) {
+    return this.documents.restoreVersion(user.id, id, versionId);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a document' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {

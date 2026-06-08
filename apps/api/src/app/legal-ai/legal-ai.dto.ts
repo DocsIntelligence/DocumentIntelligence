@@ -31,6 +31,8 @@ const GenerateDocumentSchema = z.object({
   title: z.string().max(200).optional(),
   /** Human language name to write the document in (e.g. "English", "Hindi", "Tamil"). */
   language: z.string().min(2).max(40).default('English'),
+  /** Optional court/legal preset key (see @org/legal-reference DOCUMENT_PRESETS) — selects a structural scaffold. */
+  presetKey: z.string().min(1).max(64).optional(),
 });
 
 export class GenerateDocumentDto extends createZodDto(GenerateDocumentSchema) {}

@@ -18,6 +18,7 @@ import {
   BuilderPage,
   DocumentsList,
   NewDocumentPicker,
+  SharedDocumentView,
 } from './features/documents';
 import { EditorDemo, DraftEditorPage } from './features/editor';
 import { Settings } from './features/settings/Settings';
@@ -40,6 +41,9 @@ export function App() {
 
   return (
     <Routes>
+      {/* Public, no-auth: shared document view */}
+      <Route path="/s/:token" element={<SharedDocumentView />} />
+
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

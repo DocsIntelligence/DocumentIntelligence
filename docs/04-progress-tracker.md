@@ -59,22 +59,24 @@
 
 | Item | Status | Notes |
 |---|---|---|
-| Court `_internals` scaffolding (cause title, prayer, verification, memo of parties) | ⬜ | |
-| `citations.ts` library with effective dates (IPC→BNS, CrPC→BNSS, Evidence→BSA) | ⬜ | **correctness-critical** |
-| Legal notice family (consumer/employment/civil/§138) | ⬜ | |
-| Consumer complaint (CP Act 2019) | ⬜ | |
-| Affidavits (name-change/address/lost-doc/general) | ⬜ | |
-| Bail application (regular + anticipatory, **BNSS**) | ⬜ | |
-| Plaint / Written Statement + Vakalatnama + Memo of Parties | ⬜ | |
-| Writ petition scaffold (Art. 226/32) | ⬜ | advocate-gated |
+| Court structural scaffolds (cause title, prayer, verification, memo of parties) | 🟡 | Shipped as **server-side prompt scaffolds** (`apps/api/.../legal-ai/court-scaffolds.ts`) that structure AI-drafted court docs in the freeform editor. A reusable React `_internals` set for *structured* court templates is still future. |
+| Citation library with effective dates (IPC→BNS, CrPC→BNSS, Evidence→BSA) | 🟡 | **correctness-critical** — `@org/legal-reference` (act-level reforms authoritative; section maps confidence-annotated + "verify against bare act"). Wired into legal-ai generate/revise as a guardrail. Expand section coverage + a server-side citation-fill step next. |
+| Court & legal **document presets** (notice §138, general notice, consumer, bail ×2, plaint, WS, vakalatnama, affidavit, RTI) | ✅ | `DOCUMENT_PRESETS` in `@org/legal-reference` → New-document picker "Court & legal" section → AI draft (with `presetKey` scaffold + criminal-code guardrail) → freeform editor. |
+| Legal notice family (consumer/employment/civil/§138) | 🟡 | Available as AI presets (notice-138, general). Dedicated structured templates not built. |
+| Consumer complaint (CP Act 2019) | 🟡 | AI preset (`consumer-complaint`). |
+| Affidavits (name-change/address/lost-doc/general) | 🟡 | AI preset (`affidavit-general`); specific variants via the brief. |
+| Bail application (regular + anticipatory, **BNSS**) | 🟡 | AI presets (`bail-regular`, `bail-anticipatory`) with BNSS guardrail. |
+| Plaint / Written Statement + Vakalatnama + Memo of Parties | 🟡 | AI presets (`plaint`, `written-statement`, `vakalatnama`). |
+| Writ petition scaffold (Art. 226/32) | ⬜ | advocate-gated; add as a preset + scaffold next. |
 
 ## Phase D — Sharing, signing, collaboration
 
 | Item | Status | Notes |
 |---|---|---|
-| Share links (view/comment/edit) on `apps/web` | ⬜ | `DocumentShare` model exists |
-| Section-anchored comments (REST + SSE) | ⬜ | `DocumentComment` model exists |
-| Multi-signer drawn/typed signatures | ⬜ | `DocumentSigner` model exists |
+| Share links (view/comment/edit) | ✅ | Backend `shares` module + **frontend**: api-client + `ShareDialog` (mode/password/expiry → copyable link) in BuilderShell + freeform editor; public `/s/:token` view (`SharedDocumentView`) renders freeform read-only. (Public view lives in `apps/app`, not `apps/web`.) |
+| Section-anchored comments (REST + SSE) | 🟡 | REST done: `comments/` module (list/add/resolve, owner+org access) + api-client + `useComments`/`useAddComment`/`useResolveComment` + `CommentsDialog` in both builders + guest comments via share token (`SharedDocumentView`). **SSE live-refresh not done** (react-query refetch only); `anchor` stored but UI is document-level. |
+| Document version history (snapshot / list / restore) | ✅ | `GET/POST` version endpoints + `VersionHistoryDialog` wired into both builders (reversible restore). |
+| Multi-signer drawn/typed signatures | 🟡 | Capture done: `signers/` module (list/add/update/remove + `:signerId/sign` recording drawn-PNG/typed signature into `DocumentSigner.evidence` with IP/UA, auto-flips doc to `signed` when all sign) + api-client + `useSigners`/`useAddSigner`/`useUpdateSigner`/`useRemoveSigner`/`useSignSigner` + `SignaturesDialog` (canvas pad + typed) in builder + freeform editor. **Not done:** rendering the captured signature onto the exported PDF/artboard, and reorder UI. |
 | One eSign provider (Digio) integration | ⬜ | webhook flow |
 | eSign hard-gate for Schedule-1-excluded doc types | ⬜ | **legal requirement** |
 | Audit-trail page on signed PDF | ⬜ | |
@@ -87,7 +89,7 @@
 | Advocate verification (BCI number) | ⬜ | |
 | Template marketplace (revenue share) | ⬜ | `DocumentTemplate.ownerType` supports it |
 | White-label share subdomains | ⬜ | |
-| Long-tail consumer docs (NDA/MoU/will/RTI/…) | ⬜ | |
+| Long-tail consumer docs (NDA/MoU/will/RTI/…) | 🟡 | Available as AI presets in `@org/legal-reference` `DOCUMENT_PRESETS` (NDA, MoU, partnership deed, offer letter, gift deed, will, GPA, RTI). Structured templates optional later. |
 | Hindi UI on `apps/app` | 🟡 | i18next plumbed; content/QA pending |
 | eStamp aggregator integration | ⬜ | manual stamped-paper upload first |
 | PWA + offline drafting | ⬜ | redux-persist already wires storage |

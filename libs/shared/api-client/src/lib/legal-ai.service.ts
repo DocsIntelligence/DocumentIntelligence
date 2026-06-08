@@ -28,6 +28,8 @@ export interface GenerateDocumentPayload {
   documentTypeKey?: string;
   title?: string;
   language?: string;
+  /** Court/legal preset key (selects a server-side structural scaffold). */
+  presetKey?: string;
 }
 
 export interface GenerateDocumentResponse {

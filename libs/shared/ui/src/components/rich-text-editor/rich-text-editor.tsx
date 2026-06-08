@@ -105,12 +105,12 @@ export function RichTextEditor({
 
   // Sync transliteration state when props change
   if (editor) {
-    const ext = editor.extensionManager.extensions.find(
-      (e) => e.name === 'transliteration',
-    );
-    if (ext) {
-      ext.storage.state.enabled = enabled;
-      ext.storage.state.language = language;
+    const storage = editor.storage.transliteration as
+      | TransliterationState
+      | undefined;
+    if (storage) {
+      storage.enabled = enabled;
+      storage.language = language;
     }
   }
 
@@ -118,11 +118,10 @@ export function RichTextEditor({
     (suggestion: string) => {
       if (!editor) return;
 
-      const ext = editor.extensionManager.extensions.find(
-        (e) => e.name === 'transliteration',
-      );
-      if (ext) {
-        const state = ext.storage.state as TransliterationState;
+      const state = editor.storage.transliteration as
+        | TransliterationState
+        | undefined;
+      if (state) {
         editor
           .chain()
           .focus()

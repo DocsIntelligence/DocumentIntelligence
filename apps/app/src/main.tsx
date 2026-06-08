@@ -4,6 +4,7 @@ import {
   createDocumentsService,
   createHttpClient,
   createLegalAiService,
+  createSharesService,
   createUsersService,
 } from '@org/api-client';
 import { authActions, configureAppStore } from '@org/store';
@@ -51,6 +52,7 @@ const auth = createAuthService(http);
 const users = createUsersService(http);
 const documents = createDocumentsService(http);
 const legalAi = createLegalAiService(http);
+const shares = createSharesService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -73,10 +75,14 @@ root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <ServicesProvider documents={documents} legalAi={legalAi}>
+          <ServicesProvider
+            documents={documents}
+            legalAi={legalAi}
+            shares={shares}
+          >
             <BrowserRouter>
               <App />
-              <Toaster richColors position="top-right" />
+              <Toaster richColors position="bottom-right" />
             </BrowserRouter>
           </ServicesProvider>
         </TooltipProvider>

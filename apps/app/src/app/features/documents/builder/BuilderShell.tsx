@@ -21,6 +21,10 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
 import { PageSizeSelect } from '../../../lib/page-sizes';
+import { CommentsDialog } from '../CommentsDialog';
+import { ShareDialog } from '../ShareDialog';
+import { SignaturesDialog } from '../SignaturesDialog';
+import { VersionHistoryDialog } from '../VersionHistoryDialog';
 import { useCreateDocument, useDocument, usePatchDocument } from '../queries';
 import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
@@ -63,6 +67,10 @@ export function BuilderShell({ documentId }: Props) {
   const [langModalOpen, setLangModalOpen] = useState(false);
   const [targetLang, setTargetLang] = useState(DEFAULT_LANGUAGE);
   const [langBusy, setLangBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [signaturesOpen, setSignaturesOpen] = useState(false);
 
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [draftTitle, setDraftTitle] = useState('');
@@ -314,7 +322,36 @@ export function BuilderShell({ documentId }: Props) {
           <GlobeIcon />
           <span className="hidden md:inline">Language</span>
         </Button>
-        <Button variant="outline" size="sm" disabled className="hidden lg:inline-flex">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCommentsOpen(true)}
+          className="hidden flex-none lg:inline-flex"
+        >
+          Comments
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSignaturesOpen(true)}
+          className="hidden flex-none lg:inline-flex"
+        >
+          Signatures
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setHistoryOpen(true)}
+          className="hidden flex-none lg:inline-flex"
+        >
+          History
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShareOpen(true)}
+          className="hidden flex-none sm:inline-flex"
+        >
           Share
         </Button>
         <Button
@@ -397,6 +434,27 @@ export function BuilderShell({ documentId }: Props) {
           />
         </section>
       </div>
+
+      <ShareDialog
+        documentId={documentId}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
+      <VersionHistoryDialog
+        documentId={documentId}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
+      <CommentsDialog
+        documentId={documentId}
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+      />
+      <SignaturesDialog
+        documentId={documentId}
+        open={signaturesOpen}
+        onOpenChange={setSignaturesOpen}
+      />
 
       {/* Generate-in-language modal */}
       <Dialog open={langModalOpen} onOpenChange={setLangModalOpen}>

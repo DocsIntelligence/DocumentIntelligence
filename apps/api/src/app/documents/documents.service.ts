@@ -219,6 +219,65 @@ export class DocumentsService {
     });
   }
 
+  // ─── Version history ─────────────────────────────────────────────────────
+
+  async listVersions(userId: string, id: string) {
+    const doc = await this.db.document.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+    await this.assertCanAccess(userId, doc);
+    return this.db.documentVersion.findMany({
+      where: { documentId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        label: true,
+        pageSize: true,
+        createdAt: true,
+        createdById: true,
+      },
+    });
+  }
+
+  async restoreVersion(userId: string, id: string, versionId: string) {
+    const doc = await this.db.document.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+    await this.assertCanAccess(userId, doc);
+    if (doc.lockedAt) {
+      throw new ForbiddenException('Document is locked (signed).');
+    }
+    const version = await this.db.documentVersion.findUnique({
+      where: { id: versionId },
+    });
+    if (!version || version.documentId !== id) {
+      throw new NotFoundException('Version not found');
+    }
+    // Snapshot the current state first, so a restore is itself reversible.
+    await this.db.documentVersion.create({
+      data: {
+        documentId: doc.id,
+        data: doc.data as Prisma.InputJsonValue,
+        templateId: doc.templateId,
+        pageSize: doc.pageSize,
+        label: 'Auto-snapshot before restore',
+        createdById: userId,
+      },
+    });
+    return this.db.document.update({
+      where: { id },
+      data: {
+        data: version.data as Prisma.InputJsonValue,
+        templateId: version.templateId,
+        pageSize: version.pageSize,
+      },
+      include: {
+        documentType: true,
+        template: true,
+        signers: { orderBy: { order: 'asc' } },
+      },
+    });
+  }
+
   // ─── Delete ────────────────────────────────────────────────────────────
 
   async remove(userId: string, id: string) {

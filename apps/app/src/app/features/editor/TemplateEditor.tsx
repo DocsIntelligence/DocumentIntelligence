@@ -109,6 +109,14 @@ export interface TemplateEditorProps {
   /** When provided, the PDF button uses this (the reliable backend export) instead of window.print. */
   onExportPdf?: () => void;
   exportingPdf?: boolean;
+  /** When provided (bound docs), shows a Share action in the top bar. */
+  onShare?: () => void;
+  /** When provided (bound docs), shows a version-History action in the top bar. */
+  onHistory?: () => void;
+  /** When provided (bound docs), shows a Comments action in the top bar. */
+  onComments?: () => void;
+  /** When provided (bound docs), shows a Signatures action in the top bar. */
+  onSignatures?: () => void;
 }
 
 function TemplateEditorInner({
@@ -120,6 +128,10 @@ function TemplateEditorInner({
   onAiRevise,
   onExportPdf,
   exportingPdf,
+  onShare,
+  onHistory,
+  onComments,
+  onSignatures,
 }: {
   persistence: EditorPersistence;
   backHref?: string;
@@ -136,6 +148,10 @@ function TemplateEditorInner({
   ) => Promise<{ html: string }>;
   onExportPdf?: () => void;
   exportingPdf?: boolean;
+  onShare?: () => void;
+  onHistory?: () => void;
+  onComments?: () => void;
+  onSignatures?: () => void;
 }) {
   const { enabled, language } = useTransliteration();
   const bound = persistence.mode === 'bound';
@@ -277,13 +293,12 @@ function TemplateEditorInner({
   // Keep the transliteration extension's live state in sync with the toolbar.
   useEffect(() => {
     if (!editor) return;
-    const ext = editor.extensionManager.extensions.find(
-      (e) => e.name === 'transliteration',
-    );
-    if (ext) {
-      const state = ext.storage.state as TransliterationState;
-      state.enabled = enabled;
-      state.language = language;
+    const storage = editor.storage.transliteration as
+      | TransliterationState
+      | undefined;
+    if (storage) {
+      storage.enabled = enabled;
+      storage.language = language;
     }
     if (!enabled) setTranslitState(null);
   }, [editor, enabled, language]);
@@ -291,11 +306,10 @@ function TemplateEditorInner({
   const handleSuggestionSelect = useCallback(
     (suggestion: string) => {
       if (!editor) return;
-      const ext = editor.extensionManager.extensions.find(
-        (e) => e.name === 'transliteration',
-      );
-      if (ext) {
-        const state = ext.storage.state as TransliterationState;
+      const state = editor.storage.transliteration as
+        | TransliterationState
+        | undefined;
+      if (state) {
         editor
           .chain()
           .focus()
@@ -730,6 +744,46 @@ function TemplateEditorInner({
             <CopyIcon />
             Copy
           </Button>
+          {onComments && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onComments}
+              className="gap-1.5 text-xs"
+            >
+              Comments
+            </Button>
+          )}
+          {onSignatures && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSignatures}
+              className="gap-1.5 text-xs"
+            >
+              Signatures
+            </Button>
+          )}
+          {onHistory && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onHistory}
+              className="gap-1.5 text-xs"
+            >
+              History
+            </Button>
+          )}
+          {onShare && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onShare}
+              className="gap-1.5 text-xs"
+            >
+              Share
+            </Button>
+          )}
           <PageSizeSelect
             value={pageSize}
             onChange={handlePageSizeChange}
@@ -1106,6 +1160,10 @@ export function TemplateEditor({
   onAiRevise,
   onExportPdf,
   exportingPdf,
+  onShare,
+  onHistory,
+  onComments,
+  onSignatures,
 }: TemplateEditorProps = {}) {
   return (
     <TransliterationProvider defaultLanguage="hi" defaultEnabled={false}>
@@ -1118,6 +1176,10 @@ export function TemplateEditor({
         onAiRevise={onAiRevise}
         onExportPdf={onExportPdf}
         exportingPdf={exportingPdf}
+        onShare={onShare}
+        onHistory={onHistory}
+        onComments={onComments}
+        onSignatures={onSignatures}
       />
     </TransliterationProvider>
   );

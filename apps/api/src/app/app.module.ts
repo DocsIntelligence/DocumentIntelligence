@@ -6,6 +6,7 @@ import { AiModule } from './ai/ai.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { CommentsModule } from './comments/comments.module';
 import { CommonModule } from './common/common.module';
 import { RequestLoggerMiddleware } from './common/middleware/logger.middleware';
 import { AppConfigModule } from './config/config.module';
@@ -14,6 +15,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { LegalAiModule } from './legal-ai/legal-ai.module';
 import { SharesModule } from './shares/shares.module';
+import { SignersModule } from './signers/signers.module';
 import { AppLoggerModule } from './logger/logger.module';
 import { LookupModule } from './lookup/lookup.module';
 import { MailModule } from './mail/mail.module';
@@ -40,6 +42,8 @@ import { UsersModule } from './users/users.module';
     DocumentsModule,
     LegalAiModule,
     SharesModule,
+    CommentsModule,
+    SignersModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

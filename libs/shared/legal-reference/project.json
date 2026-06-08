@@ -1,0 +1,6 @@
+{
+  "name": "legal-reference",
+  "sourceRoot": "libs/shared/legal-reference/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"]
+}

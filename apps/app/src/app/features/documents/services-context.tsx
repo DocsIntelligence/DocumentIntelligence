@@ -1,4 +1,8 @@
-import type { DocumentsService, LegalAiService } from '@org/api-client';
+import type {
+  DocumentsService,
+  LegalAiService,
+  SharesService,
+} from '@org/api-client';
 import { createContext, type ReactNode, useContext } from 'react';
 
 /**
@@ -10,6 +14,7 @@ import { createContext, type ReactNode, useContext } from 'react';
 interface Services {
   documents: DocumentsService;
   legalAi: LegalAiService;
+  shares: SharesService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -21,10 +26,11 @@ interface ProviderProps extends Services {
 export function ServicesProvider({
   documents,
   legalAi,
+  shares,
   children,
 }: ProviderProps) {
   return (
-    <ServicesContext.Provider value={{ documents, legalAi }}>
+    <ServicesContext.Provider value={{ documents, legalAi, shares }}>
       {children}
     </ServicesContext.Provider>
   );
@@ -40,4 +46,10 @@ export function useLegalAiService(): LegalAiService {
   const ctx = useContext(ServicesContext);
   if (!ctx) throw new Error('useLegalAiService outside <ServicesProvider>');
   return ctx.legalAi;
+}
+
+export function useSharesService(): SharesService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx) throw new Error('useSharesService outside <ServicesProvider>');
+  return ctx.shares;
 }

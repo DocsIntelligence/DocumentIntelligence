@@ -4,6 +4,11 @@
 > Mirrors the harness task list but survives across sessions. Update the **Current state** and
 > **Next step** blocks every time you stop. Phase order: **editor first, then flows.**
 
+## 🚧 In progress / next (update this when you start/finish a slice)
+- **IN PROGRESS:** Comments on documents + shares (collaboration) — backend comments module + public-via-token + owner/guest UI.
+- **NEXT (queued, in order):** drawn/typed signatures → eSign (Digio) + Schedule-1 gate → org multi-tenancy + marketplace → Hindi UI i18n.
+- Done so far (see journal): editor, multilingual, paper sizes, PDF/Word export, court docs + presets, sharing, version history, standards docs + `@org/legal-reference`.
+
 ## How to resume in a new session
 1. Read this file top-to-bottom.
 2. Read [`03-technical-design.md`](03-technical-design.md) for the how, [`02-product-roadmap.md`](02-product-roadmap.md) for the why/order.
@@ -59,6 +64,36 @@ Court-document scaffolding + citation library (BNS/BNSS/BSA), sharing/comments, 
 - **To verify visually:** `pnpm nx run app:serve` (or `pnpm dev:app`) → log in → `/editor` → toggle अ On, type `namaste ` and confirm Devanagari suggestions; check live preview pane + page navigator.
 - **Next step for whoever resumes:** T4, or jump to T5 (backend Claude provider) — they're independent; T5 unblocks the AI-draft flow which is the headline feature.
 
+### 2026-06-08 — Document version history (snapshot / list / restore)
+- **Backend:** `documents.service` gained `listVersions` + `restoreVersion` (restore first snapshots current state, so it's reversible); controller `GET /:id/versions` + `POST /:id/versions/:versionId/restore`. (`snapshot` already existed.)
+- **api-client:** `listVersions` / `restoreVersion` + `DocumentVersionSummary`.
+- **Frontend:** `useDocumentVersions` / `useSnapshotDocument` / `useRestoreVersion`; `VersionHistoryDialog` (list newest-first, "Save current as version", per-row Restore). Wired a **History** button into `BuilderShell` and the freeform editor (`TemplateEditor.onHistory` via `DraftEditorPage`).
+- Verified: api `tsc` 0, `app:typecheck` green, eslint clean, `app:build` ✓.
+
+### 2026-06-08 — Sharing (Phase D): share links + public view + long-tail presets
+- **Long-tail presets** added to `@org/legal-reference` `DOCUMENT_PRESETS`: writ petition, NDA, MoU, partnership deed, offer letter, gift deed, will, power of attorney (new categories `Agreements`/`Personal`). Will/PoA/gift-deed carry the IT-Act Schedule-1 "not Aadhaar-eSign-eligible" note. Backend `court-scaffolds.ts` gained a shared `AGREEMENT` scaffold + will/gpa/writ scaffolds. Picker now groups presets by category.
+- **Sharing UI (backend was already complete):**
+  - api-client `createSharesService` (`create`, `resolve`, `isSharedDocument`) + index export; wired into `services-context` (`useSharesService`) + `main.tsx`.
+  - `useCreateShare` mutation; `ShareDialog` (access mode view/comment/edit, optional password, expiry 0/7/30d → URL + copy).
+  - Enabled **Share** in `BuilderShell` (was a disabled stub) and added a Share action to the freeform editor (`TemplateEditor.onShare`, wired in `DraftEditorPage`).
+  - **Public route `/s/:token`** (`SharedDocumentView`, outside ProtectedRoute): resolves the share, handles password prompt, renders freeform docs read-only via `PaginatedPreview` (zoom/paper), graceful fallback for structured types. Links point at `${origin}/s/<token>`.
+- Verified: api `tsc` 0, `app:typecheck` green, eslint clean, `app:build` (vite) ✓.
+- **Still pending (phases):** comments on shares (model exists; not surfaced), eSign (Digio) + Schedule-1 gating, org multi-tenancy + marketplace, Hindi UI i18n, structured React court templates.
+
+### 2026-06-08 — Court & legal documents (AI-drafted, end-to-end)
+- **Presets catalog** `DOCUMENT_PRESETS` in `@org/legal-reference` (frontend-safe): cheque-bounce notice §138, general notice, consumer complaint (CPA 2019), regular + anticipatory bail (BNSS), plaint, written statement, vakalatnama, affidavit, RTI — each with name/category/description/editable `sampleBrief`/citation topics.
+- **Backend scaffolds** `apps/api/.../legal-ai/court-scaffolds.ts`: per-preset structural prompt (cause title, memo of parties, numbered facts/grounds, prayer, verification, advocate block / notice / affidavit / vakalatnama). `GenerateDocumentDto` + api-client gained `presetKey`; `generateDocument` appends the scaffold (and the criminal-code guardrail) to the system prompt. Bail/criminal presets explicitly steer to **BNSS, not the repealed CrPC**.
+- **Frontend:** New-document picker now has a "Court & legal documents" section; a preset opens the AI modal seeded with its brief + `presetKey`, generates a freeform doc, and opens `/documents/:id/draft` — where it can be edited, translated to any language, paper-sized, and exported (PDF backend / Word frontend).
+- **Why presets-into-freeform, not structured templates:** court docs are prose-heavy and don't fit rigid forms; AI-draft + structural scaffold + the citation guardrail is the architecture-fitting, scalable path. Structured React court templates remain a future option.
+- Verified: api `tsc` 0, legal-reference `tsc` 0, `app:typecheck` green, eslint clean, `app:build` (vite) succeeds.
+
+### 2026-06-08 — Maintainability docs + @org/legal-reference commons lib
+- **Standards docs:** added root `CONTRIBUTING.md` (repo map, setup, the golden rules, verify-before-claiming) and `docs/CODING_STANDARDS.md` (TS/React/NestJS conventions, module boundaries, i18n/translations, error handling, the per-app `tsconfig.json` rule, recipes, AI-agent guidance). `CLAUDE.md` now points at both (appended after the nx-managed markers).
+- **New commons lib `@org/legal-reference`** (`libs/shared/legal-reference`, tag scope:shared/type:util; path added to `tsconfig.base.json`): `jurisdictions` (Indian states/UTs + `IN-*`) and the **citation library** — `Citation` type, `CRIMINAL_CODE_REFORMS` (IPC→BNS / CrPC→BNSS / Evidence→BSA, effective 2024-07-01, authoritative), curated stable citations (NI §138, CPA 2019, Registration Act §17, IT Act §3A, RTI 2005) and a few criminal remaps (confidence-flagged + "verify against bare act"). Created manually mirroring the transliteration lib (nx-generate skill not available in this harness).
+- **Guardrail wired:** `CRIMINAL_CODE_REFORM_NOTE` appended to legal-ai generate + revise system prompts, so the AI won't silently reproduce repealed IPC/CrPC/Evidence sections.
+- Verified: api `tsc` exit 0, legal-reference lib `tsc` exit 0, eslint clean on the new lib + legal-ai.
+- **NOT done (remaining phases — see roadmap):** court-doc `_internals` scaffolding + types (plaint/WS/bail/vakalatnama), share links + comments, eSign (Digio) with Schedule-1 gating, org multi-tenancy + marketplace, long-tail doc types, Hindi UI i18n. These need either live integrations or large vertical slices; tackle one at a time.
+
 ### 2026-06-08 — Multilingual documents (Hindi / any language)
 - **Backend:** `/legal-ai/generate` now writes the ENTIRE document in a requested `language` (strong system directive; keeps `{{snake_case}}` placeholder keys in Latin). DTO relaxed to accept language names (`English`, `Hindi`, `Tamil`, …). `/legal-ai/revise` gained an optional `language` → translate/rewrite the whole doc into it.
 - **Shared UI:** `apps/app/.../lib/languages.tsx` — `LANGUAGE_OPTIONS` (English + 13 Indian langs from `@org/transliteration` + a few world languages) and a dialog-safe `<LanguageSelect>`.
@@ -105,3 +140,17 @@ Court-document scaffolding + citation library (BNS/BNSS/BSA), sharing/comments, 
 - **Files touched:** `package.json`/`pnpm-lock.yaml` (anthropic sdk), `apps/api/src/app/ai/providers/claude.provider.ts` (new), `ai.service.ts`, `ai.module.ts`, `config/schema.ts`, `.env.example`, `apps/app/src/app/features/editor/TemplateEditor.tsx`.
 - **Phase 1 (editor) is complete (T1–T4).** Next is the rest of Phase 2 flows.
 - **Next step for whoever resumes:** **T6** — `/legal-ai/generate` + `/legal-ai/revise` (read `legal-ai.service.ts`/`legal-ai.controller.ts`/`legal-ai.dto.ts` + `document-schema` prompts; use Claude structured outputs vs the Zod schema; guardrails + metering). Then **T7** (persist freeform editor to `Document`) and **T9** (wire "Draft with AI" into the editor). To runtime-verify T5: set `ANTHROPIC_API_KEY`, `pnpm dev:api`, hit an `/ai` or `/legal-ai` endpoint.
+
+### 2026-06-08 — Fix: AI over-inserting page breaks on short documents
+- **Symptom:** the generate/revise prompts told the model to insert `<div data-page-break></div>` "between major sections that should begin on a new page" — read as "every section," so short docs (a one-page notice, affidavit, etc.) got spurious page breaks and rendered as several near-empty pages.
+- **Fix (`apps/api/.../legal-ai/legal-ai.service.ts`):** rewrote the page-break rule in both `GENERATE_SYSTEM` and `REVISE_SYSTEM` to gate breaks on length — only insert when the document genuinely spans multiple printed pages (~500+ words/page), never on short docs or between every section. No code path / API change; prompt-only.
+- Verified: api `tsc -p apps/api/tsconfig.app.json --noEmit` exit 0, eslint clean on the changed file.
+
+### 2026-06-08 — Phase D: multi-signer drawn/typed signatures (capture, end-to-end)
+- **Backend `signers/` module** (`apps/api/.../signers/*`, mirrors `comments/`): `GET/POST /documents/:id/signers`, `PATCH/DELETE /documents/:id/signers/:signerId`, and `POST :signerId/sign`. `sign` records a drawn PNG data-URL (`method: 'draw'`) or typed name (`method: 'typed'`, `font`) into `DocumentSigner.evidence` along with server-stamped `signedAt`, IP and user-agent; sets `status='signed'`, `provider`. When the last signer signs, the document flips to `status='signed'`. Same owner/org access guard as comments. Registered in `app.module.ts`.
+- **DTOs** (`signers.dto.ts`, zod + `createZodDto`): `AddSignerDto`, `UpdateSignerDto`, `RecordSignatureDto` (refine: draw⇒image, typed⇒typedText; image capped at 2 MB).
+- **api-client:** `DocumentSigner`/`SignerRole`/`SignerStatus` types + `AddSigner`/`UpdateSigner`/`RecordSignature` payloads; `listSigners`/`addSigner`/`updateSigner`/`removeSigner`/`signSigner` on `documents.service`.
+- **Frontend:** `SignaturesDialog.tsx` — signer list with status badges, add-signer form (name/role/email), per-signer **canvas signature pad** (pointer-events draw → `toDataURL`) and **typed** mode (cursive preview), captured signature shown back. Query hooks in `queries.ts`. Mounted in `BuilderShell` (Signatures button) and the freeform editor (`DraftEditorPage` → `TemplateEditor` new `onSignatures` prop + button).
+- **Pre-existing bug found & fixed (correctness):** TipTap types `editor.storage` as the bare `Storage` interface; with no module-local declaration it resolved to the **DOM `Storage`** (localStorage), so `editor.storage.transliteration` only type-checked by luck of program composition — adding *any* new app code (this feature) tipped resolution and surfaced 7 `TS2339` errors across `TemplateEditor` + the rich-text-editor lib. Fixed at the source: `declare module '@tiptap/core' { interface Storage { transliteration: TransliterationState; [key: string]: unknown } }` in `transliteration-extension.ts`. App + lib now type-check green with the new code.
+- Verified: api `tsc` exit 0, **app `tsc -p apps/app/tsconfig.app.json` exit 0** (was failing pre-fix), eslint clean on all changed files. Runtime needs Postgres (DocumentSigner table) — not run here.
+- **Not done (follow-ups):** placing the captured signature image onto the exported PDF/artboard; drag-to-reorder signing order; remote/guest signing — that's the eSign (Digio) + Schedule-1 gate task.

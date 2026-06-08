@@ -6,6 +6,10 @@ import { TemplateEditor, type EditorDraftState } from './TemplateEditor';
 import { useDocument, usePatchDocument } from '../documents/queries';
 import { useLegalAiService } from '../documents/services-context';
 import { useExportPdf } from '../documents/builder/useExportPdf';
+import { ShareDialog } from '../documents/ShareDialog';
+import { VersionHistoryDialog } from '../documents/VersionHistoryDialog';
+import { CommentsDialog } from '../documents/CommentsDialog';
+import { SignaturesDialog } from '../documents/SignaturesDialog';
 
 /**
  * `/documents/:id/draft` — the freeform editor bound to a backend Document.
@@ -19,6 +23,10 @@ export function DraftEditorPage() {
   const legalAi = useLegalAiService();
   const { state: exportState, start: startExport } = useExportPdf(id ?? '');
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [signaturesOpen, setSignaturesOpen] = useState(false);
 
   // Reliable PDF via the backend Puppeteer service — open it when ready.
   useEffect(() => {
@@ -91,9 +99,38 @@ export function DraftEditorPage() {
   };
 
   return (
-    <TemplateEditor
-      backHref="/documents"
-      persistence={{
+    <>
+      {id && (
+        <>
+          <ShareDialog
+            documentId={id}
+            open={shareOpen}
+            onOpenChange={setShareOpen}
+          />
+          <VersionHistoryDialog
+            documentId={id}
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+          />
+          <CommentsDialog
+            documentId={id}
+            open={commentsOpen}
+            onOpenChange={setCommentsOpen}
+          />
+          <SignaturesDialog
+            documentId={id}
+            open={signaturesOpen}
+            onOpenChange={setSignaturesOpen}
+          />
+        </>
+      )}
+      <TemplateEditor
+        backHref="/documents"
+        onShare={() => setShareOpen(true)}
+        onHistory={() => setHistoryOpen(true)}
+        onComments={() => setCommentsOpen(true)}
+        onSignatures={() => setSignaturesOpen(true)}
+        persistence={{
         mode: 'bound',
         initial: {
           templateId: data.templateId,
@@ -107,10 +144,11 @@ export function DraftEditorPage() {
         savedAt,
         saving: patch.isPending,
       }}
-      onAiGenerate={handleAiGenerate}
-      onAiRevise={handleAiRevise}
-      onExportPdf={() => startExport()}
-      exportingPdf={exportState.phase === 'queued'}
-    />
+        onAiGenerate={handleAiGenerate}
+        onAiRevise={handleAiRevise}
+        onExportPdf={() => startExport()}
+        exportingPdf={exportState.phase === 'queued'}
+      />
+    </>
   );
 }

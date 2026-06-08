@@ -11,6 +11,8 @@ import {
   getBundle,
   type PromptDefinition,
 } from '@org/document-schema';
+import { CRIMINAL_CODE_REFORM_NOTE } from '@org/legal-reference';
+import { scaffoldForPreset } from './court-scaffolds';
 import { AiService } from '../ai/ai.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import type {
@@ -33,7 +35,7 @@ const GENERATE_SYSTEM = `You are an expert Indian legal document drafter. Produc
 Rules:
 - Output ONLY the document body as HTML (use h1, h2, h3, p, ol, ul, li, strong, em). No markdown, no <html>/<head>/<body> wrappers, and no code fences.
 - For any party-specific or fill-in value you do not know (names, addresses, dates, amounts, etc.), insert a placeholder token of the form {{snake_case_key}} — e.g. {{landlord_name}}, {{monthly_rent}}, {{agreement_date}}. Reuse the same key whenever the same value recurs.
-- Insert <div data-page-break></div> between major sections that should begin on a new page.
+- Only insert <div data-page-break></div> when the document is long enough to genuinely span multiple printed pages (roughly 500+ words per page). Do NOT add page breaks to short documents or between every section — only before a major section that should clearly start on a fresh page in a lengthy document.
 - Do NOT cite specific statute section numbers or case law. Where a legal reference is needed, write the neutral placeholder {{applicable_law}} — a qualified human inserts the correct citation.
 - Never impersonate a court or issue a judicial order.
 - Indian context: use ₹ for currency, Indian date conventions, and Indian legal drafting style.`;
@@ -43,7 +45,7 @@ const REVISE_SYSTEM = `You are editing an existing Indian legal document supplie
 Rules:
 - Keep existing {{placeholder}} tokens intact unless the instruction is specifically to fill or change them.
 - Output ONLY the HTML document body — no code fences, no commentary, no explanation.
-- Same drafting rules as generation: no statute section numbers (use {{applicable_law}}), Indian context, page breaks via <div data-page-break></div>.`;
+- Same drafting rules as generation: no statute section numbers (use {{applicable_law}}), Indian context. Only add page breaks (<div data-page-break></div>) if the document is long enough to span multiple printed pages — do not add them to short documents.`;
 
 interface CacheEntry {
   text: string;
@@ -110,9 +112,11 @@ export class LegalAiService {
       system += `\n\nThis document is a "${bundle.key}". Typical sections (guidance — adapt to the brief): ${bundle.sectionOrder.join(', ')}.`;
     }
     system += `\n\nLanguage: write the ENTIRE document — every heading, clause, label, and sentence — in ${dto.language}. The ONLY exception: keep {{placeholder}} tokens exactly as given (Latin snake_case keys, e.g. {{landlord_name}}); never translate the keys themselves. If ${dto.language} is not English, still keep ₹ and Indian legal conventions.`;
+    system += `\n\n${CRIMINAL_CODE_REFORM_NOTE}`;
+    const scaffold = scaffoldForPreset(dto.presetKey);
+    if (scaffold) system += `\n\n${scaffold}`;
     const userMessage =
-      (dto.title ? `Title: ${dto.title}\n` : '') +
-      `Brief:\n${dto.brief}`;
+      (dto.title ? `Title: ${dto.title}\n` : '') + `Brief:\n${dto.brief}`;
 
     const { html, model, cached } = await this.generateHtml(
       userId,
@@ -133,7 +137,12 @@ export class LegalAiService {
   async reviseDocument(
     userId: string,
     dto: ReviseDocumentDto,
-  ): Promise<{ html: string; model: string; cached: boolean; placeholders: string[] }> {
+  ): Promise<{
+    html: string;
+    model: string;
+    cached: boolean;
+    placeholders: string[];
+  }> {
     const bundle = dto.documentTypeKey
       ? getBundle(dto.documentTypeKey)
       : undefined;
@@ -142,6 +151,7 @@ export class LegalAiService {
     if (dto.language) {
       system += `\n\nLanguage: rewrite/translate the ENTIRE document into ${dto.language}, preserving meaning, structure, and all {{placeholder}} keys (keep keys in Latin snake_case).`;
     }
+    system += `\n\n${CRIMINAL_CODE_REFORM_NOTE}`;
     const userMessage = `Instruction:\n${dto.instruction}\n\nCurrent document HTML:\n${dto.html}`;
 
     const { html, model, cached } = await this.generateHtml(

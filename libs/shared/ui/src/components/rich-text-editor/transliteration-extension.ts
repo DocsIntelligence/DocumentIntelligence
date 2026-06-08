@@ -20,6 +20,20 @@ export type TransliterationState = {
   selectedIndex: number;
 };
 
+// TipTap types `editor.storage` as the bare `Storage` interface, which — with
+// no module-local declaration — otherwise resolves to the DOM `Storage`
+// (localStorage), so `editor.storage.transliteration` fails to type-check.
+// Declaring the interface inside the module gives extension storage a real
+// shape and keeps it stable regardless of program composition.
+declare module '@tiptap/core' {
+  interface Storage {
+    transliteration: TransliterationState;
+    // Other extensions' storage is accessed only internally; index keeps
+    // arbitrary `editor.storage[name]` lookups permissive.
+    [key: string]: unknown;
+  }
+}
+
 const TRANSLITERATION_PLUGIN_KEY = new PluginKey('transliteration');
 
 // Characters that are part of a transliterable word
@@ -56,21 +70,23 @@ export const TransliterationExtension =
 
     addStorage() {
       return {
-        state: {
-          enabled: this.options.enabled,
-          language: this.options.language,
-          buffer: '',
-          bufferStart: 0,
-          suggestions: [],
-          showSuggestions: false,
-          selectedIndex: 0,
-        } as TransliterationState,
+        enabled: this.options.enabled,
+        language: this.options.language,
+        buffer: '',
+        bufferStart: 0,
+        suggestions: [] as string[],
+        showSuggestions: false,
+        selectedIndex: 0,
         debounceTimer: null as ReturnType<typeof setTimeout> | null,
       };
     },
 
     addProseMirrorPlugins() {
-      const extension = this;
+      // Capture a reference to the editor instance so the plugin can access
+      // extension storage via editor.storage.transliteration (the canonical
+      // shared reference TipTap guarantees across re-renders).
+      const editor = this.editor;
+      const extensionOptions = this.options;
 
       return [
         new Plugin({
@@ -78,8 +94,8 @@ export const TransliterationExtension =
 
           props: {
             handleKeyDown(view: EditorView, event: KeyboardEvent) {
-              const storage = extension.storage;
-              const state = storage.state as TransliterationState;
+              const state = editor.storage
+                .transliteration as TransliterationState;
 
               if (!state.enabled) return false;
 
@@ -91,14 +107,14 @@ export const TransliterationExtension =
                     state.selectedIndex + 1,
                     state.suggestions.length - 1,
                   );
-                  extension.options.onSuggestions?.(state);
+                  extensionOptions.onSuggestions?.({ ...state });
                   return true;
                 }
 
                 if (event.key === 'ArrowUp') {
                   event.preventDefault();
                   state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
-                  extension.options.onSuggestions?.(state);
+                  extensionOptions.onSuggestions?.({ ...state });
                   return true;
                 }
 
@@ -109,7 +125,7 @@ export const TransliterationExtension =
                   if (selected) {
                     applySuggestion(view, state, selected);
                     resetBuffer(state);
-                    extension.options.onDismiss?.();
+                    extensionOptions.onDismiss?.();
                   }
                   return true;
                 }
@@ -122,7 +138,7 @@ export const TransliterationExtension =
                   if (selected) {
                     applySuggestion(view, state, selected);
                     resetBuffer(state);
-                    extension.options.onDismiss?.();
+                    extensionOptions.onDismiss?.();
                   }
                   return true;
                 }
@@ -131,7 +147,7 @@ export const TransliterationExtension =
                 if (event.key === 'Escape') {
                   event.preventDefault();
                   resetBuffer(state);
-                  extension.options.onDismiss?.();
+                  extensionOptions.onDismiss?.();
                   return true;
                 }
               }
@@ -146,17 +162,30 @@ export const TransliterationExtension =
                     state.suggestions[state.selectedIndex] ??
                     state.suggestions[0];
                   applySuggestion(view, state, selected + event.key);
+                  resetBuffer(state);
+                  extensionOptions.onDismiss?.();
                 } else {
-                  // Fetch and apply immediately
-                  transliterate(state.buffer, state.language).then((result) => {
+                  // Capture buffer state before reset for the async path
+                  const pendingBuffer = state.buffer;
+                  const pendingStart = state.bufferStart;
+                  const pendingLang = state.language;
+                  resetBuffer(state);
+                  extensionOptions.onDismiss?.();
+
+                  // Fetch and apply
+                  transliterate(pendingBuffer, pendingLang).then((result) => {
                     if (result.suggestions.length > 0) {
-                      applySuggestion(
-                        view,
-                        state,
-                        result.suggestions[0] + event.key,
+                      const { tr } = view.state;
+                      tr.replaceWith(
+                        pendingStart,
+                        pendingStart + pendingBuffer.length,
+                        view.state.schema.text(
+                          result.suggestions[0] + event.key,
+                        ),
                       );
+                      view.dispatch(tr);
                     } else {
-                      // No suggestion — insert buffer as-is + trigger char
+                      // No suggestion — just insert the trigger char
                       const { tr } = view.state;
                       tr.insertText(event.key);
                       view.dispatch(tr);
@@ -164,8 +193,6 @@ export const TransliterationExtension =
                   });
                 }
 
-                resetBuffer(state);
-                extension.options.onDismiss?.();
                 return true;
               }
 
@@ -174,9 +201,9 @@ export const TransliterationExtension =
                 state.buffer = state.buffer.slice(0, -1);
                 if (state.buffer.length === 0) {
                   resetBuffer(state);
-                  extension.options.onDismiss?.();
+                  extensionOptions.onDismiss?.();
                 } else {
-                  debounceFetch(extension, state);
+                  debounceFetchFromState(state, extensionOptions);
                 }
                 return false; // Let default backspace behavior happen
               }
@@ -188,7 +215,7 @@ export const TransliterationExtension =
                   state.bufferStart = from;
                 }
                 state.buffer += event.key;
-                debounceFetch(extension, state);
+                debounceFetchFromState(state, extensionOptions);
                 return false; // Let the character be inserted normally
               }
 
@@ -223,21 +250,17 @@ function resetBuffer(state: TransliterationState) {
   state.selectedIndex = 0;
 }
 
-function debounceFetch(
-  extension: {
-    storage: {
-      debounceTimer: ReturnType<typeof setTimeout> | null;
-      state: TransliterationState;
-    };
-    options: TransliterationExtensionOptions;
-  },
-  state: TransliterationState,
-) {
-  if (extension.storage.debounceTimer) {
-    clearTimeout(extension.storage.debounceTimer);
-  }
+// Shared debounce timer stored directly on the state object
+const debounceTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
 
-  extension.storage.debounceTimer = setTimeout(async () => {
+function debounceFetchFromState(
+  state: TransliterationState,
+  options: TransliterationExtensionOptions,
+) {
+  const existing = debounceTimers.get(state);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(async () => {
     if (state.buffer.length < 2) return; // Don't fetch for single chars
 
     const result = await transliterate(state.buffer, state.language);
@@ -245,7 +268,9 @@ function debounceFetch(
       state.suggestions = result.suggestions;
       state.showSuggestions = true;
       state.selectedIndex = 0;
-      extension.options.onSuggestions?.(state);
+      options.onSuggestions?.({ ...state });
     }
-  }, extension.options.debounceMs);
+  }, options.debounceMs);
+
+  debounceTimers.set(state, timer);
 }

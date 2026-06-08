@@ -21,3 +21,18 @@
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+# Project conventions (read before changing code)
+
+This is an India-first legal-document drafting platform. Before editing, read:
+
+- **[`CONTRIBUTING.md`](CONTRIBUTING.md)** — repo map, setup, and the golden rules.
+- **[`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md)** — TS/React/NestJS conventions, module
+  boundaries, i18n/translations, error handling, and "recipes" for adding a doc type / lib / module / route.
+- **[`docs/BUILD_LOG.md`](docs/BUILD_LOG.md)** — dated journal of what changed and why (resume point).
+- **[`docs/`](docs/)** — market analysis, product roadmap, technical design, progress tracker.
+
+Non-negotiables: one `DocumentTypeBundle` per doc type is the source of truth; the AI never authors
+statute citations (use `@org/legal-reference` + `{{applicable_law}}`); verify changes with
+typecheck + eslint (+ build) and report honestly what you did/didn't run; every app needs a
+solution-style `tsconfig.json`. After a unit of work, append to `docs/BUILD_LOG.md`.
