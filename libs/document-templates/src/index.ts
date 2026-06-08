@@ -38,4 +38,6 @@ export {
 export { TemplateRenderer } from './TemplateRenderer';
 
 export { RentAgreementClassic } from './rent-agreement/classic';
+export { RtiDefault } from './rti/default';
+export { LegalNoticeFormal } from './legal-notice/formal';
 export { FreeformDocument, type FreeformData } from './freeform';

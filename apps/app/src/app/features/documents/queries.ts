@@ -7,11 +7,7 @@ import type {
   RecordSignaturePayload,
   UpdateSignerPayload,
 } from '@org/api-client';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useDocumentsService, useSharesService } from './services-context';
 
@@ -97,7 +93,8 @@ export function useSnapshotDocument(id: string) {
       qc.invalidateQueries({ queryKey: ['documents', 'versions', id] });
       toast.success('Version saved');
     },
-    onError: (err) => toast.error(extractMessage(err, 'Could not save version')),
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not save version')),
   });
 }
 
@@ -174,7 +171,8 @@ export function useUpdateSigner(id: string) {
       svc.updateSigner(id, args.signerId, args.payload),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['documents', 'signers', id] }),
-    onError: (err) => toast.error(extractMessage(err, 'Could not update signer')),
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not update signer')),
   });
 }
 
@@ -185,7 +183,8 @@ export function useRemoveSigner(id: string) {
     mutationFn: (signerId: string) => svc.removeSigner(id, signerId),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['documents', 'signers', id] }),
-    onError: (err) => toast.error(extractMessage(err, 'Could not remove signer')),
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not remove signer')),
   });
 }
 
@@ -200,7 +199,8 @@ export function useSignSigner(id: string) {
       // Document status may flip to 'signed' once everyone has signed.
       qc.invalidateQueries({ queryKey: ['documents', 'detail', id] });
     },
-    onError: (err) => toast.error(extractMessage(err, 'Could not save signature')),
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not save signature')),
   });
 }
 

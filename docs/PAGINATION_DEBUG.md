@@ -16,10 +16,10 @@ Both surfaces share ONE paginator — `paginateChunks()` in
 top-level block's height in a hidden host and packs blocks into page-sized
 buckets. The two surfaces differ only in **where** they measure:
 
-| Surface | Runs in | Measures inside | Styled by |
-|---|---|---|---|
-| Live preview | the **app** (`:4200`) | `.document-preview-page` | `editor.css` |
-| Exported PDF | the **artboard** via Puppeteer (`:4210`) | `.doc-page` | `Page.tsx` `PagePrintStyles` |
+| Surface      | Runs in                                  | Measures inside          | Styled by                    |
+| ------------ | ---------------------------------------- | ------------------------ | ---------------------------- |
+| Live preview | the **app** (`:4200`)                    | `.document-preview-page` | `editor.css`                 |
+| Exported PDF | the **artboard** via Puppeteer (`:4210`) | `.doc-page`              | `Page.tsx` `PagePrintStyles` |
 
 For the breaks to match, three things must hold in both contexts:
 
@@ -32,7 +32,7 @@ For the breaks to match, three things must hold in both contexts:
    line-height, margins, list padding, table padding). They are kept in sync by
    hand; each file has a header comment saying so.
 3. **No reliance on a global reset present in one app but not the other** — the
-   app loads Tailwind's *preflight* (which resets `h1–h6` margins/sizes); the
+   app loads Tailwind's _preflight_ (which resets `h1–h6` margins/sizes); the
    artboard does **not**. Any element you don't style explicitly inherits
    different defaults in each. (This is exactly the `h3` bug — see History.)
 
@@ -45,13 +45,16 @@ The diagnostic exposes all three at once.
 It prints two reports you compare: `[PREVIEW/APP]` and `[ARTBOARD/PDF]`.
 
 ### Preview (app, `:4200`)
+
 Logged to the browser console. Turn it on with **either**:
+
 - Add `?paginationDebug=1` to the editor URL, **or**
 - In DevTools console: `localStorage.paginationDebug = '1'` then reload.
 
 Open the editor, look at the console for the `[PREVIEW/APP] …` block.
 
 ### Exported PDF (artboard, `:4210`)
+
 Printed as a yellow box at the top of **page 1 of the PDF itself** (so you can
 read it from the exported file). Turn it on by setting an env var on the **API**
 and re-exporting:
@@ -90,11 +93,11 @@ H1:48 P:96 H2:45 P:74 H3:22 P:30 UL:150 ...
 
 Compare the two reports for the **same document**:
 
-| Observation | Cause | Fix |
-|---|---|---|
-| `Inter`/`Noto` differ (e.g. PDF `false`) | Font not loaded in that context | Rebuild/restart that app; `rm -rf node_modules/.vite` so Vite re-bundles the `@fontsource` deps; confirm the imports in its `main.tsx`. |
-| Fonts match, but a `TAG:height` differs | CSS metric divergence between `.doc-page` and `.document-preview-page` | Find the first differing block tag; pin that element identically in BOTH stylesheets. Watch for elements only reset by Tailwind preflight (headings, blockquote, hr, dl). |
-| Heights identical, `pages` differ | The JS budget vs. Chrome's actual sheet fill (a packed page renders a hair over `fullH` and spills) | Add a small safety margin to the budget, or move the PDF to native CSS paged media. |
+| Observation                              | Cause                                                                                               | Fix                                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Inter`/`Noto` differ (e.g. PDF `false`) | Font not loaded in that context                                                                     | Rebuild/restart that app; `rm -rf node_modules/.vite` so Vite re-bundles the `@fontsource` deps; confirm the imports in its `main.tsx`.                                   |
+| Fonts match, but a `TAG:height` differs  | CSS metric divergence between `.doc-page` and `.document-preview-page`                              | Find the first differing block tag; pin that element identically in BOTH stylesheets. Watch for elements only reset by Tailwind preflight (headings, blockquote, hr, dl). |
+| Heights identical, `pages` differ        | The JS budget vs. Chrome's actual sheet fill (a packed page renders a hair over `fullH` and spills) | Add a small safety margin to the budget, or move the PDF to native CSS paged media.                                                                                       |
 
 ---
 

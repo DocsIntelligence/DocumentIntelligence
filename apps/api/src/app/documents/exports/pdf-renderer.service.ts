@@ -95,10 +95,13 @@ export class PdfRendererService {
       // Inject the document data before any page script runs. RenderRoute
       // reads `window.__ARTBOARD_DATA__` first, falling back to ?data= / the
       // API for older callers.
-      await page.evaluateOnNewDocument((injected) => {
-        (globalThis as unknown as Record<string, unknown>).__ARTBOARD_DATA__ =
-          injected;
-      }, (renderData ?? {}) as Prisma.JsonValue);
+      await page.evaluateOnNewDocument(
+        (injected) => {
+          (globalThis as unknown as Record<string, unknown>).__ARTBOARD_DATA__ =
+            injected;
+        },
+        (renderData ?? {}) as Prisma.JsonValue,
+      );
 
       this.logger.debug(`Rendering ${url}`);
       const response = await page.goto(url, {
@@ -148,7 +151,10 @@ export class PdfRendererService {
       const msg = errorMessage(e);
       // Log the full error (stack / deep inspect) so non-Error rejections
       // from the browser transport or SDKs aren't swallowed.
-      this.logger.error(`✗ Render failed for ${documentId}: ${msg}`, errorDetail(e));
+      this.logger.error(
+        `✗ Render failed for ${documentId}: ${msg}`,
+        errorDetail(e),
+      );
       await this.fail(exportId, msg);
       throw e;
     } finally {
@@ -305,9 +311,7 @@ export class PdfRendererService {
         data: { status: 'failed', error: message },
       });
     } catch (e) {
-      this.logger.error(
-        `Could not record failure on export ${exportId}: ${e}`,
-      );
+      this.logger.error(`Could not record failure on export ${exportId}: ${e}`);
     }
   }
 }

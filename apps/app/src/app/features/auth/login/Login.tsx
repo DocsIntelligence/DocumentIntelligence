@@ -14,10 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { APP_ENV } from '../../../../config';
-import {
-  consumeRedirectTarget,
-  setRedirectTarget,
-} from '../redirect-target';
+import { consumeRedirectTarget, setRedirectTarget } from '../redirect-target';
 
 const API_BASE_URL = APP_ENV.apiUrl;
 
@@ -41,9 +38,7 @@ export function Login() {
     location.state as { from?: { pathname: string; search?: string } } | null
   )?.from;
   if (fromState?.pathname) {
-    setRedirectTarget(
-      fromState.pathname + (fromState.search ?? ''),
-    );
+    setRedirectTarget(fromState.pathname + (fromState.search ?? ''));
   }
 
   function nextDestination(): string {
@@ -96,7 +91,9 @@ export function Login() {
       if (e.name === 'NotAllowedError') {
         // User cancelled
       } else {
-        toast.error(e.message ?? t('auth.login.passkeyFailed', 'Passkey login failed'));
+        toast.error(
+          e.message ?? t('auth.login.passkeyFailed', 'Passkey login failed'),
+        );
       }
     } finally {
       setPasskeyLoading(false);
@@ -110,7 +107,10 @@ export function Login() {
           {t('auth.login.title', 'Sign in')}
         </h2>
         <p className="text-sm text-foreground/60 mt-1">
-          {t('auth.login.subtitle', 'Enter your credentials to access your account')}
+          {t(
+            'auth.login.subtitle',
+            'Enter your credentials to access your account',
+          )}
         </p>
       </div>
 

@@ -186,20 +186,20 @@ export function DraftEditorPage() {
         onSignatures={() => setSignaturesOpen(true)}
         previewAppendHtml={signaturesHtml}
         persistence={{
-        mode: 'bound',
-        initial: {
-          templateId: data.templateId,
-          title: doc.title,
-          html: data.html ?? '<p></p>',
-          values: data.values ?? {},
-          pageSize: doc.pageSize,
-          fontFamily: data.fontFamily,
-        },
-        onSave: handleSave,
-        onPageSizeChange: (size) => patch.mutate({ pageSize: size }),
-        savedAt,
-        saving: patch.isPending,
-      }}
+          mode: 'bound',
+          initial: {
+            templateId: data.templateId,
+            title: doc.title,
+            html: data.html ?? '<p></p>',
+            values: data.values ?? {},
+            pageSize: doc.pageSize,
+            fontFamily: data.fontFamily,
+          },
+          onSave: handleSave,
+          onPageSizeChange: (size) => patch.mutate({ pageSize: size }),
+          savedAt,
+          saving: patch.isPending,
+        }}
         onAiGenerate={handleAiGenerate}
         onAiRevise={handleAiRevise}
         onExportPdf={() => startExport()}

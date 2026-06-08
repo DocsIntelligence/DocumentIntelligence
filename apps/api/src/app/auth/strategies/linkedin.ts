@@ -41,7 +41,6 @@ export class LinkedInStrategy extends PassportStrategy(Strategy, 'linkedin') {
     // the deprecated v2 /me and /emailAddress endpoints.
     const logger = this.logger;
 
-     
     const self = this as unknown as {
       userProfile: (
         accessToken: string,

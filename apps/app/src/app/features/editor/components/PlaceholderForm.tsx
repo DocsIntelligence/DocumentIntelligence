@@ -65,7 +65,9 @@ export const PlaceholderForm = forwardRef<
         </p>
         <p className="mt-1 text-xs text-foreground/50">
           {t('editor.fields.emptyHintPrefix', 'Add')}{' '}
-          <code className="rounded bg-secondary/40 px-1 py-0.5">{'{{name}}'}</code>{' '}
+          <code className="rounded bg-secondary/40 px-1 py-0.5">
+            {'{{name}}'}
+          </code>{' '}
           {t(
             'editor.fields.emptyHintSuffix',
             'tokens in the editor and they will appear here automatically.',
@@ -170,9 +172,13 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
             className="text-sm"
           >
             <SelectValue
-              placeholder={t('editor.fields.choosePlaceholder', 'Choose {{label}}', {
-                label: field.label.toLowerCase(),
-              })}
+              placeholder={t(
+                'editor.fields.choosePlaceholder',
+                'Choose {{label}}',
+                {
+                  label: field.label.toLowerCase(),
+                },
+              )}
             />
           </SelectTrigger>
           <SelectContent>
@@ -191,10 +197,10 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
             field.type === 'date'
               ? 'date'
               : field.type === 'number'
-              ? 'number'
-              : field.type === 'email'
-              ? 'email'
-              : 'text'
+                ? 'number'
+                : field.type === 'email'
+                  ? 'email'
+                  : 'text'
           }
           value={value}
           onChange={(e) => onChange(e.target.value)}

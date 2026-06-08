@@ -157,14 +157,17 @@ function fillPlaceholders(
   html: string,
   values: Record<string, string>,
 ): string {
-  return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_full, key: string) => {
-    const v = values[key];
-    return v && v.trim()
-      ? escapeHtml(v)
-      : `<span style="background:#fef3c7;color:#92400e;padding:0 2px;border-radius:2px">[${escapeHtml(
-          key,
-        )}]</span>`;
-  });
+  return html.replace(
+    /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
+    (_full, key: string) => {
+      const v = values[key];
+      return v && v.trim()
+        ? escapeHtml(v)
+        : `<span style="background:#fef3c7;color:#92400e;padding:0 2px;border-radius:2px">[${escapeHtml(
+            key,
+          )}]</span>`;
+    },
+  );
 }
 
 function escapeHtml(s: string): string {

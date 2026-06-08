@@ -29,7 +29,9 @@ export function ResetPassword() {
   const onSubmit = handleSubmit(async (values) => {
     const result = await dispatch(resetPasswordThunk(values));
     if (resetPasswordThunk.fulfilled.match(result)) {
-      toast.success(t('auth.reset.success', 'Password updated. Sign in again.'));
+      toast.success(
+        t('auth.reset.success', 'Password updated. Sign in again.'),
+      );
       navigate('/login');
     } else {
       toast.error(t('auth.reset.invalidToken', 'Invalid or expired token.'));

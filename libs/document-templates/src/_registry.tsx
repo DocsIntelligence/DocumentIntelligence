@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react';
 import type { PageSizeKey } from './_internals/page-sizes';
 import { RentAgreementClassic } from './rent-agreement/classic';
+import { RtiDefault } from './rti/default';
+import { LegalNoticeFormal } from './legal-notice/formal';
 import { FreeformDocument } from './freeform';
 
 /**
@@ -24,6 +26,11 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   // component lands. Replace when the bilingual template is implemented.
   'rent-agreement.bilingual':
     RentAgreementClassic as TemplateComponent<unknown>,
+  // RTI application (Right to Information Act, 2005). Both en/hi seed templates
+  // currently map to the same component.
+  'rti.default': RtiDefault as TemplateComponent<unknown>,
+  // Pre-litigation legal notice (branches on noticeType, incl. NI Act §138).
+  'legal-notice.formal': LegalNoticeFormal as TemplateComponent<unknown>,
   // Freeform / AI-drafted documents — editor HTML rendered to pages.
   freeform: FreeformDocument as TemplateComponent<unknown>,
 };

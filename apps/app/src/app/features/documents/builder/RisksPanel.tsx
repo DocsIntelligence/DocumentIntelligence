@@ -15,7 +15,9 @@ export function RisksPanel({ warnings, onJump }: Props) {
   if (warnings.length === 0) {
     return (
       <div className="p-4 text-xs text-foreground/50">
-        <p className="font-medium text-foreground/70 mb-1">All checks passed.</p>
+        <p className="font-medium text-foreground/70 mb-1">
+          All checks passed.
+        </p>
         <p>
           We'll flag missing essentials and state-specific issues as you fill
           the form.

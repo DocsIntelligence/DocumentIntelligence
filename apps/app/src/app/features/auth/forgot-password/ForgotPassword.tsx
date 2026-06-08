@@ -37,7 +37,10 @@ export function ForgotPassword() {
           {t('auth.forgot.title', 'Forgot password')}
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          {t('auth.forgot.subtitle', "Enter your email and we'll send you a reset link")}
+          {t(
+            'auth.forgot.subtitle',
+            "Enter your email and we'll send you a reset link",
+          )}
         </p>
       </div>
 

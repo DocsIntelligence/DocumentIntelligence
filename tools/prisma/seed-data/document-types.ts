@@ -112,7 +112,14 @@ export const documentTypes: DocumentTypeSeed[] = [
     iconKey: 'gavel',
     sortOrder: 30,
     schemaShape: {
-      sections: ['sender', 'recipient', 'subject', 'facts', 'demand', 'cause_of_action'],
+      sections: [
+        'sender',
+        'recipient',
+        'subject',
+        'facts',
+        'demand',
+        'cause_of_action',
+      ],
     },
     templates: [
       {

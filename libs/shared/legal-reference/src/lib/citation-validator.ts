@@ -27,7 +27,8 @@ export interface CitationFinding {
 // Reverse map: repealed citation id (e.g. "ipc.302") → successor display string.
 const SUPERSEDED_TO_SUCCESSOR = new Map<string, string>();
 for (const c of CITATIONS) {
-  if (c.supersedes) SUPERSEDED_TO_SUCCESSOR.set(c.supersedes, formatCitation(c));
+  if (c.supersedes)
+    SUPERSEDED_TO_SUCCESSOR.set(c.supersedes, formatCitation(c));
 }
 
 interface CodeSpec {
@@ -78,14 +79,13 @@ export function validateCitations(text: string): CitationFinding[] {
       `${SEC}\\s*(?:of\\s+(?:the\\s+)?)?(?:${spec.act})`,
       'gi',
     );
-    const numAfter = new RegExp(
-      `(?:${spec.act})\\s*${SEC}`,
-      'gi',
-    );
+    const numAfter = new RegExp(`(?:${spec.act})\\s*${SEC}`, 'gi');
 
     const withSection = (m: RegExpExecArray) => {
       const section = m[1];
-      const successor = SUPERSEDED_TO_SUCCESSOR.get(`${spec.prefix}.${section}`);
+      const successor = SUPERSEDED_TO_SUCCESSOR.get(
+        `${spec.prefix}.${section}`,
+      );
       push({
         matched: m[0].trim(),
         code: spec.code,

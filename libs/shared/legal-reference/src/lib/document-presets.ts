@@ -97,8 +97,7 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
     key: 'vakalatnama',
     name: 'Vakalatnama',
     category: 'Court Filings',
-    description:
-      'Authorisation appointing an advocate to act in a case.',
+    description: 'Authorisation appointing an advocate to act in a case.',
     sampleBrief:
       'Vakalatnama appointing Advocate {{advocate_name}} (Enrolment No. {{bar_number}}) to appear for {{client_name}} in Case No. {{case_number}} before {{court_name}}.',
   },
@@ -144,7 +143,8 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
     key: 'mou',
     name: 'Memorandum of understanding (MoU)',
     category: 'Agreements',
-    description: 'Non-binding (or partly binding) understanding between parties.',
+    description:
+      'Non-binding (or partly binding) understanding between parties.',
     sampleBrief:
       'MoU between {{party_a}} and {{party_b}} regarding {{subject}}. Scope: {{scope}}. Responsibilities: {{responsibilities}}. Duration: {{duration}}.',
   },
@@ -152,7 +152,8 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
     key: 'partnership-deed',
     name: 'Partnership deed',
     category: 'Agreements',
-    description: 'Deed constituting a partnership firm (Indian Partnership Act, 1932).',
+    description:
+      'Deed constituting a partnership firm (Indian Partnership Act, 1932).',
     sampleBrief:
       'Partnership deed for firm "{{firm_name}}" at {{firm_address}}. Partners: {{partners}}. Capital contributions: {{capital}}. Profit/loss sharing: {{profit_ratio}}. Business: {{business}}.',
   },

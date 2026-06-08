@@ -11,8 +11,9 @@ export const USERS_FEATURE_KEY = 'users';
 
 export const usersAdapter = createEntityAdapter<User>();
 
-export interface UsersState
-  extends ReturnType<typeof usersAdapter.getInitialState> {
+export interface UsersState extends ReturnType<
+  typeof usersAdapter.getInitialState
+> {
   status: 'idle' | 'pending' | 'succeeded' | 'failed';
   error: string | null;
 }

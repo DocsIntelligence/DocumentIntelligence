@@ -3,6 +3,7 @@ import { selectUser, useAppSelector } from '@org/store';
 import { Button, Card } from '@org/ui';
 import { toast } from 'sonner';
 import { AdminLookups } from './AdminLookups';
+import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { APP_ENV } from '../../../config';
 
 const API_BASE_URL = APP_ENV.apiUrl;
@@ -26,6 +27,7 @@ interface Stats {
 
 export function AdminDashboard() {
   const currentUser = useAppSelector(selectUser);
+  const confirm = useConfirm();
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,13 @@ export function AdminDashboard() {
   };
 
   const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: 'Delete this user?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
         method: 'DELETE',

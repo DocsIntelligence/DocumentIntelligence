@@ -68,6 +68,5 @@ export const selectLocale = (state: { [APP_FEATURE_KEY]: AppState }) =>
   state[APP_FEATURE_KEY].locale;
 export const selectSidebarOpen = (state: { [APP_FEATURE_KEY]: AppState }) =>
   state[APP_FEATURE_KEY].sidebarOpen;
-export const selectNotifications = (state: {
-  [APP_FEATURE_KEY]: AppState;
-}) => state[APP_FEATURE_KEY].notifications;
+export const selectNotifications = (state: { [APP_FEATURE_KEY]: AppState }) =>
+  state[APP_FEATURE_KEY].notifications;

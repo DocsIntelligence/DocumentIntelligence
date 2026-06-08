@@ -41,7 +41,10 @@ export const rentAgreementFormMetadata: FormMetadata = {
   },
   'parties.landlord.phone': { label: 'Phone', widget: 'phone' },
   'parties.landlord.email': { label: 'Email' },
-  'parties.landlord.address': { label: 'Permanent address', widget: 'textarea' },
+  'parties.landlord.address': {
+    label: 'Permanent address',
+    widget: 'textarea',
+  },
 
   'parties.tenant.name': { label: 'Tenant — full name' },
   'parties.tenant.parentRelation': { label: 'Relation', widget: 'select' },
@@ -66,7 +69,10 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'property.state': { label: 'State' },
   'property.pincode': { label: 'PIN code', widget: 'pincode' },
   'property.type': { label: 'Property type', widget: 'select' },
-  'property.builtUpAreaSqft': { label: 'Built-up area (sq ft)', widget: 'number' },
+  'property.builtUpAreaSqft': {
+    label: 'Built-up area (sq ft)',
+    widget: 'number',
+  },
   'property.furnished': { label: 'Furnishing', widget: 'select' },
   'property.inventory': {
     label: 'Inventory of fittings/fixtures',

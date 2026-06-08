@@ -54,7 +54,9 @@ export function VersionHistoryDialog({
             size="sm"
             variant="outline"
             isLoading={snapshot.isPending}
-            onClick={() => snapshot.mutate(t('versions.manualSave', 'Manual save'))}
+            onClick={() =>
+              snapshot.mutate(t('versions.manualSave', 'Manual save'))
+            }
           >
             {t('versions.saveCurrent', 'Save current as version')}
           </Button>

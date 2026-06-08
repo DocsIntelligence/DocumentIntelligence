@@ -60,7 +60,8 @@ export const rentAgreementPrompts: PromptManifest = {
     system:
       'You format Indian legal-document party-name strings. Return only the formatted ' +
       'string, no prose.',
-    user: 'Given relation={{relation}} and parent name={{parentName}}, output the ' +
+    user:
+      'Given relation={{relation}} and parent name={{parentName}}, output the ' +
       'standard form (e.g. "S/o Ramesh Kumar").',
   },
 

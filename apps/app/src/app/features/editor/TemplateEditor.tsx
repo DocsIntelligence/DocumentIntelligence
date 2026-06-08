@@ -357,12 +357,15 @@ function TemplateEditorInner({
   // One-time notice if we recovered a draft from a previous visit.
   useEffect(() => {
     if (restored) {
-      toast.message(t('editor.toast.draftRestored', 'Restored your last draft'), {
-        description: t(
-          'editor.toast.draftRestoredDesc',
-          'Your in-progress document was recovered from this browser.',
-        ),
-      });
+      toast.message(
+        t('editor.toast.draftRestored', 'Restored your last draft'),
+        {
+          description: t(
+            'editor.toast.draftRestoredDesc',
+            'Your in-progress document was recovered from this browser.',
+          ),
+        },
+      );
     }
   }, []);
 
@@ -677,7 +680,9 @@ function TemplateEditorInner({
     const rendered = renderTemplateHtml(html, values);
     try {
       await navigator.clipboard.writeText(stripHtmlToText(rendered));
-      toast.success(t('editor.toast.copied', 'Copied document text to clipboard'));
+      toast.success(
+        t('editor.toast.copied', 'Copied document text to clipboard'),
+      );
     } catch {
       toast.error(t('editor.toast.copyFailed', 'Could not copy'));
     }
@@ -813,13 +818,17 @@ function TemplateEditorInner({
       </div>
       <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
         <span className="truncate">
-          {t('editor.status.counts', '{{chars}} chars · {{words}} words · Page {{page}}', {
-            chars: editor?.getText().length ?? 0,
-            words: editor
-              ? editor.getText().split(/\s+/).filter(Boolean).length
-              : 0,
-            page: activePage + 1,
-          })}
+          {t(
+            'editor.status.counts',
+            '{{chars}} chars · {{words}} words · Page {{page}}',
+            {
+              chars: editor?.getText().length ?? 0,
+              words: editor
+                ? editor.getText().split(/\s+/).filter(Boolean).length
+                : 0,
+              page: activePage + 1,
+            },
+          )}
         </span>
         <span className="flex flex-none items-center gap-1.5">
           <span
@@ -877,12 +886,17 @@ function TemplateEditorInner({
                 {template.name}
               </div>
               <div className="truncate text-[11px] text-foreground/55">
-                {t('editor.meta.fieldsFilled', '{{category}} · {{filled}}/{{total}} fields filled', {
-                  category: template.category,
-                  filled: completionStats.filled,
-                  total: completionStats.total,
-                })}
-                {enabled && t('editor.meta.transliterationOn', ' · Transliteration on')}
+                {t(
+                  'editor.meta.fieldsFilled',
+                  '{{category}} · {{filled}}/{{total}} fields filled',
+                  {
+                    category: template.category,
+                    filled: completionStats.filled,
+                    total: completionStats.total,
+                  },
+                )}
+                {enabled &&
+                  t('editor.meta.transliterationOn', ' · Transliteration on')}
               </div>
             </div>
           </div>
@@ -1028,7 +1042,9 @@ function TemplateEditorInner({
           {(onShare || onComments || onSignatures || onHistory) && (
             <>
               <ToolbarDivider />
-              <ToolbarGroup label={t('editor.group.collaborate', 'Collaborate')}>
+              <ToolbarGroup
+                label={t('editor.group.collaborate', 'Collaborate')}
+              >
                 {onShare && (
                   <Button
                     variant="ghost"
@@ -1188,7 +1204,9 @@ function TemplateEditorInner({
       <Dialog open={generateModalOpen} onOpenChange={setGenerateModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('editor.toolbar.draftWithAi', 'Draft with AI')}</DialogTitle>
+            <DialogTitle>
+              {t('editor.toolbar.draftWithAi', 'Draft with AI')}
+            </DialogTitle>
             <DialogDescription>
               {t(
                 'editor.generate.description',
@@ -1248,7 +1266,9 @@ function TemplateEditorInner({
       <Dialog open={reviseModalOpen} onOpenChange={setReviseModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('editor.toolbar.reviseWithAi', 'Revise with AI')}</DialogTitle>
+            <DialogTitle>
+              {t('editor.toolbar.reviseWithAi', 'Revise with AI')}
+            </DialogTitle>
             <DialogDescription>
               {t(
                 'editor.revise.description',
@@ -1314,7 +1334,9 @@ function TemplateEditorInner({
       >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('editor.diff.title', 'Review AI revision')}</DialogTitle>
+            <DialogTitle>
+              {t('editor.diff.title', 'Review AI revision')}
+            </DialogTitle>
             <DialogDescription>
               <span className="bg-success/25">
                 {t('editor.diff.green', 'Green')}
@@ -1392,7 +1414,10 @@ function TemplateEditorInner({
             </Label>
             <Input
               id="placeholder-key"
-              placeholder={t('editor.placeholder.keyPlaceholder', 'e.g. tenant_name')}
+              placeholder={t(
+                'editor.placeholder.keyPlaceholder',
+                'e.g. tenant_name',
+              )}
               value={placeholderKey}
               onChange={(e) => setPlaceholderKey(e.target.value)}
               onKeyDown={(e) => {

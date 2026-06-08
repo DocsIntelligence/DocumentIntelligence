@@ -51,7 +51,8 @@ export function StampPaperFrame({
             color: '#a1a1aa',
           }}
         >
-          Reserved for pre-printed stamp ({pageSize.replace('stamp_paper_in_', '₹')})
+          Reserved for pre-printed stamp (
+          {pageSize.replace('stamp_paper_in_', '₹')})
         </div>
       </div>
     </>

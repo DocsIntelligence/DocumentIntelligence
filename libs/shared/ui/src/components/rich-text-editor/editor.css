@@ -140,8 +140,9 @@
   /* --doc-font = per-document chosen font (set on the page root); keep this
      stack byte-identical to .doc-page (document-templates Page.tsx) so the
      preview and the exported PDF break pages at the same places. */
-  font-family: var(--doc-font, 'Inter'), 'Noto Sans Devanagari', 'Segoe UI',
-    system-ui, sans-serif;
+  font-family:
+    var(--doc-font, 'Inter'), 'Noto Sans Devanagari', 'Segoe UI', system-ui,
+    sans-serif;
 }
 
 .document-preview-page p {
@@ -239,7 +240,9 @@
   line-height: 1.25;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.12s ease, transform 0.08s ease;
+  transition:
+    background-color 0.12s ease,
+    transform 0.08s ease;
   border: 1px dashed transparent;
 }
 

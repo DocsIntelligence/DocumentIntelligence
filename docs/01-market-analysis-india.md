@@ -31,31 +31,31 @@ If those don't kill it, the opportunity is below.
 
 ## 1. Market size & momentum (Confidence: moderate — third-party estimates)
 
-| Metric | Figure | Source |
-|---|---|---|
-| India legal-technology market | **$464.6M (2023) → $1,253.1M by 2030**, CAGR **15.2%** (2024–30) | Grand View Research |
-| India **legal-AI** sub-market | **$29.5M (2024) → $106.3M by 2030**, CAGR **~23%** — *highest legal-AI CAGR of any country tracked* | Grand View Research |
-| Active LegalTech companies (India) | **662** as of 2025 | Legistify / ecosystem trackers |
-| Cumulative LegalTech funding (India) | **~$793M** to date; 2025 funding up **~781% YoY** | ecosystem trackers |
-| Reference exit/scale signal | **SpotDraft**: $54M Series B (Feb 2025), ~$80M total raised, ~400 customers, 169% YoY revenue growth | TechCrunch, SiliconANGLE |
+| Metric                               | Figure                                                                                               | Source                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------ |
+| India legal-technology market        | **$464.6M (2023) → $1,253.1M by 2030**, CAGR **15.2%** (2024–30)                                     | Grand View Research            |
+| India **legal-AI** sub-market        | **$29.5M (2024) → $106.3M by 2030**, CAGR **~23%** — _highest legal-AI CAGR of any country tracked_  | Grand View Research            |
+| Active LegalTech companies (India)   | **662** as of 2025                                                                                   | Legistify / ecosystem trackers |
+| Cumulative LegalTech funding (India) | **~$793M** to date; 2025 funding up **~781% YoY**                                                    | ecosystem trackers             |
+| Reference exit/scale signal          | **SpotDraft**: $54M Series B (Feb 2025), ~$80M total raised, ~400 customers, 169% YoY revenue growth | TechCrunch, SiliconANGLE       |
 
-**Read:** the *legal-AI* slice is small in absolute terms but the fastest-growing globally, and
+**Read:** the _legal-AI_ slice is small in absolute terms but the fastest-growing globally, and
 funding is flowing. The window is real, but the capital is concentrating in **enterprise CLM**
 (SpotDraft, Sirion), not consumer/SMB drafting. Your bet must avoid head-to-head with funded CLM
 players.
 
 ## 2. Competitive landscape (Confidence: high on existence, moderate on internals)
 
-| Player | Position | Weakness you can exploit |
-|---|---|---|
-| **LegalDesk** | Strongest in rent agreement + e-stamp + courier; owns organic search | Dated UI, no live page-faithful preview, weak AI |
-| **Vakilsearch** | Full-stack legal services; drafting is a feeder for higher-ARPU (GST, incorporation) | B2C ad-funnel; won't be outspent on Google; thin on preview/UX |
-| **Leegality / SignDesk / Digio** | eSign + eStamp **infrastructure** (you'll likely *integrate* one) | Not drafting products — partners, not competitors |
-| **ZoopSign / Zoop.one** | Combined draft + e-stamp + e-sign | Narrow, transactional |
-| **NoBroker Legal** | Rent-only, owns broker-side distribution | Single vertical |
-| **eDrafter / LawRato / OnlineLegalIndia** | Commodity template + notice layer | Fragmented, low-trust, SEO-dependent |
-| **SpotDraft / Sirion / Provakil** | Enterprise CLM, well-funded | Different market — ignore for B2C/SMB; do **not** try to out-CLM them |
-| **Govt channels** (`rtionline.gov.in`, SHCIL e-stamp portals, eCourts) | Free, authoritative | UX-hostile; users still need drafting help — this is your funnel, not your enemy |
+| Player                                                                 | Position                                                                             | Weakness you can exploit                                                         |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| **LegalDesk**                                                          | Strongest in rent agreement + e-stamp + courier; owns organic search                 | Dated UI, no live page-faithful preview, weak AI                                 |
+| **Vakilsearch**                                                        | Full-stack legal services; drafting is a feeder for higher-ARPU (GST, incorporation) | B2C ad-funnel; won't be outspent on Google; thin on preview/UX                   |
+| **Leegality / SignDesk / Digio**                                       | eSign + eStamp **infrastructure** (you'll likely _integrate_ one)                    | Not drafting products — partners, not competitors                                |
+| **ZoopSign / Zoop.one**                                                | Combined draft + e-stamp + e-sign                                                    | Narrow, transactional                                                            |
+| **NoBroker Legal**                                                     | Rent-only, owns broker-side distribution                                             | Single vertical                                                                  |
+| **eDrafter / LawRato / OnlineLegalIndia**                              | Commodity template + notice layer                                                    | Fragmented, low-trust, SEO-dependent                                             |
+| **SpotDraft / Sirion / Provakil**                                      | Enterprise CLM, well-funded                                                          | Different market — ignore for B2C/SMB; do **not** try to out-CLM them            |
+| **Govt channels** (`rtionline.gov.in`, SHCIL e-stamp portals, eCourts) | Free, authoritative                                                                  | UX-hostile; users still need drafting help — this is your funnel, not your enemy |
 
 ## 3. TAM/SAM (Confidence: moderate — derived, do not quote without primary data)
 
@@ -75,14 +75,15 @@ revenue is; B2C is the funnel.
 
 ## 4. The regulatory ground truth you MUST encode (Confidence: high)
 
-This is the moat *and* the liability. Get it wrong and you ship harmful documents.
+This is the moat _and_ the liability. Get it wrong and you ship harmful documents.
 
 ### 4.1 eSignature legality
+
 - **Legal basis:** IT Act 2000, **§3A read with Schedule 2** — Aadhaar-based eSign through an
   empaneled eSign Service Provider (ESP) is legally valid. OTP to Aadhaar-linked mobile → digital
   certificate from ESP.
 - **Court acceptance:** Indian courts accept compliant eSigned documents as evidence (e.g. Delhi
-  HC, *South Eastern Coalfields Ltd. v. STC*, 2021).
+  HC, _South Eastern Coalfields Ltd. v. STC_, 2021).
 - **Hard exclusions (IT Act Schedule 1 — eSign NOT valid):** negotiable instruments (except
   cheques in some readings), **powers of attorney**, **trusts**, **wills & testamentary
   dispositions**, and contracts for sale/conveyance of immovable property. **These document types
@@ -91,6 +92,7 @@ This is the moat *and* the liability. Get it wrong and you ship harmful document
   maturity); never integrate UIDAI directly.
 
 ### 4.2 e-Stamping
+
 - Central authority: **SHCIL (Stock Holding Corporation of India)**. States with e-stamping incl.
   Assam, Gujarat, Himachal Pradesh, Karnataka, Maharashtra, Delhi-NCR, Tamil Nadu, Uttarakhand, UP.
 - Stamp duty and registration thresholds **vary by state** (e.g. Maharashtra registration
@@ -100,34 +102,37 @@ This is the moat *and* the liability. Get it wrong and you ship harmful document
   aggregator API integration later.
 
 ### 4.3 DPDP Act 2023 (data protection)
+
 - Consent must be specific and purpose-bound; data minimization applies. Aadhaar/PAN extraction
   (the "upload-to-fill" AI feature) is KYC-tier data — gate behind explicit consent, store
   encrypted, allow deletion. **This directly constrains the AI vision/OCR feature in
   [`03-technical-design.md`](03-technical-design.md).**
 
 ### 4.4 ⚠️ New criminal codes (CRITICAL accuracy point — Confidence: high)
+
 Effective **1 July 2024**, India's three core criminal statutes were replaced:
+
 - **IPC 1860 → Bharatiya Nyaya Sanhita (BNS) 2023**
 - **CrPC 1973 → Bharatiya Nagarik Suraksha Sanhita (BNSS) 2023**
 - **Indian Evidence Act 1872 → Bharatiya Sakshya Adhiniyam (BSA) 2023**
 
 Any court/criminal document the AI generates (bail applications, complaints, FIR-related docs)
 **must cite the new sections (e.g. BNSS §223 for magistrate complaints, not the old CrPC §200)**.
-An AI trained largely on pre-2024 text will hallucinate the *old* sections. This is the single
+An AI trained largely on pre-2024 text will hallucinate the _old_ sections. This is the single
 biggest correctness landmine in the court-document scope and is exactly why the rule/citation
 library must be hand-curated with effective dates — not left to the LLM.
 
 ## 5. Where the wedge is (unchanged, validated)
 
-| Gap | Incumbents | What this platform already has / will build |
-|---|---|---|
-| Live A4/stamp-paper preview as you type | Absent (form-first, PDF-later) | **Built** — artboard iframe + `Paginator` + `StampPaperFrame` |
-| Stamp-paper-aware layout (reserved top zone) | Nobody | **Built** — `PageSize` enum incl. `stamp_paper_in_*`, calibrated offset |
-| State/jurisdiction-aware clauses | 2–3 states at best | **Built foundation** — schema `jurisdictions[]` + deterministic `risks.ts` |
-| Indian-language drafting | Rare | **Built** — 13-language transliteration in the editor |
-| AI that drafts/updates whole documents grounded in statute | Generic "rewrite" buttons | **To build** — see technical design |
-| Court-document formatting (cause title, prayer, verification, vakalatnama, **BNS/BNSS citations**) | Patchy/manual | **To build** — biggest B2B-advocate opportunity |
-| Multi-format (PDF + DOCX advocates can edit) | PDF-only mostly | **To build** — advocates *need* editable DOCX |
+| Gap                                                                                                | Incumbents                     | What this platform already has / will build                                |
+| -------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| Live A4/stamp-paper preview as you type                                                            | Absent (form-first, PDF-later) | **Built** — artboard iframe + `Paginator` + `StampPaperFrame`              |
+| Stamp-paper-aware layout (reserved top zone)                                                       | Nobody                         | **Built** — `PageSize` enum incl. `stamp_paper_in_*`, calibrated offset    |
+| State/jurisdiction-aware clauses                                                                   | 2–3 states at best             | **Built foundation** — schema `jurisdictions[]` + deterministic `risks.ts` |
+| Indian-language drafting                                                                           | Rare                           | **Built** — 13-language transliteration in the editor                      |
+| AI that drafts/updates whole documents grounded in statute                                         | Generic "rewrite" buttons      | **To build** — see technical design                                        |
+| Court-document formatting (cause title, prayer, verification, vakalatnama, **BNS/BNSS citations**) | Patchy/manual                  | **To build** — biggest B2B-advocate opportunity                            |
+| Multi-format (PDF + DOCX advocates can edit)                                                       | PDF-only mostly                | **To build** — advocates _need_ editable DOCX                              |
 
 ## 6. Strategic recommendation (Confidence: moderate-high)
 
@@ -140,11 +145,13 @@ library must be hand-curated with effective dates — not left to the LLM.
    BCI grey zone.
 3. **Distribution:** go **B2B2C through advocates and small firms**, not pure B2C ad-buying.
    Advocate marketplace + branded output = compounding distribution.
-4. **Moat:** the deterministic, dated, per-state rule + citation library — *not* the cleverness of
+4. **Moat:** the deterministic, dated, per-state rule + citation library — _not_ the cleverness of
    the LLM. Spend disproportionately here.
 
 ---
+
 ### Sources
+
 - [India Legal Technology Market Size & Outlook, 2025-2030 — Grand View Research](https://www.grandviewresearch.com/horizon/outlook/legal-technology-market/india)
 - [India Legal AI Market Size & Outlook, 2025-2030 — Grand View Research](https://www.grandviewresearch.com/horizon/outlook/legal-ai-market/india)
 - [LegalTech India: What the $63.1B Market Means for Legal Teams — Legistify](https://legistify.com/blogs/legaltech-india/)

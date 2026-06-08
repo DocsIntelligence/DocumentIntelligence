@@ -49,8 +49,7 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
         const el = root.querySelector<HTMLElement>(
           `[data-section="${cssEscape(sectionKey)}"]`,
         );
-        if (el)
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       },
     }));
 
@@ -93,10 +92,7 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {fields.map(([path, meta]) => {
-                  if (
-                    meta.showIf &&
-                    !evalShowIf(meta.showIf, data)
-                  ) {
+                  if (meta.showIf && !evalShowIf(meta.showIf, data)) {
                     return null;
                   }
                   return (
@@ -131,7 +127,14 @@ interface FieldProps {
   aiBusy?: boolean;
 }
 
-function Field({ path, meta, value, onChange, onAiAssist, aiBusy }: FieldProps) {
+function Field({
+  path,
+  meta,
+  value,
+  onChange,
+  onAiAssist,
+  aiBusy,
+}: FieldProps) {
   const widget = meta.widget ?? 'text';
   const id = `f-${path.replace(/\./g, '-')}`;
   const isFullWidth =
@@ -261,14 +264,12 @@ function renderInput(
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 function deepGet(obj: unknown, path: string): unknown {
-  return path
-    .split('.')
-    .reduce<unknown>((acc, k) => {
-      if (acc && typeof acc === 'object' && k in acc) {
-        return (acc as Record<string, unknown>)[k];
-      }
-      return undefined;
-    }, obj);
+  return path.split('.').reduce<unknown>((acc, k) => {
+    if (acc && typeof acc === 'object' && k in acc) {
+      return (acc as Record<string, unknown>)[k];
+    }
+    return undefined;
+  }, obj);
 }
 
 function deepSet(
@@ -280,11 +281,7 @@ function deepSet(
   let cur: Record<string, unknown> = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const k = keys[i];
-    if (
-      cur[k] === undefined ||
-      cur[k] === null ||
-      typeof cur[k] !== 'object'
-    ) {
+    if (cur[k] === undefined || cur[k] === null || typeof cur[k] !== 'object') {
       cur[k] = {};
     }
     cur = cur[k] as Record<string, unknown>;

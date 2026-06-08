@@ -58,7 +58,9 @@ export interface DocumentSummary {
   updatedAt: string;
   createdAt: string;
   documentType?: { key: string; name: string };
-  template?: { key: string; name: string };
+  // `componentKey` is the canonical template→renderer mapping (present on the
+  // detail response via `getById`'s full template include; omitted by `list`).
+  template?: { key: string; name: string; componentKey?: string };
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -243,9 +245,7 @@ export const createDocumentsService = (http: HttpClient) => ({
       )
       .then((r) => r.data),
   listSigners: (id: string) =>
-    http
-      .get<DocumentSigner[]>(`/documents/${id}/signers`)
-      .then((r) => r.data),
+    http.get<DocumentSigner[]>(`/documents/${id}/signers`).then((r) => r.data),
   addSigner: (id: string, payload: AddSignerPayload) =>
     http
       .post<DocumentSigner>(`/documents/${id}/signers`, payload)

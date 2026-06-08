@@ -40,8 +40,11 @@ const rules: Rule[] = [
   // Maharashtra: registration mandatory regardless of duration if
   // residential rent agreement (Bombay Rent Control / state law).
   (data) => {
-    if (data.state === 'IN-MH' && data.property?.type !== 'commercial' &&
-        data.registered === false) {
+    if (
+      data.state === 'IN-MH' &&
+      data.property?.type !== 'commercial' &&
+      data.registered === false
+    ) {
       return {
         id: 'mh.residential_registration',
         severity: 'warning',

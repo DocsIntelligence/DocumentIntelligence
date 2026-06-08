@@ -146,7 +146,10 @@ export function SignaturesDialog({
               onChange={(e) => setName(e.target.value)}
               className="sm:flex-1"
             />
-            <Select value={role} onValueChange={(v) => setRole(v as SignerRole)}>
+            <Select
+              value={role}
+              onValueChange={(v) => setRole(v as SignerRole)}
+            >
               <SelectTrigger className="sm:w-36">
                 <SelectValue />
               </SelectTrigger>
@@ -313,7 +316,9 @@ function SignatureCapture({
   function handleFile(file: File) {
     setUploadError(null);
     if (!file.type.startsWith('image/')) {
-      setUploadError(t('signatures.errNotImage', 'Please choose an image file.'));
+      setUploadError(
+        t('signatures.errNotImage', 'Please choose an image file.'),
+      );
       return;
     }
     const reader = new FileReader();
@@ -329,14 +334,18 @@ function SignatureCapture({
         c.height = h;
         const g = c.getContext('2d');
         if (!g) {
-          setUploadError(t('signatures.errProcess', 'Could not process image.'));
+          setUploadError(
+            t('signatures.errProcess', 'Could not process image.'),
+          );
           return;
         }
         g.drawImage(img, 0, 0, w, h);
         setUploaded(c.toDataURL('image/png'));
       };
       img.onerror = () =>
-        setUploadError(t('signatures.errReadImage', 'Could not read that image.'));
+        setUploadError(
+          t('signatures.errReadImage', 'Could not read that image.'),
+        );
       img.src = reader.result as string;
     };
     reader.onerror = () =>

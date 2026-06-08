@@ -1,7 +1,7 @@
 # Legal Documents Platform — Plan & Market Analysis
 
 > ⚠️ **Superseded / extended by [`docs/`](docs/) as of 2026-06-07.** This original plan is now
-> ~70% implemented. For the *current* state, refreshed market analysis, and the next-phase roadmap
+> ~70% implemented. For the _current_ state, refreshed market analysis, and the next-phase roadmap
 > (AI document **generation/update**, **court documents**, **multi-format export**, **Claude
 > integration**), start at [`docs/README.md`](docs/README.md) and
 > [`docs/04-progress-tracker.md`](docs/04-progress-tracker.md). This file is kept as the founding
@@ -28,15 +28,15 @@ If those don't kill the idea, the real opportunity is below.
 
 Almost every Indian legal-doc site renders a form, then gives you a "Download PDF" button. There is no live, page-faithful preview as you type. **That is the wedge.** A few specific gaps the MyLiveCV-style architecture lets you attack:
 
-| Gap | Existing tools | What you can build |
-|---|---|---|
-| Live A4/Stamp-paper preview as you fill | Absent. Form first, PDF later. | MyLiveCV-style iframe artboard, real-time render. |
-| Stamp-paper-aware layout (top zone reserved) | Nobody does this; users print on A4 and re-print on stamp paper hoping it fits | Render the body with mm-precise top offset; print profile per page size |
-| State/jurisdiction toggles inside templates | Vakilsearch has 2–3 state variants; mostly silent on the rest | Schema-driven: state field flips clauses/registration text |
-| Multi-persona (user / agency / advocate) on the same product | Vakilsearch is B2C; CLM tools (Spotdraft, Sirion) are enterprise; nothing in between | White-label + branding + marketplace templates |
-| Real-time co-editing with the counterparty | None | Share link → comment/suggest mode (Google Docs analog) |
-| AI grounded in actual statutory references, not just LLM completion | Generic "rewrite this clause" buttons | Rule library + RAG over Bare Acts + per-state overrides |
-| Print fidelity | Browser print kills margins | Server-side Puppeteer with calibrated CSS |
+| Gap                                                                 | Existing tools                                                                       | What you can build                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Live A4/Stamp-paper preview as you fill                             | Absent. Form first, PDF later.                                                       | MyLiveCV-style iframe artboard, real-time render.                       |
+| Stamp-paper-aware layout (top zone reserved)                        | Nobody does this; users print on A4 and re-print on stamp paper hoping it fits       | Render the body with mm-precise top offset; print profile per page size |
+| State/jurisdiction toggles inside templates                         | Vakilsearch has 2–3 state variants; mostly silent on the rest                        | Schema-driven: state field flips clauses/registration text              |
+| Multi-persona (user / agency / advocate) on the same product        | Vakilsearch is B2C; CLM tools (Spotdraft, Sirion) are enterprise; nothing in between | White-label + branding + marketplace templates                          |
+| Real-time co-editing with the counterparty                          | None                                                                                 | Share link → comment/suggest mode (Google Docs analog)                  |
+| AI grounded in actual statutory references, not just LLM completion | Generic "rewrite this clause" buttons                                                | Rule library + RAG over Bare Acts + per-state overrides                 |
+| Print fidelity                                                      | Browser print kills margins                                                          | Server-side Puppeteer with calibrated CSS                               |
 
 ### 1.3 Competitive landscape (confidence: high on existence, moderate on internals)
 
@@ -85,6 +85,7 @@ From `apps/api`, `apps/app`, `apps/web`, `tools/prisma/schema.prisma`:
 - **i18n**: i18next on both `app` and `web`. Hindi/regional support is plumbed.
 
 **What's missing** that you must add:
+
 - Document/Template domain model (Prisma).
 - Template render engine (HTML/React component per template + server-side PDF).
 - Builder shell (drag-drop sections, live preview iframe).
@@ -264,6 +265,7 @@ model BrandingProfile {
 ```
 
 Notes:
+
 - `Feature` enum already has `documents` — reuse for per-plan doc quota. No schema change needed for billing.
 - `Document.data` as JSON keeps you fast; validate against the template type's Zod schema in the service layer, not the database.
 - Add `documents` and `ai_*` Plan defaults at seed time.
@@ -360,7 +362,7 @@ Pick **one** provider for v1. Digio and Leegality have the most mature APIs; Lee
 
 This is the most contested integration. SHCIL (Stock Holding Corp of India) is the central authority; states have their own portals (Karnataka via Khazane2, Maharashtra IGR, etc.). Direct integration with SHCIL is gated and slow. **Path**: integrate via a stamp-paper aggregator (StampIt, Leegality, NoBroker — some offer API access). For v1, support **manual upload of the user's own stamped paper** (they upload a photo/PDF of the stamped paper, you overlay the document content with mm-precision, render the combined PDF). Add live aggregator integration in v2.
 
-### 2.8 AI features — designed for *trust*, not just *features*
+### 2.8 AI features — designed for _trust_, not just _features_
 
 Reuse `apps/api/src/app/ai/` (OpenAI + Gemini providers). Add a new module `legal-ai` on top with strict guard-rails:
 
@@ -481,16 +483,16 @@ Each new doc type costs ~1 week if schema/template patterns are reusable. **If**
 
 ## Part 4 — Engineering risks & how to defuse them
 
-| Risk | Likelihood | Mitigation |
-|---|---|---|
-| Print fidelity differs across printers/browsers | High | Server-side Puppeteer only for final output; calibration ruler PDF; never trust browser print for production output |
-| Clause hallucinations / wrong legal advice | High | Risk rules are deterministic; AI outputs always carry disclaimer; per-state rule library is hand-curated |
-| BCI complaint or PIL against you | Moderate | Position as DIY tool; never "we draft for you"; verified lawyers are independent contractors via marketplace |
-| eSign provider outage | Moderate | Single-provider day 1, but design `signers.provider` field-driven so you can add a fallback in a week |
-| AI cost spirals on free tier | High | Per-attempt metering via existing `WalletUsage`; per-IP rate limit on anonymous preview AI (don't expose to anonymous users at all initially) |
-| Template proliferation = unmaintainable | High | Force every template through the schema lib's typed contract; no per-template HTML hacks; review at PR |
-| State-law changes silently break correctness | High | Rule library in code with named effective dates; quarterly legal consultant review; CI test that every template renders for every supported jurisdiction |
-| Stamp-paper offset varies by state denomination | Moderate | Calibrate per `PageSize`; store offsets as data, not code |
+| Risk                                            | Likelihood | Mitigation                                                                                                                                               |
+| ----------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Print fidelity differs across printers/browsers | High       | Server-side Puppeteer only for final output; calibration ruler PDF; never trust browser print for production output                                      |
+| Clause hallucinations / wrong legal advice      | High       | Risk rules are deterministic; AI outputs always carry disclaimer; per-state rule library is hand-curated                                                 |
+| BCI complaint or PIL against you                | Moderate   | Position as DIY tool; never "we draft for you"; verified lawyers are independent contractors via marketplace                                             |
+| eSign provider outage                           | Moderate   | Single-provider day 1, but design `signers.provider` field-driven so you can add a fallback in a week                                                    |
+| AI cost spirals on free tier                    | High       | Per-attempt metering via existing `WalletUsage`; per-IP rate limit on anonymous preview AI (don't expose to anonymous users at all initially)            |
+| Template proliferation = unmaintainable         | High       | Force every template through the schema lib's typed contract; no per-template HTML hacks; review at PR                                                   |
+| State-law changes silently break correctness    | High       | Rule library in code with named effective dates; quarterly legal consultant review; CI test that every template renders for every supported jurisdiction |
+| Stamp-paper offset varies by state denomination | Moderate   | Calibrate per `PageSize`; store offsets as data, not code                                                                                                |
 
 ---
 
@@ -503,6 +505,7 @@ Each new doc type costs ~1 week if schema/template patterns are reusable. **If**
 - **Don't ship 30 templates on day one.** Ship rent agreement, perfectly. Earn the right to add the next one.
 
 Next concrete step options:
+
 - (a) Draft the Prisma migration and seed for Phase 0.
 - (b) Scaffold `apps/artboard` and the two new libs with the rent-agreement schema + classic template.
 - (c) Write the legal-AI prompt registry + risk-rule structure.

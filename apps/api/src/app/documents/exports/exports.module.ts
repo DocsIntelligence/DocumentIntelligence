@@ -2,10 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { DynamicModule, Logger, Module } from '@nestjs/common';
 import { StorageModule } from '../../storage/storage.module';
 import { ExportsService, PDF_QUEUE_ENABLED } from './exports.service';
-import {
-  PDF_RENDER_QUEUE,
-  PdfRenderProcessor,
-} from './pdf-render.processor';
+import { PDF_RENDER_QUEUE, PdfRenderProcessor } from './pdf-render.processor';
 import { PdfRendererService } from './pdf-renderer.service';
 
 /**

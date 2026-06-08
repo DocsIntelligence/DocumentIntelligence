@@ -8,7 +8,13 @@ import {
 import { Button, LanguageSwitcher, UserAvatar } from '@org/ui';
 import { cn } from '@org/utils';
 import { useTranslation } from 'react-i18next';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { APP_ENV } from '../../../config';
 
 /**

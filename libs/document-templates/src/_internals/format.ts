@@ -39,7 +39,11 @@ export function formatDateLong(iso: string | undefined | null): string {
   });
 }
 
-export function partyDisplay(name?: string, parentName?: string, relation?: string): string {
+export function partyDisplay(
+  name?: string,
+  parentName?: string,
+  relation?: string,
+): string {
   if (!name) return '—';
   if (parentName && relation) return `${name}, ${relation} ${parentName}`;
   return name;

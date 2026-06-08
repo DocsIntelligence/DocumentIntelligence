@@ -52,7 +52,9 @@ export function Settings() {
         setIdentities(ids);
         setPasskeys(pks);
       })
-      .catch(() => toast.error(t('settings.loadError', 'Failed to load settings')))
+      .catch(() =>
+        toast.error(t('settings.loadError', 'Failed to load settings')),
+      )
       .finally(() => setLoading(false));
   }, [t]);
 
@@ -67,7 +69,9 @@ export function Settings() {
         throw new Error(data.message);
       }
       setIdentities((prev) => prev.filter((i) => i.id !== id));
-      toast.success(t('settings.providerDisconnected', 'Provider disconnected'));
+      toast.success(
+        t('settings.providerDisconnected', 'Provider disconnected'),
+      );
     } catch (e: any) {
       toast.error(e.message ?? t('settings.unlinkError', 'Failed to unlink'));
     }
@@ -97,8 +101,9 @@ export function Settings() {
 
       // Verify with server
       const label =
-        prompt(t('settings.namePasskeyPrompt', 'Name this passkey (optional):')) ??
-        undefined;
+        prompt(
+          t('settings.namePasskeyPrompt', 'Name this passkey (optional):'),
+        ) ?? undefined;
       const verifyRes = await fetch(
         `${API_BASE_URL}/auth/passkey/register/verify`,
         {
@@ -142,7 +147,8 @@ export function Settings() {
       toast.success(t('settings.passkeyRemoved', 'Passkey removed'));
     } catch (e: any) {
       toast.error(
-        e.message ?? t('settings.passkeyDeleteError', 'Failed to delete passkey'),
+        e.message ??
+          t('settings.passkeyDeleteError', 'Failed to delete passkey'),
       );
     }
   };
@@ -269,7 +275,8 @@ export function Settings() {
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {pk.label || t('settings.unnamedPasskey', 'Unnamed passkey')}
+                    {pk.label ||
+                      t('settings.unnamedPasskey', 'Unnamed passkey')}
                   </p>
                   <p className="text-xs text-foreground/50">
                     {t('settings.passkeyMeta', '{{device}} · Added {{date}}', {

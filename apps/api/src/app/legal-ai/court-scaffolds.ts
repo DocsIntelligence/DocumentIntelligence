@@ -86,7 +86,13 @@ const AGREEMENT = `Format as a formal Indian commercial agreement:
 - Signature blocks for both parties, with witness lines where customary.
 Keep party-specific values as {{placeholders}}.`;
 
-for (const k of ['nda', 'mou', 'partnership-deed', 'offer-letter', 'gift-deed']) {
+for (const k of [
+  'nda',
+  'mou',
+  'partnership-deed',
+  'offer-letter',
+  'gift-deed',
+]) {
   COURT_SCAFFOLDS[k] = AGREEMENT;
 }
 

@@ -2,7 +2,7 @@
 
 > **Status as of 2026-06-07.** This `docs/` set supersedes and extends the original
 > [`../LEGAL_DOCS_PLAN.md`](../LEGAL_DOCS_PLAN.md). That plan is now ~70% implemented;
-> these documents describe the *current* state, the Indian market as of mid-2026, and the
+> these documents describe the _current_ state, the Indian market as of mid-2026, and the
 > roadmap for the next phase: **AI-driven document drafting/updating, court documents, and
 > multi-format output.**
 
@@ -16,12 +16,12 @@ copilot** that can generate and edit whole documents from natural language.
 
 ## Document map
 
-| File | Purpose | Read if you want… |
-|---|---|---|
-| [`01-market-analysis-india.md`](01-market-analysis-india.md) | Indian legal-tech market, sizing, competitors, regulatory constraints (eSign/eStamp/DPDP/BCI/new criminal codes) | The "should we build this, and where's the wedge" answer |
-| [`02-product-roadmap.md`](02-product-roadmap.md) | Phased product roadmap, document-type rollout order, pricing, success metrics | The "what ships when" answer |
-| [`03-technical-design.md`](03-technical-design.md) | Architecture of the AI drafting engine, Claude integration, court-document support, multi-format export | The "how we build it" answer |
-| [`04-progress-tracker.md`](04-progress-tracker.md) | Living checklist of what is built / partial / not-started, by component | The "where are we" answer — **update this as work lands** |
+| File                                                         | Purpose                                                                                                          | Read if you want…                                         |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [`01-market-analysis-india.md`](01-market-analysis-india.md) | Indian legal-tech market, sizing, competitors, regulatory constraints (eSign/eStamp/DPDP/BCI/new criminal codes) | The "should we build this, and where's the wedge" answer  |
+| [`02-product-roadmap.md`](02-product-roadmap.md)             | Phased product roadmap, document-type rollout order, pricing, success metrics                                    | The "what ships when" answer                              |
+| [`03-technical-design.md`](03-technical-design.md)           | Architecture of the AI drafting engine, Claude integration, court-document support, multi-format export          | The "how we build it" answer                              |
+| [`04-progress-tracker.md`](04-progress-tracker.md)           | Living checklist of what is built / partial / not-started, by component                                          | The "where are we" answer — **update this as work lands** |
 
 ## The codebase in one paragraph
 

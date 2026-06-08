@@ -18,8 +18,7 @@ export const createAuthService = (http: HttpClient) => ({
     http.post<AuthResponse>('/auth/register', payload).then((r) => r.data),
   refresh: (payload: RefreshDto) =>
     http.post<AuthResponse>('/auth/refresh', payload).then((r) => r.data),
-  logout: () =>
-    http.post<MessageResponse>('/auth/logout').then((r) => r.data),
+  logout: () => http.post<MessageResponse>('/auth/logout').then((r) => r.data),
   me: () => http.get<User>('/auth/me').then((r) => r.data),
   forgotPassword: (payload: ForgotPasswordDto) =>
     http

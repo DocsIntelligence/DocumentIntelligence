@@ -217,8 +217,8 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
                 placeholder="furnishing"
               >
                 {prop?.furnished ? prop.furnished.replace('_', '-') : undefined}
-              </EditableField>
-              {' '}(the &ldquo;Premises&rdquo;).
+              </EditableField>{' '}
+              (the &ldquo;Premises&rdquo;).
             </p>
             {(prop?.inventory?.length ?? 0) > 0 && (
               <p>
@@ -254,8 +254,8 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
               </strong>
               {term?.renewable
                 ? ', renewable by mutual written consent of both parties.'
-                : ', and is not renewable except by a fresh agreement.'}
-              {' '}Either party may terminate this Agreement by giving{' '}
+                : ', and is not renewable except by a fresh agreement.'}{' '}
+              Either party may terminate this Agreement by giving{' '}
               <strong>
                 <EditableField
                   path="term.noticePeriodDays"
@@ -266,20 +266,21 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
                 days
               </strong>{' '}
               prior written notice.
-              {term?.lockInMonths
-                ? (
-                    <>
-                      {' '}A lock-in period of{' '}
-                      <EditableField
-                        path="term.lockInMonths"
-                        value={term.lockInMonths}
-                        widget="number"
-                        placeholder="months"
-                      />{' '}
-                      month(s) shall apply.
-                    </>
-                  )
-                : ''}
+              {term?.lockInMonths ? (
+                <>
+                  {' '}
+                  A lock-in period of{' '}
+                  <EditableField
+                    path="term.lockInMonths"
+                    value={term.lockInMonths}
+                    widget="number"
+                    placeholder="months"
+                  />{' '}
+                  month(s) shall apply.
+                </>
+              ) : (
+                ''
+              )}
             </p>
           </section>
 
@@ -310,52 +311,53 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
                 />
               </strong>
               th day of each calendar month.
-              {rent?.escalationPercent
-                ? (
-                    <>
-                      {' '}The rent shall be escalated by{' '}
-                      <EditableField
-                        path="rent_deposit.escalationPercent"
-                        value={rent.escalationPercent}
-                        widget="number"
-                        placeholder="%"
-                      />
-                      % every{' '}
-                      <EditableField
-                        path="rent_deposit.escalationEveryMonths"
-                        value={rent.escalationEveryMonths}
-                        widget="number"
-                        placeholder="months"
-                      />{' '}
-                      months.
-                    </>
-                  )
-                : ''}
-              {rent?.lateFeePerDay
-                ? (
-                    <>
-                      {' '}Delayed payment shall attract a late fee of{' '}
-                      <EditableField
-                        path="rent_deposit.lateFeePerDay"
-                        value={rent.lateFeePerDay}
-                        widget="currency"
-                        placeholder="late fee/day"
-                      >
-                        {formatINR(rent.lateFeePerDay)}
-                      </EditableField>{' '}
-                      per day.
-                    </>
-                  )
-                : ''}
+              {rent?.escalationPercent ? (
+                <>
+                  {' '}
+                  The rent shall be escalated by{' '}
+                  <EditableField
+                    path="rent_deposit.escalationPercent"
+                    value={rent.escalationPercent}
+                    widget="number"
+                    placeholder="%"
+                  />
+                  % every{' '}
+                  <EditableField
+                    path="rent_deposit.escalationEveryMonths"
+                    value={rent.escalationEveryMonths}
+                    widget="number"
+                    placeholder="months"
+                  />{' '}
+                  months.
+                </>
+              ) : (
+                ''
+              )}
+              {rent?.lateFeePerDay ? (
+                <>
+                  {' '}
+                  Delayed payment shall attract a late fee of{' '}
+                  <EditableField
+                    path="rent_deposit.lateFeePerDay"
+                    value={rent.lateFeePerDay}
+                    widget="currency"
+                    placeholder="late fee/day"
+                  >
+                    {formatINR(rent.lateFeePerDay)}
+                  </EditableField>{' '}
+                  per day.
+                </>
+              ) : (
+                ''
+              )}
             </p>
           </section>
 
           <section>
             <h2>4. Security Deposit</h2>
             <p>
-              The Tenant has, on or before the execution of this Agreement,
-              paid to the Landlord an interest-free refundable security deposit
-              of{' '}
+              The Tenant has, on or before the execution of this Agreement, paid
+              to the Landlord an interest-free refundable security deposit of{' '}
               <strong>
                 <EditableField
                   path="rent_deposit.depositAmount"
@@ -462,29 +464,36 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
             <h2>6. Use of Premises &amp; House Rules</h2>
             <p>
               The Tenant shall use the Premises solely for{' '}
-              {rules?.commercialUseAllowed ? 'lawful commercial' : 'lawful residential'}{' '}
+              {rules?.commercialUseAllowed
+                ? 'lawful commercial'
+                : 'lawful residential'}{' '}
               purposes. The Tenant shall not assign, sublet, or part with
               possession of the Premises{' '}
-              {rules?.subletAllowed ? '' : 'without the prior written consent of the Landlord'}.
+              {rules?.subletAllowed
+                ? ''
+                : 'without the prior written consent of the Landlord'}
+              .
               {rules?.alterationsAllowed
                 ? ' Structural alterations may be made with prior written consent.'
-                : ' No structural alterations shall be made to the Premises.'}
-              {' '}Pets are {rules?.petsAllowed ? 'permitted' : 'not permitted'}; smoking is{' '}
-              {rules?.smokingAllowed ? 'permitted' : 'not permitted'} within the Premises.
-              {rules?.maxOccupants
-                ? (
-                    <>
-                      {' '}The Premises shall not be occupied by more than{' '}
-                      <EditableField
-                        path="rules.maxOccupants"
-                        value={rules.maxOccupants}
-                        widget="number"
-                        placeholder="occupants"
-                      />{' '}
-                      persons.
-                    </>
-                  )
-                : ''}
+                : ' No structural alterations shall be made to the Premises.'}{' '}
+              Pets are {rules?.petsAllowed ? 'permitted' : 'not permitted'};
+              smoking is {rules?.smokingAllowed ? 'permitted' : 'not permitted'}{' '}
+              within the Premises.
+              {rules?.maxOccupants ? (
+                <>
+                  {' '}
+                  The Premises shall not be occupied by more than{' '}
+                  <EditableField
+                    path="rules.maxOccupants"
+                    value={rules.maxOccupants}
+                    widget="number"
+                    placeholder="occupants"
+                  />{' '}
+                  persons.
+                </>
+              ) : (
+                ''
+              )}
             </p>
             {(rules?.customRules?.length ?? 0) > 0 && (
               <ol>

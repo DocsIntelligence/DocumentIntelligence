@@ -125,7 +125,9 @@ export class StorageController {
    */
   @Get('local/{*key}')
   @Public()
-  @ApiOperation({ summary: 'Stream a file from the local-fs storage backend (dev only)' })
+  @ApiOperation({
+    summary: 'Stream a file from the local-fs storage backend (dev only)',
+  })
   async downloadLocal(
     @Param('key') key: string | string[],
     @Res() res: Response,
@@ -136,7 +138,9 @@ export class StorageController {
     const joined = Array.isArray(key) ? key.join('/') : key;
     try {
       const buf = await this.storage.readBuffer(joined);
-      const ct = CONTENT_TYPES[extname(joined).toLowerCase()] ?? 'application/octet-stream';
+      const ct =
+        CONTENT_TYPES[extname(joined).toLowerCase()] ??
+        'application/octet-stream';
       res.setHeader('Content-Type', ct);
       res.setHeader('Content-Length', buf.length);
       res.setHeader('Cache-Control', 'private, max-age=60');

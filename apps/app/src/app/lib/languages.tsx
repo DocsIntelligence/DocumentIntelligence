@@ -7,10 +7,12 @@ export interface LanguageOption {
   label: string;
 }
 
-const indian: LanguageOption[] = Object.values(SUPPORTED_LANGUAGES).map((l) => ({
-  value: l.name,
-  label: `${l.name} (${l.nativeName})`,
-}));
+const indian: LanguageOption[] = Object.values(SUPPORTED_LANGUAGES).map(
+  (l) => ({
+    value: l.name,
+    label: `${l.name} (${l.nativeName})`,
+  }),
+);
 
 /** English + India's languages + a few world languages. The AI can write any
  * language, so this is a convenience list — extend freely. */

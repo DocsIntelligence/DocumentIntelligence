@@ -47,9 +47,7 @@ export function Paginator({
 
   useIsomorphicLayoutEffect(() => {
     if (!mirrorRef.current) return;
-    const blocks = Array.from(
-      mirrorRef.current.children,
-    ) as HTMLElement[];
+    const blocks = Array.from(mirrorRef.current.children) as HTMLElement[];
 
     // Convert mm to px assuming 96dpi (1mm ≈ 3.7795px); browsers do the same
     // when interpreting mm on screen.

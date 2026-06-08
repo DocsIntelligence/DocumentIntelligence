@@ -133,17 +133,16 @@ export function RenderRoute() {
       state.data && typeof state.data === 'object'
         ? (state.data as { fontFamily?: string }).fontFamily
         : undefined;
-    void Promise.all([
-      loadDocumentFonts(),
-      ensureGoogleFont(chosenFont),
-    ]).then(() => {
-      if (cancelled) return;
-      requestAnimationFrame(() => {
+    void Promise.all([loadDocumentFonts(), ensureGoogleFont(chosenFont)]).then(
+      () => {
+        if (cancelled) return;
         requestAnimationFrame(() => {
-          if (!cancelled) window.__ARTBOARD_READY__ = true;
+          requestAnimationFrame(() => {
+            if (!cancelled) window.__ARTBOARD_READY__ = true;
+          });
         });
-      });
-    });
+      },
+    );
     return () => {
       cancelled = true;
     };

@@ -18,7 +18,10 @@ export function DocumentsList() {
             {t('documents.title', 'My documents')}
           </h1>
           <p className="mt-1 text-foreground/60">
-            {t('documents.subtitle', 'Drafts, signed copies, and shared documents.')}
+            {t(
+              'documents.subtitle',
+              'Drafts, signed copies, and shared documents.',
+            )}
           </p>
         </div>
         <Button asChild>

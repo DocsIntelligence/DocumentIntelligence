@@ -20,7 +20,5 @@ export function labelFor(sectionKey: string): string {
   if (sectionLabels[sectionKey]) return sectionLabels[sectionKey];
   const segments = sectionKey.split('.');
   const last = segments[segments.length - 1] ?? sectionKey;
-  return last
-    .replace(/_/g, ' ')
-    .replace(/^./, (c) => c.toUpperCase());
+  return last.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 }

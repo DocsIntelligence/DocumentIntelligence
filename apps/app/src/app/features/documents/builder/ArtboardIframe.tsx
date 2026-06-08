@@ -66,7 +66,8 @@ export function ArtboardIframe({
         return;
       }
       if (msg.type === 'artboard:zoom') {
-        if (typeof msg.payload?.zoom === 'number') setZoom(clampZoom(msg.payload.zoom));
+        if (typeof msg.payload?.zoom === 'number')
+          setZoom(clampZoom(msg.payload.zoom));
         return;
       }
       if (msg.type === 'artboard:field-click' && onFieldClick) {
@@ -99,7 +100,10 @@ export function ArtboardIframe({
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage({ type: 'doc:zoom', payload: { zoom } }, '*');
+    iframe.contentWindow.postMessage(
+      { type: 'doc:zoom', payload: { zoom } },
+      '*',
+    );
   }, [zoom, ready]);
 
   return (
@@ -156,14 +160,28 @@ function ZoomButton({
 
 function MinusIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   );
 }
 function PlusIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>

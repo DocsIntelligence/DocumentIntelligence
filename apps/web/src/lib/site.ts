@@ -6,5 +6,4 @@
  * NEXT_PUBLIC_* vars are inlined at build time, so this works in both
  * server and client components.
  */
-export const SITE_NAME =
-  process.env.NEXT_PUBLIC_SITE_NAME ?? 'Document Portal';
+export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Document Portal';

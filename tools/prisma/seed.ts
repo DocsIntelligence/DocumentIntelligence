@@ -171,7 +171,11 @@ async function main() {
       active: true,
       features: {
         create: [
-          { name: Feature.documents, action: FeatureAction.reset, quantity: 10 },
+          {
+            name: Feature.documents,
+            action: FeatureAction.reset,
+            quantity: 10,
+          },
           {
             name: Feature.ai_tokens,
             action: FeatureAction.reset,
@@ -215,7 +219,11 @@ async function main() {
       active: true,
       features: {
         create: [
-          { name: Feature.documents, action: FeatureAction.reset, quantity: -1 },
+          {
+            name: Feature.documents,
+            action: FeatureAction.reset,
+            quantity: -1,
+          },
           {
             name: Feature.ai_tokens,
             action: FeatureAction.reset,

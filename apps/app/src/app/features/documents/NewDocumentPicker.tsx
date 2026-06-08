@@ -290,7 +290,9 @@ export function NewDocumentPicker() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {preset ? preset.name : t('dashboard.draftAiTitle', 'Draft with AI')}
+              {preset
+                ? preset.name
+                : t('dashboard.draftAiTitle', 'Draft with AI')}
             </DialogTitle>
             <DialogDescription>
               {preset

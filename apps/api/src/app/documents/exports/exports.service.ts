@@ -41,11 +41,7 @@ export class ExportsService {
     private readonly db: DatabaseService,
   ) {}
 
-  async enqueueExport(
-    userId: string,
-    documentId: string,
-    pageSize?: PageSize,
-  ) {
+  async enqueueExport(userId: string, documentId: string, pageSize?: PageSize) {
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
       include: { template: true },

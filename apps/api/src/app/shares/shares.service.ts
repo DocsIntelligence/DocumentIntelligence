@@ -105,8 +105,15 @@ export class SharesService {
         language: document.language,
         jurisdiction: document.jurisdiction,
         data: document.data,
-        documentType: { key: document.documentType.key, name: document.documentType.name },
-        template: { key: document.template.key, name: document.template.name, componentKey: document.template.componentKey },
+        documentType: {
+          key: document.documentType.key,
+          name: document.documentType.name,
+        },
+        template: {
+          key: document.template.key,
+          name: document.template.name,
+          componentKey: document.template.componentKey,
+        },
       },
     };
   }

@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
@@ -16,11 +10,7 @@ import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import {
-  CreateShareDto,
-  PublicCommentDto,
-  UnlockShareDto,
-} from './shares.dto';
+import { CreateShareDto, PublicCommentDto, UnlockShareDto } from './shares.dto';
 import { SharesService } from './shares.service';
 
 @ApiTags('shares')
@@ -51,7 +41,9 @@ export class SharesController {
   @Post('public/:token/comments')
   @Public()
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  @ApiOperation({ summary: 'Add a comment to a shared document (comment/edit links)' })
+  @ApiOperation({
+    summary: 'Add a comment to a shared document (comment/edit links)',
+  })
   comment(@Param('token') token: string, @Body() body: PublicCommentDto) {
     return this.shares.addPublicComment(token, body);
   }

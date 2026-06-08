@@ -6,10 +6,7 @@ const CreateShareSchema = z.object({
   documentId: z.string().cuid(),
   mode: z.nativeEnum(ShareMode).default(ShareMode.view),
   password: z.string().min(4).max(64).optional(),
-  expiresAt: z
-    .string()
-    .datetime()
-    .optional(),
+  expiresAt: z.string().datetime().optional(),
 });
 
 export class CreateShareDto extends createZodDto(CreateShareSchema) {}

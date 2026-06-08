@@ -11,7 +11,10 @@ import {
   getBundle,
   type PromptDefinition,
 } from '@org/document-schema';
-import { CRIMINAL_CODE_REFORM_NOTE, citationWarnings } from '@org/legal-reference';
+import {
+  CRIMINAL_CODE_REFORM_NOTE,
+  citationWarnings,
+} from '@org/legal-reference';
 import { scaffoldForPreset } from './court-scaffolds';
 import { AiService } from '../ai/ai.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';

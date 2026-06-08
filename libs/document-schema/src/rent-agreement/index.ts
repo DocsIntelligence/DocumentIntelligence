@@ -23,6 +23,9 @@ export const rentAgreementBundle: DocumentTypeBundle<
 registerDocumentType(rentAgreementBundle);
 
 export * from './schema';
-export { rentAgreementFormMetadata, rentAgreementSectionOrder } from './form-metadata';
+export {
+  rentAgreementFormMetadata,
+  rentAgreementSectionOrder,
+} from './form-metadata';
 export { rentAgreementRisks } from './risks';
 export { rentAgreementPrompts } from './prompts';

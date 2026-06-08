@@ -9,8 +9,8 @@
 A document type is a `DocumentTypeBundle` in `libs/document-schema` — `schema` (Zod) +
 `formMetadata` + `sectionOrder` + `risks` + `prompts` + `knownTemplates`. The AI engine, the form,
 the validation, the risk panel, and the renderer **all derive from this single object**. The AI
-generation feature is, at its core, *"use the LLM to produce data that validates against
-`bundle.schema`, then run the existing render path."* This is what makes AI drafting reliable
+generation feature is, at its core, _"use the LLM to produce data that validates against
+`bundle.schema`, then run the existing render path."_ This is what makes AI drafting reliable
 instead of a free-text hallucination machine.
 
 ## 2. Adding the Claude provider
@@ -19,6 +19,7 @@ The `ai` module already has an `AiProvider` interface (`ai-provider.interface.ts
 `openai.provider.ts` and `gemini.provider.ts` behind a fallback chain. Add a third.
 
 ### 2.1 SDK choice
+
 Use the **official `@anthropic-ai/sdk`** (the project is TypeScript). The existing providers wrap
 LangChain; the Claude provider should call the Anthropic SDK directly for access to
 **structured outputs**, **prompt caching**, and **adaptive thinking**, which are the features that
@@ -27,11 +28,11 @@ hides exactly the controls we need.
 
 ### 2.2 Models, pricing, and routing (verified, cached 2026-05-26)
 
-| Model | ID | Context | Max output | $/1M in | $/1M out | Use for |
-|---|---|---|---|---|---|---|
-| Claude Opus 4.8 | `claude-opus-4-8` | 1M | 128K | $5.00 | $25.00 | Whole-document generation, court docs, anything correctness-critical |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | 1M | 64K | $3.00 | $15.00 | Mid-tier rewrites, bulk operations |
-| Claude Haiku 4.5 | `claude-haiku-4-5` | 200K | 64K | $1.00 | $5.00 | Cheap single-clause rewrites, classification, field suggestions |
+| Model             | ID                  | Context | Max output | $/1M in | $/1M out | Use for                                                              |
+| ----------------- | ------------------- | ------- | ---------- | ------- | -------- | -------------------------------------------------------------------- |
+| Claude Opus 4.8   | `claude-opus-4-8`   | 1M      | 128K       | $5.00   | $25.00   | Whole-document generation, court docs, anything correctness-critical |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | 1M      | 64K        | $3.00   | $15.00   | Mid-tier rewrites, bulk operations                                   |
+| Claude Haiku 4.5  | `claude-haiku-4-5`  | 200K    | 64K        | $1.00   | $5.00    | Cheap single-clause rewrites, classification, field suggestions      |
 
 **Routing policy:** generation/court docs → Opus 4.8 (default); clause-rewrite → Haiku 4.5 or
 Sonnet 4.6; the existing `PromptDefinition.model` alias field already lets each prompt pick its tier.
@@ -46,20 +47,28 @@ import { AiProvider, GenerateOptions } from './ai-provider.interface';
 export class ClaudeProvider implements AiProvider {
   readonly name = 'claude';
   private client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  constructor(private readonly defaultModel = process.env.ANTHROPIC_MODEL ?? 'claude-opus-4-8') {}
+  constructor(
+    private readonly defaultModel = process.env.ANTHROPIC_MODEL ??
+      'claude-opus-4-8',
+  ) {}
 
-  isAvailable() { return Boolean(process.env.ANTHROPIC_API_KEY); }
+  isAvailable() {
+    return Boolean(process.env.ANTHROPIC_API_KEY);
+  }
 
   async generate(prompt: string, opts: GenerateOptions = {}) {
     const res = await this.client.messages.create({
       model: opts.model ?? this.defaultModel,
       max_tokens: opts.maxTokens ?? 16000,
-      thinking: { type: 'adaptive' },             // Opus 4.8: adaptive only — never budget_tokens
+      thinking: { type: 'adaptive' }, // Opus 4.8: adaptive only — never budget_tokens
       // NOTE: no temperature/top_p/top_k — removed on Opus 4.8 (would 400)
       system: opts.system,
       messages: [{ role: 'user', content: prompt }],
     });
-    return res.content.filter(b => b.type === 'text').map(b => (b as any).text).join('');
+    return res.content
+      .filter((b) => b.type === 'text')
+      .map((b) => (b as any).text)
+      .join('');
   }
   // stream(): use client.messages.stream(...).finalMessage() for max_tokens > ~16k
 }
@@ -72,7 +81,7 @@ optional-group pattern. Register `ClaudeProvider` first in the fallback chain.
 ## 3. Document **generation** (the headline feature)
 
 The reliability trick: don't ask the model for prose, ask it for **schema-conforming JSON** via
-structured outputs, then feed that through the *existing* validation + render path.
+structured outputs, then feed that through the _existing_ validation + render path.
 
 ### 3.1 Flow
 
@@ -100,7 +109,9 @@ already does), and `additionalProperties: false` is required on every object. Th
 `messages.parse()` validates and returns a typed object.
 
 ### 3.2 New prompt-manifest entries
+
 Each doc type's `prompts.ts` gains (the `PromptManifest`/`PromptDefinition` types already exist):
+
 - `document.generate` — system prompt: "You produce data for a `<type>` in `<jurisdiction>`.
   Output must satisfy the provided schema. **Do not invent statutory citations; leave citation
   fields blank for the server to fill.** Use placeholders `{{like_this}}` for unknown party
@@ -108,7 +119,9 @@ Each doc type's `prompts.ts` gains (the `PromptManifest`/`PromptDefinition` type
 - `document.revise` — see §4.
 
 ### 3.3 The intake gap (handling missing fields)
+
 A one-shot generation will invent values for required fields the brief omits. Two options:
+
 1. **Placeholder mode (default):** instruct the model to emit `{{placeholders}}` for unknown
    required fields; the UI's `PlaceholderHighlightExtension` already highlights these for the user
    to fill. Cheapest, no extra round trips.
@@ -147,7 +160,7 @@ libs/document-schema/src/_shared/citations.ts
   }
 ```
 
-- The Ai system prompt forbids emitting raw citations; citation *slots* in the schema are filled
+- The Ai system prompt forbids emitting raw citations; citation _slots_ in the schema are filled
   server-side by looking up this table.
 - Court/criminal templates reference `citations` by id, so a statute change is a one-line data edit.
 - **New-criminal-codes mapping is mandatory** (see [`01-market-analysis-india.md`](01-market-analysis-india.md) §4.4):
@@ -183,11 +196,11 @@ The PDF pipeline (`ExportsService` → BullMQ `PdfRenderProcessor` → `PdfRende
 hits `apps/artboard/render/:componentKey` → S3 → `DocumentExport`) stays as the canonical visual
 renderer. Add formats alongside it:
 
-| Format | Approach | Notes |
-|---|---|---|
-| **PDF** | Existing Puppeteer pipeline | Canonical; print-fidelity; stamp-paper aware |
+| Format   | Approach                                                                                               | Notes                                                                                                                                                                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PDF**  | Existing Puppeteer pipeline                                                                            | Canonical; print-fidelity; stamp-paper aware                                                                                                                                                                                                                               |
 | **DOCX** | New worker: either `docx` (npm, programmatic) or headless **LibreOffice** converting the artboard HTML | Advocates **require** editable output. Programmatic `docx` gives cleaner structure but you re-author layout; LibreOffice reuses the HTML but is heavier to host. **Recommend `docx` for court docs (structured, predictable) and accept minor visual drift from the PDF.** |
-| **PNG** | `page.screenshot()` in the same Puppeteer worker | Thumbnails, share cards; enum already supports it |
+| **PNG**  | `page.screenshot()` in the same Puppeteer worker                                                       | Thumbnails, share cards; enum already supports it                                                                                                                                                                                                                          |
 
 Wire `DocumentExport.format` through `ExportsService.enqueue(format)` and add a
 `DocxRenderProcessor`. Keep checksum + S3 + status semantics identical to the PDF path.
@@ -199,7 +212,7 @@ Wire `DocumentExport.format` through `ExportsService.enqueue(format)` and add a
   Cache writes cost ~1.25× (5-min TTL); break-even at two requests. Minimum cacheable prefix is
   **4096 tokens for Opus 4.8/Haiku 4.5** and **2048 for Sonnet 4.6** — a short system prompt won't
   cache, so keep the cached prefix (schema + examples) above the floor. Put volatile content (the
-  user's brief) *after* the last cache breakpoint. Verify with `usage.cache_read_input_tokens`.
+  user's brief) _after_ the last cache breakpoint. Verify with `usage.cache_read_input_tokens`.
 - **Model tiering**: Opus for generation, Haiku/Sonnet for rewrites (already expressible via
   `PromptDefinition.model`).
 - **Existing 24h cache** in `legal-ai.service` (SHA256 of prompt id+version+input) stays — extend it

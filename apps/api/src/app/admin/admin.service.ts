@@ -12,7 +12,9 @@ export class AdminService {
       select: { role: true },
     });
     if (target?.role !== Role.admin) return;
-    const adminCount = await this.db.user.count({ where: { role: Role.admin } });
+    const adminCount = await this.db.user.count({
+      where: { role: Role.admin },
+    });
     if (adminCount <= 1) {
       throw new BadRequestException(
         'Cannot remove the last admin from the system',

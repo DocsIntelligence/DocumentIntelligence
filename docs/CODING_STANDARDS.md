@@ -25,7 +25,11 @@ Start with [`../CONTRIBUTING.md`](../CONTRIBUTING.md) (setup + golden rules); th
 - **Every app must have `apps/<app>/tsconfig.json`** (solution-style) in addition to
   `tsconfig.app.json`:
   ```json
-  { "extends": "../../tsconfig.base.json", "files": [], "references": [{ "path": "./tsconfig.app.json" }] }
+  {
+    "extends": "../../tsconfig.base.json",
+    "files": [],
+    "references": [{ "path": "./tsconfig.app.json" }]
+  }
   ```
   VS Code discovers files via `tsconfig.json` only; without it, new files land in an inferred
   project with no `@org/*` paths → spurious "Cannot find module". The CLI build is unaffected
@@ -67,7 +71,7 @@ Two distinct mechanisms — don't confuse them:
 
 1. **UI i18n** — `i18next` / `react-i18next` (plumbed in `apps/app` and `apps/web`). User-facing UI
    strings should go through translation keys, not be hard-coded, as Hindi/regional UI lands.
-2. **Document content language** — the *document body* can be generated in any language by the AI
+2. **Document content language** — the _document body_ can be generated in any language by the AI
    (`/legal-ai/generate` + `/legal-ai/revise` take a `language`). Language options + the
    `<LanguageSelect>` live in `apps/app/src/app/lib/languages.tsx`.
 3. **Transliteration** — type Latin, get Indic script in the editor, via `@org/transliteration`

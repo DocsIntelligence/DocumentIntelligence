@@ -421,7 +421,11 @@ export class DocumentsService {
         where: { orgId_userId: { orgId: doc.ownerOrgId, userId } },
       });
       if (member) {
-        if (opts.requireOwner && member.role !== 'owner' && member.role !== 'admin') {
+        if (
+          opts.requireOwner &&
+          member.role !== 'owner' &&
+          member.role !== 'admin'
+        ) {
           throw new ForbiddenException('Owner/admin role required');
         }
         return;

@@ -16,8 +16,16 @@ import type { ShareMode } from '@org/api-client';
 import { useCreateShare } from './queries';
 
 const MODES: { value: ShareMode; label: string; hint: string }[] = [
-  { value: 'view', label: 'View only', hint: 'Recipient can read the document.' },
-  { value: 'comment', label: 'Comment', hint: 'Recipient can read and comment.' },
+  {
+    value: 'view',
+    label: 'View only',
+    hint: 'Recipient can read the document.',
+  },
+  {
+    value: 'comment',
+    label: 'Comment',
+    hint: 'Recipient can read and comment.',
+  },
   { value: 'edit', label: 'Edit', hint: 'Recipient can edit the document.' },
 ];
 
@@ -133,7 +141,9 @@ export function ShareDialog({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="share-expiry">{t('share.expires', 'Expires')}</Label>
+              <Label htmlFor="share-expiry">
+                {t('share.expires', 'Expires')}
+              </Label>
               <select
                 id="share-expiry"
                 value={expiryDays}

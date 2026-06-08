@@ -22,7 +22,9 @@ interface RazorpayClient {
     }>;
   };
   subscriptions: {
-    create(opts: Record<string, unknown>): Promise<{ id: string } & Record<string, unknown>>;
+    create(
+      opts: Record<string, unknown>,
+    ): Promise<{ id: string } & Record<string, unknown>>;
   };
   payments: {
     fetch(id: string): Promise<{
@@ -36,7 +38,10 @@ interface RazorpayClient {
   };
 }
 
-type RazorpayCtor = new (opts: { key_id: string; key_secret: string }) => RazorpayClient;
+type RazorpayCtor = new (opts: {
+  key_id: string;
+  key_secret: string;
+}) => RazorpayClient;
 
 const safeEqualHex = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
@@ -79,9 +84,9 @@ export class RazorpayService implements OnModuleInit {
       const mod = (await import('razorpay')) as unknown as
         | { default?: RazorpayCtor }
         | RazorpayCtor;
-      const Razorpay = (
-        typeof mod === 'function' ? mod : mod.default
-      ) as RazorpayCtor | undefined;
+      const Razorpay = (typeof mod === 'function' ? mod : mod.default) as
+        | RazorpayCtor
+        | undefined;
       if (!Razorpay) {
         throw new Error('razorpay export not callable');
       }

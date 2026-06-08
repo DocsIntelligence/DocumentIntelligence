@@ -29,6 +29,7 @@ import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import App from './app/app';
+import { ConfirmProvider } from './app/components/confirm/ConfirmProvider';
 import { ServicesProvider } from './app/features/documents/services-context';
 import { APP_ENV } from './config';
 import './styles.css';
@@ -94,8 +95,10 @@ root.render(
             shares={shares}
           >
             <BrowserRouter>
-              <App />
-              <Toaster richColors position="bottom-right" />
+              <ConfirmProvider>
+                <App />
+                <Toaster richColors position="bottom-right" />
+              </ConfirmProvider>
             </BrowserRouter>
           </ServicesProvider>
         </TooltipProvider>

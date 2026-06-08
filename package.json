@@ -11,7 +11,7 @@
     "dev:api": "nx run api:serve",
     "dev:app": "nx run app:serve",
     "dev:web": "nx run web:dev",
-    "build": "NODE_ENV=production nx run-many -t build --projects=api,app,web --parallel=2",
+    "build": "NODE_ENV=production nx run-many -t build --projects=api,app,web,artboard --parallel=2",
     "start": "node dist/apps/api/main.js",
     "start:web": "next start dist/apps/web",
     "lint": "nx run-many -t lint",

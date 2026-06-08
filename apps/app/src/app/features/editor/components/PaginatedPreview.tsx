@@ -101,7 +101,7 @@ export function PaginatedPreview({
   // Per-document font applied to the measuring host and the visible pages (both
   // descend from the container below) via the --doc-font custom property.
   const docFontStyle = docFont
-    ? ({ ['--doc-font']: `'${docFont.replace(/'/g, '')}'` } as CSSProperties)
+    ? ({ '--doc-font': `'${docFont.replace(/'/g, '')}'` } as CSSProperties)
     : undefined;
 
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -290,14 +290,28 @@ function ZoomButton({
 
 function MinusIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   );
 }
 function PlusIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>

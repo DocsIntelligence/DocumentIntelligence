@@ -51,7 +51,10 @@ export function LivePreview() {
   const applyZoom = (next: number) => {
     const z = clampZoom(next);
     setZoom(z);
-    window.parent?.postMessage({ type: 'artboard:zoom', payload: { zoom: z } }, '*');
+    window.parent?.postMessage(
+      { type: 'artboard:zoom', payload: { zoom: z } },
+      '*',
+    );
   };
 
   useEffect(() => {
@@ -59,7 +62,8 @@ export function LivePreview() {
       const msg = ev.data;
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'doc:zoom') {
-        if (typeof msg.payload?.zoom === 'number') setZoom(clampZoom(msg.payload.zoom));
+        if (typeof msg.payload?.zoom === 'number')
+          setZoom(clampZoom(msg.payload.zoom));
         return;
       }
       if (msg.type !== 'doc:update') return;

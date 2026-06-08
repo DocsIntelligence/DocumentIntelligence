@@ -4,7 +4,12 @@ export interface ClauseRewritePayload {
   documentTypeKey: string;
   promptKey?: string;
   clause: string;
-  tone?: 'formal' | 'plain' | 'tenant-friendly' | 'landlord-friendly' | 'shorter';
+  tone?:
+    | 'formal'
+    | 'plain'
+    | 'tenant-friendly'
+    | 'landlord-friendly'
+    | 'shorter';
   audience?: 'landlord' | 'tenant' | 'both';
   jurisdiction?: string;
 }

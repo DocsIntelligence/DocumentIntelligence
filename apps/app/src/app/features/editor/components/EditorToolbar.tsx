@@ -50,27 +50,21 @@ export function EditorToolbar({
 
       <Btn
         active={editor.isActive('heading', { level: 1 })}
-        onClick={() =>
-          editor.chain().focus().toggleHeading({ level: 1 }).run()
-        }
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         tooltip={t('editor.format.heading1', 'Heading 1')}
       >
         H1
       </Btn>
       <Btn
         active={editor.isActive('heading', { level: 2 })}
-        onClick={() =>
-          editor.chain().focus().toggleHeading({ level: 2 }).run()
-        }
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         tooltip={t('editor.format.heading2', 'Heading 2')}
       >
         H2
       </Btn>
       <Btn
         active={editor.isActive('heading', { level: 3 })}
-        onClick={() =>
-          editor.chain().focus().toggleHeading({ level: 3 }).run()
-        }
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         tooltip={t('editor.format.heading3', 'Heading 3')}
       >
         H3
@@ -144,7 +138,12 @@ export function EditorToolbar({
       <Separator orientation="vertical" className="mx-1 h-5" />
 
       {onInsertPlaceholder && (
-        <Tooltip content={t('editor.format.insertPlaceholder', 'Insert placeholder token')}>
+        <Tooltip
+          content={t(
+            'editor.format.insertPlaceholder',
+            'Insert placeholder token',
+          )}
+        >
           <Button
             variant="ghost"
             size="sm"
@@ -157,7 +156,12 @@ export function EditorToolbar({
         </Tooltip>
       )}
       {onInsertPageBreak && (
-        <Tooltip content={t('editor.format.insertPageBreak', 'Insert page break (Ctrl+Enter)')}>
+        <Tooltip
+          content={t(
+            'editor.format.insertPageBreak',
+            'Insert page break (Ctrl+Enter)',
+          )}
+        >
           <Button
             variant="ghost"
             size="sm"

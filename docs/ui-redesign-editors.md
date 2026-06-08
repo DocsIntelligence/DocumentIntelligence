@@ -20,6 +20,7 @@ Legend: `✨`=AI · `💬`=Comments · `✍`=Signatures · `🕐`=History/Versio
 ## 0. CURRENT STATE (what we're fixing)
 
 ### Freeform editor — today
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │ ← 📄 Rent Agreement   [Templates][Save to my docs][✨Draft with AI][✨Revise with AI][Copy] │
@@ -34,6 +35,7 @@ Legend: `✨`=AI · `💬`=Comments · `✍`=Signatures · `🕐`=History/Versio
 ```
 
 ### Structured builder — today
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │ ← [Untitled document............]  (form|preview)  ● Saved  A4 ▾ [Language][Comments]      │
@@ -52,12 +54,13 @@ hover and error text render with no colour.
 
 ---
 
-## Option A — Grouped toolbar + menus  ★ recommended
+## Option A — Grouped toolbar + menus ★ recommended
 
 One clean row. Primary actions stay visible; collaboration collapses to a compact
 icon group with tooltips; low-frequency file actions fold into a `File ▾` menu.
 
 ### A — Freeform editor
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ←  📄 Rent Agreement            ┆  ✨ Draft with AI   Revise  ┆  💬 ✍ 🕐 🔗  ┆  File▾  A4▾  [ Export PDF ]  ⊟ │
@@ -84,6 +87,7 @@ icon group with tooltips; low-frequency file actions fold into a `File ▾` menu
 ```
 
 ### A — Structured builder
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ←  Rent Agreement (Untitled)…   ┆  🌐 Language  ┆  💬 ✍ 🕐 🔗  ┆  A4▾   ● Saved   [ Export PDF ] │
@@ -113,6 +117,7 @@ A slim labelled rail on the far right. Top bar shrinks to identity + the single
 primary button. Everything else lives in titled groups in the rail.
 
 ### B — Freeform editor
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ←  📄 Rent Agreement · Agreements · 3/8 fields            [ Export PDF ]    │
@@ -139,6 +144,7 @@ primary button. Everything else lives in titled groups in the rail.
 ```
 
 ### B — Structured builder
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ←  Rent Agreement (Untitled)…                            [ Export PDF ]     │
@@ -172,6 +178,7 @@ Row 1 = identity + primary. Row 2 = a single grouped strip with every secondary
 action labelled (separated into File · Collaborate · Document clusters).
 
 ### C — Freeform editor
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ←  📄 Rent Agreement · Agreements · 3/8       ✨ Draft  Revise  [Export PDF] ⊟│
@@ -185,6 +192,7 @@ action labelled (separated into File · Collaborate · Document clusters).
 ```
 
 ### C — Structured builder
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ←  Rent Agreement (Untitled)…                 🌐 Language  ● Saved [Export PDF]│

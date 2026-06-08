@@ -64,10 +64,7 @@ export class DocumentsController {
 
   @Get()
   @ApiOperation({ summary: 'List my documents (and my orgs documents)' })
-  list(
-    @CurrentUser() user: User,
-    @Query() query: ListDocumentsQueryDto,
-  ) {
+  list(@CurrentUser() user: User, @Query() query: ListDocumentsQueryDto) {
     return this.documents.list(user.id, query);
   }
 
@@ -147,8 +144,7 @@ export class DocumentsController {
 
   @Get(':id/exports/:exportId/download')
   @ApiOperation({
-    summary:
-      'Get a short-lived presigned URL to download a ready PDF export.',
+    summary: 'Get a short-lived presigned URL to download a ready PDF export.',
   })
   async getExportDownload(
     @CurrentUser() user: User,

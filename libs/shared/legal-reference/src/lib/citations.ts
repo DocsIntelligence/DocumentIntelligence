@@ -70,7 +70,8 @@ export interface Citation {
   topics?: string[];
 }
 
-const VERIFY = 'Verify the section number against the official bare act before binding use.';
+const VERIFY =
+  'Verify the section number against the official bare act before binding use.';
 
 export const CITATIONS: Citation[] = [
   // ── Stable references (acts not affected by the 2024 reform) ──────────────

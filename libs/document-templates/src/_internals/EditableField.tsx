@@ -62,11 +62,13 @@ export function EditableField({
     (typeof value === 'number' && Number.isNaN(value));
 
   const displayed: ReactNode =
-    children ?? (isEmpty ? placeholder ?? '—' : String(value));
+    children ?? (isEmpty ? (placeholder ?? '—') : String(value));
 
   if (!editable) {
     return (
-      <span style={isEmpty ? STYLE_READONLY_EMPTY : undefined}>{displayed}</span>
+      <span style={isEmpty ? STYLE_READONLY_EMPTY : undefined}>
+        {displayed}
+      </span>
     );
   }
 
@@ -92,9 +94,7 @@ export function EditableField({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleClick(
-            e as unknown as MouseEvent<HTMLSpanElement>,
-          );
+          handleClick(e as unknown as MouseEvent<HTMLSpanElement>);
         }
       }}
       style={isEmpty ? STYLE_EDITABLE_EMPTY : STYLE_EDITABLE_FILLED}

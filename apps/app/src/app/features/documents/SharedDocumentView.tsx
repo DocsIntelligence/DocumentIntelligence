@@ -112,7 +112,10 @@ export function SharedDocumentView() {
             {t('shared.passwordRequired', 'Password required')}
           </p>
           <p className="mt-1 text-sm text-foreground/60">
-            {t('shared.passwordHint', 'This shared document is password-protected.')}
+            {t(
+              'shared.passwordHint',
+              'This shared document is password-protected.',
+            )}
           </p>
           <form
             className="mt-4 space-y-3"
@@ -210,7 +213,10 @@ export function SharedDocumentView() {
                 </p>
               )}
               {comments.map((c) => (
-                <div key={c.id} className="rounded-lg border border-border p-2.5">
+                <div
+                  key={c.id}
+                  className="rounded-lg border border-border p-2.5"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-foreground">
                       {c.authorName}

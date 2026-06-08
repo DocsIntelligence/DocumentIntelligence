@@ -1,7 +1,4 @@
-import {
-  getBundle,
-  type Warning,
-} from '@org/document-schema';
+import { getBundle, type Warning } from '@org/document-schema';
 import type { FieldClickEvent } from '@org/document-templates';
 import { useDebounce, useMediaQuery } from '@org/hooks';
 import {
@@ -93,7 +90,9 @@ export function BuilderShell({ documentId }: Props) {
   useEffect(() => {
     if (exportState.phase === 'ready') {
       window.open(exportState.url, '_blank', 'noopener,noreferrer');
-      toast.success(t('builder.toast.pdfReady', 'PDF ready — opened in a new tab'));
+      toast.success(
+        t('builder.toast.pdfReady', 'PDF ready — opened in a new tab'),
+      );
     }
     if (exportState.phase === 'failed') {
       toast.error(
@@ -153,7 +152,10 @@ export function BuilderShell({ documentId }: Props) {
     const current = getAtPath(draft, fieldPath);
     if (typeof current !== 'string' || !current.trim()) {
       toast.info(
-        t('builder.toast.typeFirst', 'Type something first, then click AI to refine it.'),
+        t(
+          'builder.toast.typeFirst',
+          'Type something first, then click AI to refine it.',
+        ),
       );
       return;
     }
@@ -248,9 +250,13 @@ export function BuilderShell({ documentId }: Props) {
           {key ? (
             <>
               <p className="text-error font-medium">
-                {t('builder.noSchema.title', 'Editor not available for “{{name}}”.', {
-                  name: doc.documentType?.name ?? key,
-                })}
+                {t(
+                  'builder.noSchema.title',
+                  'Editor not available for “{{name}}”.',
+                  {
+                    name: doc.documentType?.name ?? key,
+                  },
+                )}
               </p>
               <p className="text-foreground/70 text-sm mt-2">
                 {t(
@@ -263,7 +269,10 @@ export function BuilderShell({ documentId }: Props) {
           ) : (
             <>
               <p className="text-error font-medium">
-                {t('builder.noType.title', 'This document is missing its type.')}
+                {t(
+                  'builder.noType.title',
+                  'This document is missing its type.',
+                )}
               </p>
               <p className="text-foreground/70 text-sm mt-2">
                 {t(
@@ -339,7 +348,7 @@ export function BuilderShell({ documentId }: Props) {
   const previewPane = (
     <section className="h-full min-h-0 bg-secondary/20">
       <ArtboardIframe
-        componentKey={doc.template?.key ? mapTemplateToComponent(doc) : 'rent-agreement.classic'}
+        componentKey={resolveComponentKey(doc)}
         data={draft}
         pageSize={doc.pageSize}
         language={doc.language}
@@ -412,7 +421,10 @@ export function BuilderShell({ documentId }: Props) {
             isLoading={langBusy}
             onClick={() => setLangModalOpen(true)}
             className="h-7 flex-none gap-1.5 px-2 text-xs"
-            title={t('builder.languageTooltip', 'Generate this document in another language')}
+            title={t(
+              'builder.languageTooltip',
+              'Generate this document in another language',
+            )}
           >
             <GlobeIcon />
             {t('builder.language', 'Language')}
@@ -642,14 +654,12 @@ export function BuilderShell({ documentId }: Props) {
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 function getAtPath(obj: unknown, path: string): unknown {
-  return path
-    .split('.')
-    .reduce<unknown>((acc, k) => {
-      if (acc && typeof acc === 'object' && k in acc) {
-        return (acc as Record<string, unknown>)[k];
-      }
-      return undefined;
-    }, obj);
+  return path.split('.').reduce<unknown>((acc, k) => {
+    if (acc && typeof acc === 'object' && k in acc) {
+      return (acc as Record<string, unknown>)[k];
+    }
+    return undefined;
+  }, obj);
 }
 
 function setAtPath(
@@ -669,10 +679,19 @@ function setAtPath(
 }
 
 /**
- * DocumentTemplate stores `componentKey` separately from `key`. The API
- * returns both via `doc.template`; we need the componentKey for the
- * artboard. Until the DTO ships componentKey, fall back to a convention.
+ * Resolve the artboard renderer key for a document. The canonical source is
+ * `doc.template.componentKey` (shipped on the detail response via `getById`'s
+ * full template include — same field the export/render-payload path uses).
+ * The legacy template-key convention below is only a defensive fallback for
+ * responses that omit it (e.g. a stale cache or the list shape).
  */
+function resolveComponentKey(doc: {
+  documentType?: { key: string };
+  template?: { key: string; componentKey?: string };
+}): string {
+  return doc.template?.componentKey ?? mapTemplateToComponent(doc);
+}
+
 function mapTemplateToComponent(doc: {
   documentType?: { key: string };
   template?: { key: string };
@@ -681,6 +700,9 @@ function mapTemplateToComponent(doc: {
   const dt = doc.documentType?.key ?? '';
   if (tk === 'rent-classic') return 'rent-agreement.classic';
   if (tk === 'rent-bilingual') return 'rent-agreement.bilingual';
+  if (tk === 'rti-default-en' || tk === 'rti-default-hi') return 'rti.default';
+  if (tk === 'notice-formal') return 'legal-notice.formal';
+  if (!tk) return 'rent-agreement.classic';
   // Generic fallback: assume "<docType>.<templateKey>".
   return `${dt}.${tk}`;
 }

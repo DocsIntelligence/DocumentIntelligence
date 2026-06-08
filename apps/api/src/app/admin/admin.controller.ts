@@ -22,7 +22,11 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminService } from './admin.service';
 
-const parsePositiveInt = (raw: string | undefined, fallback: number, max?: number) => {
+const parsePositiveInt = (
+  raw: string | undefined,
+  fallback: number,
+  max?: number,
+) => {
   if (raw === undefined) return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1) return fallback;

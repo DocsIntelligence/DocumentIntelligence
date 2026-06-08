@@ -12,18 +12,19 @@ Read this once; it is short on purpose. Deep conventions live in
 
 An India-first **legal-document drafting platform** with an AI copilot. Nx monorepo:
 
-| Path | What |
-|---|---|
-| `apps/api` | NestJS backend (Prisma + Postgres, BullMQ + Redis, S3, Razorpay, AI: Claude/OpenAI/Gemini) |
-| `apps/app` | React 19 + Vite SPA — the authenticated product (dashboard, builders, **editors**) |
-| `apps/web` | Next.js marketing/landing + public share pages |
-| `apps/artboard` | Isolated React renderer Puppeteer drives for **PDF export** |
-| `libs/document-schema` | Per-doc-type **source of truth**: Zod schema + form metadata + risk rules + AI prompts |
-| `libs/document-templates` | React templates (page-faithful, stamp-paper aware) + the `freeform` renderer |
-| `libs/shared/*` | `ui`, `utils`, `hooks`, `store`, `dto`, `api-client`, `transliteration`, `legal-reference` |
-| `tools/prisma` | schema, migrations, seed |
+| Path                      | What                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `apps/api`                | NestJS backend (Prisma + Postgres, BullMQ + Redis, S3, Razorpay, AI: Claude/OpenAI/Gemini) |
+| `apps/app`                | React 19 + Vite SPA — the authenticated product (dashboard, builders, **editors**)         |
+| `apps/web`                | Next.js marketing/landing + public share pages                                             |
+| `apps/artboard`           | Isolated React renderer Puppeteer drives for **PDF export**                                |
+| `libs/document-schema`    | Per-doc-type **source of truth**: Zod schema + form metadata + risk rules + AI prompts     |
+| `libs/document-templates` | React templates (page-faithful, stamp-paper aware) + the `freeform` renderer               |
+| `libs/shared/*`           | `ui`, `utils`, `hooks`, `store`, `dto`, `api-client`, `transliteration`, `legal-reference` |
+| `tools/prisma`            | schema, migrations, seed                                                                   |
 
 There are **two document surfaces, by design** (don't merge them):
+
 - **Structured builder** (`/documents/:id/edit`, `features/documents/builder`) — form → artboard preview → PDF. For schema-driven types.
 - **Freeform editor** (`/editor`, `/documents/:id/draft`, `features/editor`) — TipTap WYSIWYG with transliteration, placeholders, page breaks, AI draft/revise. For AI-drafted / court / "any" documents.
 
@@ -67,10 +68,12 @@ pnpm dev                        # api + app + web + artboard
    `window.print()` as the PDF path — it's unreliable.
 
 ## How to add things (recipes)
+
 See [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md) → "Recipes": new document type, new
 shared lib, new API module, new frontend route, new language, new paper size.
 
 ## Commits / PRs
+
 - Keep changes scoped; update [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md) journal when you finish a
   meaningful unit of work (it's how the next human/agent resumes).
 - Run lint + the relevant typecheck before committing.

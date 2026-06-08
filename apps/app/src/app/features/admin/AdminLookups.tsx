@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, Input } from '@org/ui';
 import { toast } from 'sonner';
+import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { APP_ENV } from '../../../config';
 
 const API_BASE_URL = APP_ENV.apiUrl;
@@ -22,6 +23,7 @@ interface LookupGroup {
 }
 
 export function AdminLookups() {
+  const confirm = useConfirm();
   const [groups, setGroups] = useState<LookupGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -95,7 +97,12 @@ export function AdminLookups() {
   };
 
   const deleteValue = async (valueId: string) => {
-    if (!confirm('Delete this value?')) return;
+    const ok = await confirm({
+      title: 'Delete this value?',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await fetch(`${API_BASE_URL}/lookups/values/${valueId}`, {
         method: 'DELETE',
