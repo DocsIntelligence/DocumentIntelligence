@@ -37,6 +37,7 @@ import {
   useTransliteration,
 } from '@org/transliteration';
 import { cn } from '@org/utils';
+import { useMediaQuery } from '@org/hooks';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { diffText, isUnchanged, type DiffSegment } from './revision-diff';
@@ -211,6 +212,12 @@ function TemplateEditorInner({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'fields' | 'pages'>('fields');
   const [showPreview, setShowPreview] = useState(true);
+  // lg+ shows the resizable 3-pane layout; below that we show one pane at a
+  // time via a segmented control (3 columns are unusable on a phone).
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [mobilePane, setMobilePane] = useState<'fields' | 'editor' | 'preview'>(
+    'editor',
+  );
   const [activePage, setActivePage] = useState(0);
 
   const formRef = useRef<PlaceholderFormHandle>(null);
@@ -701,362 +708,458 @@ function TemplateEditorInner({
       : known.filter((p) => knownKeys.has(p.key));
   }, [template, discoveredKeys]);
 
+  // The three panes are defined once and placed into either the desktop
+  // resizable layout or the mobile single-pane switcher (one mount each, so
+  // the single Tiptap EditorContent is never duplicated).
+  const sidebarPane = (
+    <aside className="flex h-full w-full flex-col bg-background">
+      <Tabs
+        value={sidebarTab}
+        onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
+        className="flex flex-1 flex-col overflow-hidden"
+      >
+        <div className="border-b border-border px-3 py-2">
+          <TabsList className="w-full">
+            <TabsTrigger value="fields" className="flex-1 text-xs">
+              {t('editor.tabs.fields', 'Fields')}
+              {completionStats.total > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                  {completionStats.filled}/{completionStats.total}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="pages" className="flex-1 text-xs">
+              {t('editor.tabs.pages', 'Pages')}
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <TabsContent value="fields" className="!mt-0">
+            {completionStats.total > 0 && (
+              <div className="border-b border-border bg-secondary/15 px-4 py-2">
+                <div className="flex items-center justify-between text-[11px] text-foreground/60">
+                  <span>{t('editor.completion', 'Completion')}</span>
+                  <span>{completionStats.pct}%</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
+                  <div
+                    className="h-full bg-emerald-500 transition-all"
+                    style={{ width: `${completionStats.pct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <PlaceholderForm
+              ref={formRef}
+              fields={fieldsFromTemplate}
+              values={values}
+              onChange={handleValueChange}
+              unknownKeys={discoveredKeys}
+            />
+          </TabsContent>
+
+          <TabsContent value="pages" className="!mt-0">
+            <PageNavigator
+              html={html}
+              activePage={activePage}
+              onJumpToPage={handleJumpToPage}
+              onAddPage={handleAddPage}
+              onRemovePage={handleRemovePage}
+            />
+          </TabsContent>
+        </div>
+      </Tabs>
+    </aside>
+  );
+
+  const editorPane = (
+    <section className="flex h-full flex-col overflow-hidden bg-background">
+      {editor && (
+        <EditorToolbar
+          editor={editor}
+          onInsertPlaceholder={handleInsertPlaceholderOpen}
+          onInsertPageBreak={handleInsertPageBreak}
+        />
+      )}
+      <div
+        ref={editorScrollRef}
+        className="relative flex-1 overflow-y-auto bg-background"
+      >
+        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8">
+          <EditorContent editor={editor} />
+        </div>
+        {translitState && (
+          <SuggestionPopover
+            suggestions={translitState.suggestions}
+            selectedIndex={translitState.selectedIndex}
+            onSelect={handleSuggestionSelect}
+            visible={translitState.showSuggestions}
+            position={popoverPosition}
+          />
+        )}
+      </div>
+      <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
+        <span className="truncate">
+          {t('editor.status.counts', '{{chars}} chars · {{words}} words · Page {{page}}', {
+            chars: editor?.getText().length ?? 0,
+            words: editor
+              ? editor.getText().split(/\s+/).filter(Boolean).length
+              : 0,
+            page: activePage + 1,
+          })}
+        </span>
+        <span className="flex flex-none items-center gap-1.5">
+          <span
+            className={cn(
+              'inline-block size-1.5 rounded-full',
+              savedAt ? 'bg-emerald-500' : 'bg-amber-400',
+            )}
+          />
+          {isSaving
+            ? t('editor.status.saving', 'Saving…')
+            : savedAt
+              ? `${bound ? t('editor.status.savedToCloud', 'Saved to cloud') : t('editor.status.saved', 'Saved')} ${formatTime(savedAt)}`
+              : bound
+                ? t('editor.status.saving', 'Saving…')
+                : t('editor.status.notSaved', 'Not saved yet')}
+        </span>
+      </div>
+    </section>
+  );
+
+  const previewPane = (
+    <PaginatedPreview
+      html={html}
+      values={values}
+      pageSize={pageSize}
+      appendHtml={previewAppendHtml}
+      className="h-full"
+    />
+  );
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-secondary/10">
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {backHref && (
-            <Link
-              to={backHref}
-              aria-label={t('editor.back', 'Back')}
-              className="flex size-8 flex-none items-center justify-center rounded text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
-            >
-              <BackIcon />
-            </Link>
-          )}
-          <div className="flex size-8 flex-none items-center justify-center rounded bg-secondary/60 text-lg">
-            {template.icon}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">
-              {template.name}
-            </div>
-            <div className="truncate text-[11px] text-foreground/55">
-              {t('editor.meta.fieldsFilled', '{{category}} · {{filled}}/{{total}} fields filled', {
-                category: template.category,
-                filled: completionStats.filled,
-                total: completionStats.total,
-              })}
-              {enabled && t('editor.meta.transliterationOn', ' · Transliteration on')}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setGalleryOpen(true)}
-            className="gap-1.5 text-xs"
-          >
-            <GalleryIcon />
-            {t('editor.toolbar.templates', 'Templates')}
-          </Button>
-          {persistence.mode === 'local' && onSaveToCloud && (
-            <Button
-              variant="outline"
-              size="sm"
-              isLoading={isSaving}
-              onClick={() =>
-                onSaveToCloud({
-                  templateId: template.id,
-                  title: template.name,
-                  html,
-                  values,
-                })
-              }
-              className="gap-1.5 text-xs"
-            >
-              <CloudIcon />
-              {t('editor.toolbar.saveToDocuments', 'Save to my documents')}
-            </Button>
-          )}
-          {onAiGenerate ? (
-            <Button
-              variant="outline"
-              size="sm"
-              isLoading={aiBusy}
-              onClick={handleAiGenerateOpen}
-              className="gap-1.5 text-xs"
-            >
-              <SparklesIcon />
-              {t('editor.toolbar.draftWithAi', 'Draft with AI')}
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerate}
-              className="gap-1.5 text-xs"
-            >
-              <SparklesIcon />
-              {t('editor.toolbar.reloadTemplate', 'Reload template')}
-            </Button>
-          )}
-          {onAiRevise && (
-            <Button
-              variant="outline"
-              size="sm"
-              isLoading={aiBusy}
-              onClick={handleAiReviseOpen}
-              className="gap-1.5 text-xs"
-            >
-              <SparklesIcon />
-              {t('editor.toolbar.reviseWithAi', 'Revise with AI')}
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="gap-1.5 text-xs"
-          >
-            <CopyIcon />
-            {t('editor.toolbar.copy', 'Copy')}
-          </Button>
-          {onComments && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onComments}
-              className="gap-1.5 text-xs"
-            >
-              {t('editor.toolbar.comments', 'Comments')}
-            </Button>
-          )}
-          {onSignatures && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSignatures}
-              className="gap-1.5 text-xs"
-            >
-              {t('editor.toolbar.signatures', 'Signatures')}
-            </Button>
-          )}
-          {onHistory && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onHistory}
-              className="gap-1.5 text-xs"
-            >
-              {t('editor.toolbar.history', 'History')}
-            </Button>
-          )}
-          {onShare && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onShare}
-              className="gap-1.5 text-xs"
-            >
-              {t('editor.toolbar.share', 'Share')}
-            </Button>
-          )}
-          <PageSizeSelect
-            value={pageSize}
-            onChange={handlePageSizeChange}
-            className="hidden sm:block"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportWord}
-            className="gap-1.5 text-xs"
-          >
-            <DownloadIcon />
-            {t('editor.toolbar.word', 'Word')}
-          </Button>
-          {onExportPdf ? (
-            <Button
-              size="sm"
-              isLoading={exportingPdf}
-              onClick={onExportPdf}
-              className="gap-1.5 text-xs"
-            >
-              <PrintIcon />
-              {t('editor.toolbar.exportPdf', 'Export PDF')}
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="gap-1.5 text-xs"
-            >
-              <PrintIcon />
-              {t('editor.toolbar.print', 'Print')}
-            </Button>
-          )}
-          <Tooltip
-            content={
-              showPreview
-                ? t('editor.toolbar.hidePreview', 'Hide preview')
-                : t('editor.toolbar.showPreview', 'Show preview')
-            }
-          >
-            <Button
-              variant={showPreview ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setShowPreview((s) => !s)}
-              className="size-8 p-0"
-            >
-              <SplitIcon />
-            </Button>
-          </Tooltip>
-        </div>
-      </div>
-
-      <Group orientation="horizontal" className="flex-1">
-        {/* Left sidebar */}
-        <Panel
-          id="sidebar"
-          defaultSize="22%"
-          minSize="15%"
-          maxSize="36%"
-          className="min-w-0"
-        >
-          <aside className="flex h-full w-full flex-col border-r border-border bg-background">
-            <Tabs
-              value={sidebarTab}
-              onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
-              className="flex flex-1 flex-col overflow-hidden"
-            >
-              <div className="border-b border-border px-3 py-2">
-                <TabsList className="w-full">
-                  <TabsTrigger value="fields" className="flex-1 text-xs">
-                    {t('editor.tabs.fields', 'Fields')}
-                    {completionStats.total > 0 && (
-                      <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
-                        {completionStats.filled}/{completionStats.total}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="pages" className="flex-1 text-xs">
-                    {t('editor.tabs.pages', 'Pages')}
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="flex-1 overflow-y-auto">
-                <TabsContent value="fields" className="!mt-0">
-                  {completionStats.total > 0 && (
-                    <div className="border-b border-border bg-secondary/15 px-4 py-2">
-                      <div className="flex items-center justify-between text-[11px] text-foreground/60">
-                        <span>{t('editor.completion', 'Completion')}</span>
-                        <span>{completionStats.pct}%</span>
-                      </div>
-                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
-                        <div
-                          className="h-full bg-emerald-500 transition-all"
-                          style={{ width: `${completionStats.pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <PlaceholderForm
-                    ref={formRef}
-                    fields={fieldsFromTemplate}
-                    values={values}
-                    onChange={handleValueChange}
-                    unknownKeys={discoveredKeys}
-                  />
-                </TabsContent>
-
-                <TabsContent value="pages" className="!mt-0">
-                  <PageNavigator
-                    html={html}
-                    activePage={activePage}
-                    onJumpToPage={handleJumpToPage}
-                    onAddPage={handleAddPage}
-                    onRemovePage={handleRemovePage}
-                  />
-                </TabsContent>
-              </div>
-            </Tabs>
-          </aside>
-        </Panel>
-
-        <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
-          <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
-        </Separator>
-
-        {/* Editor pane */}
-        <Panel
-          id="editor"
-          defaultSize={showPreview ? '40%' : '78%'}
-          minSize="28%"
-          className="min-w-0"
-        >
-          <section className="flex h-full flex-col overflow-hidden bg-background">
-            {editor && (
-              <EditorToolbar
-                editor={editor}
-                onInsertPlaceholder={handleInsertPlaceholderOpen}
-                onInsertPageBreak={handleInsertPageBreak}
-              />
+      {/* Top bar — two rows: identity + primary (row 1), grouped actions (row 2) */}
+      <header className="flex-none border-b border-border bg-background">
+        {/* Row 1 — identity + primary actions */}
+        <div className="flex items-center justify-between gap-3 px-4 pt-2 pb-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {backHref && (
+              <Link
+                to={backHref}
+                aria-label={t('editor.back', 'Back')}
+                className="flex size-8 flex-none items-center justify-center rounded-md text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
+              >
+                <BackIcon />
+              </Link>
             )}
-            <div
-              ref={editorScrollRef}
-              className="relative flex-1 overflow-y-auto bg-background"
-            >
-              <div className="mx-auto max-w-3xl px-8 py-6">
-                <EditorContent editor={editor} />
+            <div className="flex size-8 flex-none items-center justify-center rounded-md bg-secondary/60 text-lg">
+              {template.icon}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold leading-tight">
+                {template.name}
               </div>
-              {translitState && (
-                <SuggestionPopover
-                  suggestions={translitState.suggestions}
-                  selectedIndex={translitState.selectedIndex}
-                  onSelect={handleSuggestionSelect}
-                  visible={translitState.showSuggestions}
-                  position={popoverPosition}
-                />
-              )}
-            </div>
-            <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
-              <span>
-                {t('editor.status.counts', '{{chars}} chars · {{words}} words · Page {{page}}', {
-                  chars: editor?.getText().length ?? 0,
-                  words: editor
-                    ? editor.getText().split(/\s+/).filter(Boolean).length
-                    : 0,
-                  page: activePage + 1,
+              <div className="truncate text-[11px] text-foreground/55">
+                {t('editor.meta.fieldsFilled', '{{category}} · {{filled}}/{{total}} fields filled', {
+                  category: template.category,
+                  filled: completionStats.filled,
+                  total: completionStats.total,
                 })}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    'inline-block size-1.5 rounded-full',
-                    savedAt ? 'bg-emerald-500' : 'bg-amber-400',
-                  )}
-                />
-                {isSaving
-                  ? t('editor.status.saving', 'Saving…')
-                  : savedAt
-                    ? `${bound ? t('editor.status.savedToCloud', 'Saved to cloud') : t('editor.status.saved', 'Saved')} ${formatTime(savedAt)}`
-                    : bound
-                      ? t('editor.status.saving', 'Saving…')
-                      : t('editor.status.notSaved', 'Not saved yet')}
-              </span>
+                {enabled && t('editor.meta.transliterationOn', ' · Transliteration on')}
+              </div>
             </div>
-          </section>
-        </Panel>
+          </div>
 
-        {/* Preview pane */}
-        {showPreview && (
-          <>
-            <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
-              <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
-            </Separator>
-            <Panel
-              id="preview"
-              defaultSize="38%"
-              minSize="20%"
-              className="min-w-0"
+          <div className="flex flex-none items-center gap-1.5">
+            <ToolbarGroup label={t('editor.group.create', 'Create with AI')}>
+              {onAiGenerate ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  isLoading={aiBusy}
+                  onClick={handleAiGenerateOpen}
+                  className="gap-1.5 text-xs"
+                >
+                  <SparklesIcon />
+                  <span className="hidden sm:inline">
+                    {t('editor.toolbar.draftWithAi', 'Draft with AI')}
+                  </span>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerate}
+                  className="gap-1.5 text-xs"
+                >
+                  <SparklesIcon />
+                  <span className="hidden sm:inline">
+                    {t('editor.toolbar.reloadTemplate', 'Reload template')}
+                  </span>
+                </Button>
+              )}
+              {onAiRevise && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  isLoading={aiBusy}
+                  onClick={handleAiReviseOpen}
+                  className="gap-1.5 text-xs"
+                >
+                  <SparklesIcon />
+                  <span className="hidden sm:inline">
+                    {t('editor.toolbar.reviseWithAi', 'Revise with AI')}
+                  </span>
+                </Button>
+              )}
+            </ToolbarGroup>
+
+            <ToolbarDivider />
+
+            {onExportPdf ? (
+              <Button
+                size="sm"
+                isLoading={exportingPdf}
+                onClick={onExportPdf}
+                className="gap-1.5 text-xs"
+              >
+                <PrintIcon />
+                {t('editor.toolbar.exportPdf', 'Export PDF')}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handlePrint}
+                className="gap-1.5 text-xs"
+              >
+                <PrintIcon />
+                {t('editor.toolbar.print', 'Print')}
+              </Button>
+            )}
+
+            <Tooltip
+              content={
+                showPreview
+                  ? t('editor.toolbar.hidePreview', 'Hide preview')
+                  : t('editor.toolbar.showPreview', 'Show preview')
+              }
             >
-              <PaginatedPreview
-                html={html}
-                values={values}
-                pageSize={pageSize}
-                appendHtml={previewAppendHtml}
-                className="h-full"
-              />
-            </Panel>
-          </>
-        )}
-      </Group>
+              <Button
+                variant={showPreview ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setShowPreview((s) => !s)}
+                className="size-8 p-0"
+              >
+                <SplitIcon />
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Row 2 — grouped secondary actions */}
+        <div className="flex items-center gap-1 overflow-x-auto px-3 pb-1.5 text-foreground/75">
+          <ToolbarGroup label={t('editor.group.file', 'Document & file')}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setGalleryOpen(true)}
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              <GalleryIcon />
+              {t('editor.toolbar.templates', 'Templates')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              <CopyIcon />
+              {t('editor.toolbar.copy', 'Copy')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExportWord}
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              <DownloadIcon />
+              {t('editor.toolbar.word', 'Word')}
+            </Button>
+            {persistence.mode === 'local' && onSaveToCloud && (
+              <Button
+                variant="ghost"
+                size="sm"
+                isLoading={isSaving}
+                onClick={() =>
+                  onSaveToCloud({
+                    templateId: template.id,
+                    title: template.name,
+                    html,
+                    values,
+                  })
+                }
+                className="h-7 gap-1.5 px-2 text-xs"
+              >
+                <CloudIcon />
+                {t('editor.toolbar.saveToDocuments', 'Save to my documents')}
+              </Button>
+            )}
+          </ToolbarGroup>
+
+          {(onShare || onComments || onSignatures || onHistory) && (
+            <>
+              <ToolbarDivider />
+              <ToolbarGroup label={t('editor.group.collaborate', 'Collaborate')}>
+                {onShare && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onShare}
+                    className="h-7 gap-1.5 px-2 text-xs"
+                  >
+                    <ShareIcon />
+                    {t('editor.toolbar.share', 'Share')}
+                  </Button>
+                )}
+                {onComments && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onComments}
+                    className="h-7 gap-1.5 px-2 text-xs"
+                  >
+                    <CommentIcon />
+                    {t('editor.toolbar.comments', 'Comments')}
+                  </Button>
+                )}
+                {onSignatures && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onSignatures}
+                    className="h-7 gap-1.5 px-2 text-xs"
+                  >
+                    <SignatureIcon />
+                    {t('editor.toolbar.signatures', 'Signatures')}
+                  </Button>
+                )}
+                {onHistory && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onHistory}
+                    className="h-7 gap-1.5 px-2 text-xs"
+                  >
+                    <HistoryIcon />
+                    {t('editor.toolbar.history', 'History')}
+                  </Button>
+                )}
+              </ToolbarGroup>
+            </>
+          )}
+
+          <div className="ml-auto flex flex-none items-center pl-2">
+            <PageSizeSelect value={pageSize} onChange={handlePageSizeChange} />
+          </div>
+        </div>
+      </header>
+
+      {isDesktop ? (
+        /* ── Desktop: resizable 3-pane layout ── */
+        <Group orientation="horizontal" className="flex-1">
+          <Panel
+            id="sidebar"
+            defaultSize="22%"
+            minSize="15%"
+            maxSize="36%"
+            className="min-w-0"
+          >
+            <div className="h-full border-r border-border">{sidebarPane}</div>
+          </Panel>
+
+          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+          </Separator>
+
+          <Panel
+            id="editor"
+            defaultSize={showPreview ? '40%' : '78%'}
+            minSize="28%"
+            className="min-w-0"
+          >
+            {editorPane}
+          </Panel>
+
+          {showPreview && (
+            <>
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+                <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+              </Separator>
+              <Panel
+                id="preview"
+                defaultSize="38%"
+                minSize="20%"
+                className="min-w-0 border-l border-border"
+              >
+                {previewPane}
+              </Panel>
+            </>
+          )}
+        </Group>
+      ) : (
+        /* ── Mobile / tablet: one pane at a time ── */
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-none items-center gap-1 border-b border-border bg-background p-1">
+            {(['fields', 'editor', 'preview'] as const).map((pane) => (
+              <button
+                key={pane}
+                type="button"
+                onClick={() => setMobilePane(pane)}
+                className={cn(
+                  'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                  mobilePane === pane
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-foreground/55 hover:text-foreground',
+                )}
+              >
+                {pane === 'fields'
+                  ? t('editor.tabs.fields', 'Fields')
+                  : pane === 'editor'
+                    ? t('editor.mobile.editor', 'Editor')
+                    : t('editor.mobile.preview', 'Preview')}
+              </button>
+            ))}
+          </div>
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              mobilePane === 'fields' ? 'block' : 'hidden',
+            )}
+          >
+            {sidebarPane}
+          </div>
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              mobilePane === 'editor' ? 'block' : 'hidden',
+            )}
+          >
+            {editorPane}
+          </div>
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              mobilePane === 'preview' ? 'block' : 'hidden',
+            )}
+          >
+            {previewPane}
+          </div>
+        </div>
+      )}
 
       <TemplateGallery
         open={galleryOpen}
@@ -1443,6 +1546,28 @@ const PRINT_CSS = `
   .placeholder-token--empty { color: #92400e; background: #fef3c7; padding: 0 0.25rem; border-radius: 0.2rem; }
 `;
 
+// --- toolbar layout helpers ---
+
+/** A thin vertical rule separating clusters of toolbar buttons. */
+function ToolbarDivider() {
+  return <span aria-hidden className="mx-1 h-5 w-px flex-none bg-border/70" />;
+}
+
+/** A labelled cluster of related toolbar actions (screen-reader group). */
+function ToolbarGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex items-center gap-0.5">
+      {children}
+    </div>
+  );
+}
+
 // --- header icons ---
 
 function GalleryIcon() {
@@ -1566,6 +1691,77 @@ function BackIcon() {
     >
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  );
+}
+
+function SignatureIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 17.5c3-1 4-6 6-6s2 4 4 4 3-3 5-3" />
+      <line x1="3" y1="21" x2="21" y2="21" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 3v5h5" />
+      <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+      <path d="M12 7v5l4 2" />
     </svg>
   );
 }

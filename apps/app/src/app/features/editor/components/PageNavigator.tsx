@@ -75,7 +75,7 @@ export function PageNavigator({
               <button
                 type="button"
                 onClick={() => onRemovePage(i)}
-                className="flex w-7 flex-none items-center justify-center text-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                className="flex w-7 flex-none items-center justify-center text-foreground/40 opacity-0 transition-all hover:bg-error/10 hover:text-error group-hover:opacity-100"
                 title={t('editor.pages.remove', 'Remove page')}
                 aria-label={t('editor.pages.removeN', 'Remove page {{n}}', {
                   n: i + 1,

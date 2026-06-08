@@ -238,3 +238,24 @@ Court-document scaffolding + citation library (BNS/BNSS/BSA), sharing/comments, 
 - **Convention reaffirmed:** `t('key','English default')`, **locale JSON NOT edited** (owner populates Hindi manually; defaults keep the app working; `i18n:extract` harvests keys). Prompt strings sent to the AI (e.g. "Translate this document into …") left in English on purpose.
 - **Still English (follow-ups):** builder sub-components (`BuilderForm`, `RisksPanel`, `SectionsTree`, `InlineEditPopover`, `sectionLabels`), `AuthCallback`, and data-driven content (preset / doc-type names). + native-speaker QA.
 - Verified: app `tsc` 0, eslint 0 on every changed file.
+
+### 2026-06-08 — Editor UI/UX redesign (Option C two-row toolbar) + mobile
+- **Design doc:** `docs/ui-redesign-editors.md` — mocked the current state + 3 toolbar options (A grouped/menus, B right rail, C two-row) for both editors; user picked **C**.
+- **Token fix:** `bg-destructive`/`text-destructive` don't exist in the theme (`apps/app/src/styles.css` defines `error`, not `destructive`) — those styles rendered colourless. Replaced with `error` in `BuilderPage`, `BuilderShell` (×2), `PageNavigator` (page-delete hover).
+- **Freeform editor (`TemplateEditor`)** — two-row header:
+  - Row 1: identity (back/icon/name·meta) + **primary** cluster (Draft/Revise AI, Export PDF, preview toggle). AI labels collapse to icon-only below `sm`.
+  - Row 2: grouped, horizontally-scrollable strip — **File** group (Templates, Copy, Word, Save-to-docs) · **Collaborate** group (Share, Comments, Signatures, History) · PageSize pushed right. Ghost buttons w/ new icons (`ShareIcon/CommentIcon/SignatureIcon/HistoryIcon`) + `ToolbarDivider`/`ToolbarGroup` helpers.
+  - **Mobile:** below `lg` the 3 resizable panes are replaced by a single-pane **Fields / Editor / Preview** segmented switcher (panes extracted to `sidebarPane`/`editorPane`/`previewPane` consts so the one Tiptap `EditorContent` is never duplicated; inactive panes are `hidden`, not unmounted). `lg+` keeps the resizable `Group`/`Panel`.
+- **Structured builder (`BuilderShell`)** — same two-row pattern: Row 1 = back/title/save-dot/Export PDF; Row 2 = Language + Share/Comments/Signatures/History + PageSize (scrolls on mobile, so collaborate actions are now reachable on phones — previously `lg:`-only). Mobile switcher extended to **Sections / Form / Preview** (the Sections+Risks pane was previously inaccessible on mobile).
+- **New hook:** `@org/hooks` `useMediaQuery(query)` (SSR-safe) — drives the desktop/mobile layout swap. Added to `libs/shared/hooks`.
+- New i18n keys: `editor.group.*`, `editor.mobile.{editor,preview}`, `builder.tab.sections`.
+- Verified: app `tsc` 0, eslint 0 on every changed file. **Runtime/visual check still pending** (couldn't run the app here) — needs a look on desktop + a narrow viewport.
+
+### 2026-06-08 — Structured builder: preview zoom + scroll + resizable panes (match freeform)
+- **Goal:** the freeform editor's preview zooms/scrolls; the builder's was a bare iframe. Make them consistent and make the builder's 3 panes resizable.
+- **Zoom inside the artboard** (`apps/artboard/.../LivePreview.tsx`): wraps `TemplateRenderer` in `<div style={{ zoom }}>`. Owns zoom jointly with the host — `doc:zoom` message sets it (host buttons); trackpad pinch / ctrl+wheel are handled *inside* the iframe (it captures those, the host can't) and reported back via `artboard:zoom`. PDF `RenderRoute` is a separate component → unaffected (PDF still renders at 100%).
+- **Host** (`ArtboardIframe.tsx`): zoom state + the same corner ⊕/%/⊖ control overlay as `PaginatedPreview`, posts `doc:zoom` on change, listens for `artboard:zoom` to keep the % in sync with gestures. Same MIN/MAX/DEFAULT (0.3/3/0.85) as the freeform preview. Scroll stays native to the artboard document.
+- **Resizable panes** (`BuilderShell.tsx`): desktop now uses the same `react-resizable-panels` `Group`/`Panel`/`Separator` as the freeform editor (Sections | Form | Preview, draggable grips) instead of a fixed CSS grid. Below `lg` keeps the Sections/Form/Preview segmented switcher. Panes extracted to `sectionsPane`/`formPane`/`previewPane` consts so the single artboard iframe is never duplicated across the desktop/mobile branches. Switcher now gated on `!isDesktop` (was `lg:hidden`) for one source of truth.
+- **`useMediaQuery`** improved: synchronous lazy init from `matchMedia` (this is a Vite SPA — `window` always present) so there's no layout flash / double iframe-mount on load.
+- **Field-click popover:** unaffected — CSS `zoom` keeps `getBoundingClientRect` in the visual coordinate space the host already offsets by.
+- Verified: app `tsc` 0, artboard `tsc` 0, eslint 0. **Runtime/visual still pending** — needs the artboard + app running to confirm zoom sync (buttons ↔ pinch) and that field-click popovers land correctly while zoomed.

@@ -3,7 +3,7 @@ import {
   type Warning,
 } from '@org/document-schema';
 import type { FieldClickEvent } from '@org/document-templates';
-import { useDebounce } from '@org/hooks';
+import { useDebounce, useMediaQuery } from '@org/hooks';
 import {
   Button,
   Card,
@@ -17,6 +17,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -79,8 +80,12 @@ export function BuilderShell({ documentId }: Props) {
   const [aiBusyField, setAiBusyField] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null);
-  // Small screens show one pane at a time (form | preview); lg+ shows both.
-  const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form');
+  // lg+ shows the resizable 3-pane layout; below that we show one pane at a
+  // time (sections | form | preview) via the segmented switcher.
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [mobileTab, setMobileTab] = useState<'sections' | 'form' | 'preview'>(
+    'form',
+  );
   const formRef = useRef<BuilderFormHandle | null>(null);
   const { state: exportState, start: startExport } = useExportPdf(documentId);
 
@@ -242,7 +247,7 @@ export function BuilderShell({ documentId }: Props) {
         <Card className="rounded-xl p-6 max-w-lg">
           {key ? (
             <>
-              <p className="text-destructive font-medium">
+              <p className="text-error font-medium">
                 {t('builder.noSchema.title', 'Editor not available for “{{name}}”.', {
                   name: doc.documentType?.name ?? key,
                 })}
@@ -257,7 +262,7 @@ export function BuilderShell({ documentId }: Props) {
             </>
           ) : (
             <>
-              <p className="text-destructive font-medium">
+              <p className="text-error font-medium">
                 {t('builder.noType.title', 'This document is missing its type.')}
               </p>
               <p className="text-foreground/70 text-sm mt-2">
@@ -285,193 +290,272 @@ export function BuilderShell({ documentId }: Props) {
     label: labelFor(k),
   }));
 
+  // Each pane defined once, then placed into either the desktop resizable
+  // layout or the mobile single-pane switcher (one mount each — so the single
+  // artboard iframe is never duplicated).
+  const sectionsPane = (
+    <aside className="flex h-full w-full flex-col bg-background/60">
+      <div className="flex-1 overflow-y-auto">
+        <SectionsTree
+          sections={sections}
+          activeKey={activeSection}
+          onSelect={(k) => {
+            setActiveSection(k);
+            formRef.current?.scrollToSection(k);
+          }}
+        />
+      </div>
+      <div className="border-t max-h-[40%] overflow-y-auto">
+        <RisksPanel
+          warnings={warnings}
+          onJump={(fieldPath) => {
+            const section = bundle.sectionOrder.find(
+              (s) => fieldPath === s || fieldPath.startsWith(`${s}.`),
+            );
+            if (section) {
+              setActiveSection(section);
+              formRef.current?.scrollToSection(section);
+            }
+          }}
+        />
+      </div>
+    </aside>
+  );
+
+  const formPane = (
+    <main className="h-full min-h-0 bg-background">
+      <BuilderForm
+        ref={formRef}
+        data={draft}
+        formMetadata={bundle.formMetadata}
+        sectionOrder={bundle.sectionOrder}
+        onChange={setDraft}
+        onAiAssist={onAiAssist}
+        aiBusyField={aiBusyField}
+      />
+    </main>
+  );
+
+  const previewPane = (
+    <section className="h-full min-h-0 bg-secondary/20">
+      <ArtboardIframe
+        componentKey={doc.template?.key ? mapTemplateToComponent(doc) : 'rent-agreement.classic'}
+        data={draft}
+        pageSize={doc.pageSize}
+        language={doc.language}
+        jurisdiction={doc.jurisdiction}
+        onFieldClick={(event, iframeRect) =>
+          setInlineEdit({ event, iframeRect })
+        }
+      />
+    </section>
+  );
+
   return (
     <div className="h-screen flex flex-col">
-      <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 sm:gap-3 sm:px-4">
-        <Link
-          to="/documents"
-          aria-label={t('builder.backToDocuments', 'Back to documents')}
-          className="flex size-9 flex-none items-center justify-center rounded-md text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
-        >
-          <BackIcon />
-        </Link>
-        <input
-          value={draftTitle}
-          onChange={(e) => setDraftTitle(e.target.value)}
-          className="min-w-0 flex-1 rounded px-2 py-1 text-base font-medium bg-transparent border-0 focus:bg-foreground/5 focus:outline-none"
-          placeholder={t('builder.untitled', 'Untitled document')}
-        />
+      {/* Top bar — two rows: identity + primary (row 1), grouped actions (row 2) */}
+      <header className="flex-none border-b border-border bg-background">
+        {/* Row 1 — identity + primary */}
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 sm:gap-3 sm:px-4">
+          <Link
+            to="/documents"
+            aria-label={t('builder.backToDocuments', 'Back to documents')}
+            className="flex size-9 flex-none items-center justify-center rounded-md text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
+          >
+            <BackIcon />
+          </Link>
+          <input
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            className="min-w-0 flex-1 rounded px-2 py-1 text-base font-medium bg-transparent border-0 focus:bg-foreground/5 focus:outline-none"
+            placeholder={t('builder.untitled', 'Untitled document')}
+          />
 
-        {/* Mobile pane switcher */}
-        <div className="flex items-center rounded-lg border border-border p-0.5 lg:hidden">
-          {(['form', 'preview'] as const).map((tab) => (
+          <span className="flex flex-none items-center gap-1.5 text-xs text-foreground/50">
+            <span
+              className={cn(
+                'inline-block size-1.5 rounded-full',
+                patch.isPending
+                  ? 'bg-amber-400'
+                  : patch.isError
+                    ? 'bg-error'
+                    : 'bg-emerald-500',
+              )}
+            />
+            <span className="hidden sm:inline">
+              {patch.isPending
+                ? t('builder.status.saving', 'Saving…')
+                : patch.isError
+                  ? t('builder.status.saveFailed', 'Save failed')
+                  : t('builder.status.saved', 'Saved')}
+            </span>
+          </span>
+          <Button
+            size="sm"
+            onClick={() => {
+              if (exportState.phase !== 'queued') void startExport();
+            }}
+            disabled={exportState.phase === 'queued'}
+            className="flex-none gap-1.5"
+          >
+            {exportState.phase === 'queued'
+              ? t('builder.rendering', 'Rendering…')
+              : t('builder.exportPdf', 'Export PDF')}
+          </Button>
+        </div>
+
+        {/* Row 2 — grouped secondary actions (scrolls on small screens) */}
+        <div className="flex items-center gap-1 overflow-x-auto px-2 pb-1.5 text-foreground/75 sm:px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            isLoading={langBusy}
+            onClick={() => setLangModalOpen(true)}
+            className="h-7 flex-none gap-1.5 px-2 text-xs"
+            title={t('builder.languageTooltip', 'Generate this document in another language')}
+          >
+            <GlobeIcon />
+            {t('builder.language', 'Language')}
+          </Button>
+
+          <span aria-hidden className="mx-1 h-5 w-px flex-none bg-border/70" />
+
+          <div
+            role="group"
+            aria-label={t('editor.group.collaborate', 'Collaborate')}
+            className="flex items-center gap-0.5"
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShareOpen(true)}
+              className="h-7 flex-none gap-1.5 px-2 text-xs"
+            >
+              {t('builder.share', 'Share')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCommentsOpen(true)}
+              className="h-7 flex-none gap-1.5 px-2 text-xs"
+            >
+              {t('builder.comments', 'Comments')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSignaturesOpen(true)}
+              className="h-7 flex-none gap-1.5 px-2 text-xs"
+            >
+              {t('builder.signatures', 'Signatures')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setHistoryOpen(true)}
+              className="h-7 flex-none gap-1.5 px-2 text-xs"
+            >
+              {t('builder.history', 'History')}
+            </Button>
+          </div>
+
+          <div className="ml-auto flex flex-none items-center pl-2">
+            <PageSizeSelect
+              value={doc.pageSize}
+              onChange={(size) => patchMutate({ pageSize: size })}
+            />
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile pane switcher */}
+      {!isDesktop && (
+        <div className="flex flex-none items-center gap-1 border-b border-border bg-background p-1">
+          {(['sections', 'form', 'preview'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setMobileTab(tab)}
               className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors',
+                'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
                 mobileTab === tab
                   ? 'bg-primary/10 text-primary'
                   : 'text-foreground/55 hover:text-foreground',
               )}
             >
-              {tab === 'form'
-                ? t('builder.tab.form', 'Form')
-                : t('builder.tab.preview', 'Preview')}
+              {tab === 'sections'
+                ? t('builder.tab.sections', 'Sections')
+                : tab === 'form'
+                  ? t('builder.tab.form', 'Form')
+                  : t('builder.tab.preview', 'Preview')}
             </button>
           ))}
         </div>
+      )}
 
-        <span className="hidden items-center gap-1.5 text-xs text-foreground/50 sm:flex">
-          <span
+      {isDesktop ? (
+        /* ── Desktop: resizable 3-pane layout (matches the freeform editor) ── */
+        <Group orientation="horizontal" className="min-h-0 flex-1">
+          <Panel
+            id="sections"
+            defaultSize="20%"
+            minSize="14%"
+            maxSize="32%"
+            className="min-w-0"
+          >
+            <div className="h-full border-r border-border">{sectionsPane}</div>
+          </Panel>
+
+          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+          </Separator>
+
+          <Panel id="form" defaultSize="40%" minSize="24%" className="min-w-0">
+            {formPane}
+          </Panel>
+
+          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+          </Separator>
+
+          <Panel
+            id="preview"
+            defaultSize="40%"
+            minSize="22%"
+            className="min-w-0 border-l border-border"
+          >
+            {previewPane}
+          </Panel>
+        </Group>
+      ) : (
+        /* ── Mobile / tablet: one pane at a time ── */
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div
             className={cn(
-              'inline-block size-1.5 rounded-full',
-              patch.isPending
-                ? 'bg-amber-400'
-                : patch.isError
-                  ? 'bg-error'
-                  : 'bg-emerald-500',
+              'min-h-0 flex-1',
+              mobileTab === 'sections' ? 'block' : 'hidden',
             )}
-          />
-          {patch.isPending
-            ? t('builder.status.saving', 'Saving…')
-            : patch.isError
-              ? t('builder.status.saveFailed', 'Save failed')
-              : t('builder.status.saved', 'Saved')}
-        </span>
-        <PageSizeSelect
-          value={doc.pageSize}
-          onChange={(size) => patchMutate({ pageSize: size })}
-          className="hidden flex-none sm:block"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          isLoading={langBusy}
-          onClick={() => setLangModalOpen(true)}
-          className="hidden flex-none gap-1.5 sm:inline-flex"
-          title={t('builder.languageTooltip', 'Generate this document in another language')}
-        >
-          <GlobeIcon />
-          <span className="hidden md:inline">
-            {t('builder.language', 'Language')}
-          </span>
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCommentsOpen(true)}
-          className="hidden flex-none lg:inline-flex"
-        >
-          {t('builder.comments', 'Comments')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setSignaturesOpen(true)}
-          className="hidden flex-none lg:inline-flex"
-        >
-          {t('builder.signatures', 'Signatures')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setHistoryOpen(true)}
-          className="hidden flex-none lg:inline-flex"
-        >
-          {t('builder.history', 'History')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShareOpen(true)}
-          className="hidden flex-none sm:inline-flex"
-        >
-          {t('builder.share', 'Share')}
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => {
-            if (exportState.phase !== 'queued') void startExport();
-          }}
-          disabled={exportState.phase === 'queued'}
-          className="flex-none"
-        >
-          {exportState.phase === 'queued'
-            ? t('builder.rendering', 'Rendering…')
-            : t('builder.exportPdf', 'Export PDF')}
-        </Button>
-      </header>
-
-      <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Left: sections + risks (desktop only) */}
-        <aside className="hidden min-h-0 flex-col border-r border-border bg-background/60 lg:flex">
-          <div className="flex-1 overflow-y-auto">
-            <SectionsTree
-              sections={sections}
-              activeKey={activeSection}
-              onSelect={(k) => {
-                setActiveSection(k);
-                formRef.current?.scrollToSection(k);
-              }}
-            />
+          >
+            {sectionsPane}
           </div>
-          <div className="border-t max-h-[40%] overflow-y-auto">
-            <RisksPanel
-              warnings={warnings}
-              onJump={(fieldPath) => {
-                const section = bundle.sectionOrder.find(
-                  (s) => fieldPath === s || fieldPath.startsWith(`${s}.`),
-                );
-                if (section) {
-                  setActiveSection(section);
-                  formRef.current?.scrollToSection(section);
-                }
-              }}
-            />
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              mobileTab === 'form' ? 'block' : 'hidden',
+            )}
+          >
+            {formPane}
           </div>
-        </aside>
-
-        {/* Middle: form */}
-        <main
-          className={cn(
-            'h-full min-h-0 bg-background',
-            mobileTab === 'form' ? 'block' : 'hidden',
-            'lg:block',
-          )}
-        >
-          <BuilderForm
-            ref={formRef}
-            data={draft}
-            formMetadata={bundle.formMetadata}
-            sectionOrder={bundle.sectionOrder}
-            onChange={setDraft}
-            onAiAssist={onAiAssist}
-            aiBusyField={aiBusyField}
-          />
-        </main>
-
-        {/* Right: live preview */}
-        <section
-          className={cn(
-            'h-full min-h-0 bg-secondary/20 lg:border-l lg:border-border',
-            mobileTab === 'preview' ? 'block' : 'hidden',
-            'lg:block',
-          )}
-        >
-          <ArtboardIframe
-            componentKey={doc.template?.key ? mapTemplateToComponent(doc) : 'rent-agreement.classic'}
-            data={draft}
-            pageSize={doc.pageSize}
-            language={doc.language}
-            jurisdiction={doc.jurisdiction}
-            onFieldClick={(event, iframeRect) =>
-              setInlineEdit({ event, iframeRect })
-            }
-          />
-        </section>
-      </div>
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              mobileTab === 'preview' ? 'block' : 'hidden',
+            )}
+          >
+            {previewPane}
+          </div>
+        </div>
+      )}
 
       <ShareDialog
         documentId={documentId}

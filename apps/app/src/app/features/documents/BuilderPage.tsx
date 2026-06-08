@@ -9,7 +9,7 @@ export function BuilderPage() {
   const { id = '' } = useParams();
   if (!id) {
     return (
-      <p className="text-destructive">Missing document id in URL.</p>
+      <p className="text-error">Missing document id in URL.</p>
     );
   }
   return <BuilderShell documentId={id} />;
