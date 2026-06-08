@@ -76,7 +76,7 @@
 | Share links (view/comment/edit) | ✅ | Backend `shares` module + **frontend**: api-client + `ShareDialog` (mode/password/expiry → copyable link) in BuilderShell + freeform editor; public `/s/:token` view (`SharedDocumentView`) renders freeform read-only. (Public view lives in `apps/app`, not `apps/web`.) |
 | Section-anchored comments (REST + SSE) | 🟡 | REST done: `comments/` module (list/add/resolve, owner+org access) + api-client + `useComments`/`useAddComment`/`useResolveComment` + `CommentsDialog` in both builders + guest comments via share token (`SharedDocumentView`). **SSE live-refresh not done** (react-query refetch only); `anchor` stored but UI is document-level. |
 | Document version history (snapshot / list / restore) | ✅ | `GET/POST` version endpoints + `VersionHistoryDialog` wired into both builders (reversible restore). |
-| Multi-signer drawn/typed signatures | 🟡 | Capture done: `signers/` module (list/add/update/remove + `:signerId/sign` recording drawn-PNG/typed signature into `DocumentSigner.evidence` with IP/UA, auto-flips doc to `signed` when all sign) + api-client + `useSigners`/`useAddSigner`/`useUpdateSigner`/`useRemoveSigner`/`useSignSigner` + `SignaturesDialog` (canvas pad + typed) in builder + freeform editor. **Not done:** rendering the captured signature onto the exported PDF/artboard, and reorder UI. |
+| Multi-signer drawn/typed signatures | 🟡 | Capture done: `signers/` module (list/add/update/remove + `:signerId/sign` recording drawn-PNG/typed signature into `DocumentSigner.evidence` with IP/UA, auto-flips doc to `signed` when all sign) + api-client + `useSigners`/`useAddSigner`/`useUpdateSigner`/`useRemoveSigner`/`useSignSigner` + `SignaturesDialog` (draw pad + image upload + typed) in builder + freeform editor. **Not done:** rendering the captured signature onto the exported PDF/artboard, and reorder UI. |
 | One eSign provider (Digio) integration | ⬜ | webhook flow |
 | eSign hard-gate for Schedule-1-excluded doc types | ⬜ | **legal requirement** |
 | Audit-trail page on signed PDF | ⬜ | |
@@ -90,7 +90,7 @@
 | Template marketplace (revenue share) | ⬜ | `DocumentTemplate.ownerType` supports it |
 | White-label share subdomains | ⬜ | |
 | Long-tail consumer docs (NDA/MoU/will/RTI/…) | 🟡 | Available as AI presets in `@org/legal-reference` `DOCUMENT_PRESETS` (NDA, MoU, partnership deed, offer letter, gift deed, will, GPA, RTI). Structured templates optional later. |
-| Hindi UI on `apps/app` | 🟡 | i18next plumbed; content/QA pending |
+| Hindi UI on `apps/app` | 🟡 | App **shell + dashboard** now translated (MainLayout nav/CTA/logout + in-shell `LanguageSwitcher`, Dashboard greeting/cards/recent/status) with real Hindi in `hi/translation.json`. **Remaining:** DocumentsList, NewDocumentPicker, editors+dialogs, auth, Settings finish, toasts — plus native-speaker QA of the (AI-authored) Hindi. Pattern is `t('key','English default')`. |
 | eStamp aggregator integration | ⬜ | manual stamped-paper upload first |
 | PWA + offline drafting | ⬜ | redux-persist already wires storage |
 

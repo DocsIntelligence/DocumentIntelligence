@@ -13,7 +13,7 @@ import type {
 
 /** Signature evidence stored on DocumentSigner.evidence (Json). */
 interface DrawnTypedEvidence {
-  method: 'draw' | 'typed';
+  method: 'draw' | 'upload' | 'typed';
   image?: string;
   typedText?: string;
   font?: string;

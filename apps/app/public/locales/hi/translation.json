@@ -1,11 +1,52 @@
 {
+  "common": {
+    "openMenu": "मेनू खोलें",
+    "newDocument": "नया दस्तावेज़",
+    "logout": "लॉग आउट",
+    "viewAll": "सभी देखें",
+    "document": "दस्तावेज़",
+    "untitled": "बिना शीर्षक"
+  },
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "documents": "दस्तावेज़",
+    "quickEditor": "त्वरित संपादक",
+    "settings": "सेटिंग्स",
+    "admin": "एडमिन"
+  },
+  "greeting": {
+    "morning": "सुप्रभात",
+    "afternoon": "शुभ दोपहर",
+    "evening": "शुभ संध्या"
+  },
+  "dashboard": {
+    "subtitle": "AI सहायता के साथ कानूनी दस्तावेज़ तैयार करें, संपादित करें और निर्यात करें।",
+    "draftAiTitle": "AI से ड्राफ्ट करें",
+    "draftAiDesc": "सरल भाषा में बताएं कि आपको क्या चाहिए और पूरा ड्राफ्ट पाएं।",
+    "blankTitle": "खाली संपादक",
+    "blankDesc": "लिप्यंतरण और लाइव पूर्वावलोकन के साथ शुरू से लिखें।",
+    "myDocsTitle": "मेरे दस्तावेज़",
+    "myDocsDesc": "अपने ड्राफ्ट और हस्ताक्षरित प्रतियां खोलें, निर्यात करें और प्रबंधित करें।",
+    "recent": "हाल के",
+    "emptyTitle": "अभी तक कोई दस्तावेज़ नहीं।",
+    "emptyDesc": "किराया अनुबंध, RTI, कानूनी नोटिस — या AI ड्राफ्ट से शुरू करें।",
+    "createFirst": "अपना पहला दस्तावेज़ बनाएं",
+    "updated": "अपडेट किया गया {{date}}"
+  },
+  "status": {
+    "draft": "ड्राफ्ट",
+    "in_review": "समीक्षा में",
+    "ready": "तैयार",
+    "signed": "हस्ताक्षरित",
+    "archived": "संग्रहीत"
+  },
   "settings": {
-    "language": "Language",
-    "theme": "Theme"
+    "language": "भाषा",
+    "theme": "थीम"
   },
   "theme": {
-    "dark": "Dark",
-    "light": "Light",
-    "system": "System"
+    "dark": "डार्क",
+    "light": "लाइट",
+    "system": "सिस्टम"
   }
 }

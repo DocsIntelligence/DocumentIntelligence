@@ -3,11 +3,14 @@ import { Button, Card } from '@org/ui';
 import { cn } from '@org/utils';
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import { useDocumentList } from '../documents/queries';
 import { documentHref } from '../documents/document-href';
 
 export function Dashboard() {
   const user = useAppSelector(selectUser);
+  const { t } = useTranslation();
   const { data: docs, isLoading } = useDocumentList();
   const recent = (docs ?? []).slice(0, 5);
 
@@ -16,11 +19,14 @@ export function Dashboard() {
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {greeting()}
+          {greeting(t)}
           {user?.name ? `, ${user.name.split(' ')[0]}` : ''}
         </h1>
         <p className="mt-1 text-foreground/60">
-          Draft, edit, and export legal documents — with AI assistance.
+          {t(
+            'dashboard.subtitle',
+            'Draft, edit, and export legal documents — with AI assistance.',
+          )}
         </p>
       </div>
 
@@ -30,33 +36,44 @@ export function Dashboard() {
           to="/documents/new"
           accent
           icon={<SparklesIcon />}
-          title="Draft with AI"
-          desc="Describe what you need in plain English and get a full draft."
+          title={t('dashboard.draftAiTitle', 'Draft with AI')}
+          desc={t(
+            'dashboard.draftAiDesc',
+            'Describe what you need in plain English and get a full draft.',
+          )}
         />
         <ActionCard
           to="/editor"
           icon={<PenIcon />}
-          title="Blank editor"
-          desc="Write from scratch with transliteration and live preview."
+          title={t('dashboard.blankTitle', 'Blank editor')}
+          desc={t(
+            'dashboard.blankDesc',
+            'Write from scratch with transliteration and live preview.',
+          )}
         />
         <ActionCard
           to="/documents"
           icon={<DocsIcon />}
-          title="My documents"
-          desc="Open, export, and manage your drafts and signed copies."
+          title={t('dashboard.myDocsTitle', 'My documents')}
+          desc={t(
+            'dashboard.myDocsDesc',
+            'Open, export, and manage your drafts and signed copies.',
+          )}
         />
       </div>
 
       {/* Recent documents */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">Recent</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            {t('dashboard.recent', 'Recent')}
+          </h2>
           {recent.length > 0 && (
             <Link
               to="/documents"
               className="text-sm font-medium text-primary hover:underline"
             >
-              View all
+              {t('common.viewAll', 'View all')}
             </Link>
           )}
         </div>
@@ -72,12 +89,19 @@ export function Dashboard() {
           </div>
         ) : recent.length === 0 ? (
           <Card className="rounded-xl border-dashed p-8 text-center">
-            <p className="text-foreground/70">No documents yet.</p>
+            <p className="text-foreground/70">
+              {t('dashboard.emptyTitle', 'No documents yet.')}
+            </p>
             <p className="mt-1 text-sm text-foreground/50">
-              Start with a rent agreement, RTI, legal notice — or an AI draft.
+              {t(
+                'dashboard.emptyDesc',
+                'Start with a rent agreement, RTI, legal notice — or an AI draft.',
+              )}
             </p>
             <Button asChild className="mt-4">
-              <Link to="/documents/new">Create your first document</Link>
+              <Link to="/documents/new">
+                {t('dashboard.createFirst', 'Create your first document')}
+              </Link>
             </Button>
           </Card>
         ) : (
@@ -90,15 +114,17 @@ export function Dashboard() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[11px] font-medium uppercase tracking-wide text-foreground/50">
-                    {d.documentType?.name ?? 'Document'}
+                    {d.documentType?.name ?? t('common.document', 'Document')}
                   </span>
                   <StatusPill status={d.status} />
                 </div>
                 <p className="mt-1 truncate font-medium text-foreground group-hover:text-primary">
-                  {d.title || 'Untitled'}
+                  {d.title || t('common.untitled', 'Untitled')}
                 </p>
                 <p className="mt-0.5 text-xs text-foreground/45">
-                  Updated {new Date(d.updatedAt).toLocaleDateString()}
+                  {t('dashboard.updated', 'Updated {{date}}', {
+                    date: new Date(d.updatedAt).toLocaleDateString(),
+                  })}
                 </p>
               </Link>
             ))}
@@ -153,6 +179,7 @@ function ActionCard({
 }
 
 function StatusPill({ status }: { status: string }) {
+  const { t } = useTranslation();
   const tone: Record<string, string> = {
     draft: 'bg-amber-100 text-amber-800',
     in_review: 'bg-blue-100 text-blue-800',
@@ -167,16 +194,16 @@ function StatusPill({ status }: { status: string }) {
         tone[status] ?? 'bg-foreground/10 text-foreground/60',
       )}
     >
-      {status.replace(/_/g, ' ')}
+      {t(`status.${status}`, status.replace(/_/g, ' '))}
     </span>
   );
 }
 
-function greeting(): string {
+function greeting(t: TFunction): string {
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 12) return t('greeting.morning', 'Good morning');
+  if (h < 17) return t('greeting.afternoon', 'Good afternoon');
+  return t('greeting.evening', 'Good evening');
 }
 
 // ─── icons ───────────────────────────────────────────────────────────────

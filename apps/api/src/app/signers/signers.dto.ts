@@ -27,25 +27,24 @@ const UpdateSignerSchema = z.object({
 export class UpdateSignerDto extends createZodDto(UpdateSignerSchema) {}
 
 /**
- * Record a drawn or typed signature for a signer. `image` is a PNG data URL
- * for drawn signatures; `typedText` + `font` describe a typed signature.
+ * Record a signature for a signer:
+ *  - 'draw'   — a PNG data URL from the in-app signature pad
+ *  - 'upload' — a PNG data URL from an uploaded image (normalised client-side)
+ *  - 'typed'  — a typed name rendered in a script font
  * (Remote/provider eSign — Aadhaar/DSC — is a separate flow.)
  */
 const RecordSignatureSchema = z
   .object({
-    method: z.enum(['draw', 'typed']),
-    /** data:image/png;base64,… for method 'draw'. */
-    image: z
-      .string()
-      .startsWith('data:image/')
-      .max(2_000_000)
-      .optional(),
+    method: z.enum(['draw', 'upload', 'typed']),
+    /** data:image/…;base64,… for method 'draw' or 'upload'. */
+    image: z.string().startsWith('data:image/').max(2_000_000).optional(),
     /** The typed name for method 'typed'. */
     typedText: z.string().min(1).max(200).optional(),
     /** Optional font-family label used to render the typed signature. */
     font: z.string().max(120).optional(),
   })
-  .refine((v) => (v.method === 'draw' ? !!v.image : !!v.typedText), {
-    message: 'draw signatures require an image; typed signatures require typedText',
+  .refine((v) => (v.method === 'typed' ? !!v.typedText : !!v.image), {
+    message:
+      'draw/upload signatures require an image; typed signatures require typedText',
   });
 export class RecordSignatureDto extends createZodDto(RecordSignatureSchema) {}

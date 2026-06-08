@@ -191,8 +191,8 @@ export interface UpdateSignerPayload {
 }
 
 export interface RecordSignaturePayload {
-  method: 'draw' | 'typed';
-  /** data:image/png;base64,… for method 'draw'. */
+  method: 'draw' | 'upload' | 'typed';
+  /** data:image/…;base64,… for method 'draw' or 'upload'. */
   image?: string;
   /** The typed name for method 'typed'. */
   typedText?: string;

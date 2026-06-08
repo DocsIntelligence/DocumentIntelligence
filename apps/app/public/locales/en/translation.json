@@ -1,4 +1,45 @@
 {
+  "common": {
+    "openMenu": "Open menu",
+    "newDocument": "New document",
+    "logout": "Log out",
+    "viewAll": "View all",
+    "document": "Document",
+    "untitled": "Untitled"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "documents": "Documents",
+    "quickEditor": "Quick editor",
+    "settings": "Settings",
+    "admin": "Admin"
+  },
+  "greeting": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening"
+  },
+  "dashboard": {
+    "subtitle": "Draft, edit, and export legal documents — with AI assistance.",
+    "draftAiTitle": "Draft with AI",
+    "draftAiDesc": "Describe what you need in plain English and get a full draft.",
+    "blankTitle": "Blank editor",
+    "blankDesc": "Write from scratch with transliteration and live preview.",
+    "myDocsTitle": "My documents",
+    "myDocsDesc": "Open, export, and manage your drafts and signed copies.",
+    "recent": "Recent",
+    "emptyTitle": "No documents yet.",
+    "emptyDesc": "Start with a rent agreement, RTI, legal notice — or an AI draft.",
+    "createFirst": "Create your first document",
+    "updated": "Updated {{date}}"
+  },
+  "status": {
+    "draft": "Draft",
+    "in_review": "In review",
+    "ready": "Ready",
+    "signed": "Signed",
+    "archived": "Archived"
+  },
   "settings": {
     "language": "Language",
     "theme": "Theme"

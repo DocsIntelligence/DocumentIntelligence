@@ -5,8 +5,9 @@ import {
   useAppDispatch,
   useAppSelector,
 } from '@org/store';
-import { Button, UserAvatar } from '@org/ui';
+import { Button, LanguageSwitcher, UserAvatar } from '@org/ui';
 import { cn } from '@org/utils';
+import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { APP_ENV } from '../../../config';
 
@@ -20,6 +21,7 @@ export function MainLayout() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close the mobile drawer on navigation.
@@ -38,7 +40,7 @@ export function MainLayout() {
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 md:hidden">
         <button
           type="button"
-          aria-label="Open menu"
+          aria-label={t('common.openMenu', 'Open menu')}
           onClick={() => setMobileOpen(true)}
           className="-ml-1 inline-flex size-9 items-center justify-center rounded-md text-foreground/70 hover:bg-secondary/60"
         >
@@ -96,6 +98,7 @@ function Sidebar({
   onClose,
   onLogout,
 }: SidebarProps) {
+  const { t } = useTranslation();
   return (
     <>
       {/* Mobile overlay */}
@@ -128,24 +131,47 @@ function Sidebar({
           <Button asChild className="w-full justify-center gap-1.5">
             <Link to="/documents/new">
               <PlusIcon />
-              New document
+              {t('common.newDocument', 'New document')}
             </Link>
           </Button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
-          <NavItem to="/dashboard" label="Dashboard" icon={<GridIcon />} />
-          <NavItem to="/documents" label="Documents" icon={<DocsIcon />} />
-          <NavItem to="/editor" label="Quick editor" icon={<PenIcon />} />
-          <NavItem to="/settings" label="Settings" icon={<GearIcon />} />
+          <NavItem
+            to="/dashboard"
+            label={t('nav.dashboard', 'Dashboard')}
+            icon={<GridIcon />}
+          />
+          <NavItem
+            to="/documents"
+            label={t('nav.documents', 'Documents')}
+            icon={<DocsIcon />}
+          />
+          <NavItem
+            to="/editor"
+            label={t('nav.quickEditor', 'Quick editor')}
+            icon={<PenIcon />}
+          />
+          <NavItem
+            to="/settings"
+            label={t('nav.settings', 'Settings')}
+            icon={<GearIcon />}
+          />
           {isAdmin && (
-            <NavItem to="/admin" label="Admin" icon={<ShieldIcon />} />
+            <NavItem
+              to="/admin"
+              label={t('nav.admin', 'Admin')}
+              icon={<ShieldIcon />}
+            />
           )}
         </nav>
 
         {/* User footer */}
         <div className="border-t border-border p-3">
+          <div className="px-2 pb-2">
+            <LanguageSwitcher className="w-full" />
+          </div>
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <UserAvatar name={userName} src={userPicture} size="sm" />
             <div className="min-w-0 flex-1">
@@ -161,7 +187,7 @@ function Sidebar({
             className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground/70 transition-colors hover:bg-error/10 hover:text-error"
           >
             <LogoutIcon />
-            Log out
+            {t('common.logout', 'Log out')}
           </button>
         </div>
       </aside>
