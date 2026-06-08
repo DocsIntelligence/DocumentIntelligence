@@ -10,6 +10,7 @@ import { Button, FormField, Input, OAuthButtons } from '@org/ui';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { APP_ENV } from '../../../../config';
@@ -21,6 +22,7 @@ import {
 const API_BASE_URL = APP_ENV.apiUrl;
 
 export function Login() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,10 +53,10 @@ export function Login() {
   const onSubmit = handleSubmit(async (values) => {
     const result = await dispatch(loginThunk(values));
     if (loginThunk.fulfilled.match(result)) {
-      toast.success('Welcome back!');
+      toast.success(t('auth.login.welcomeBack', 'Welcome back!'));
       navigate(nextDestination(), { replace: true });
     } else {
-      toast.error('Invalid credentials');
+      toast.error(t('auth.login.invalidCredentials', 'Invalid credentials'));
     }
   });
 
@@ -88,13 +90,13 @@ export function Login() {
       );
       if (!verifyRes.ok) throw new Error('Verification failed');
 
-      toast.success('Signed in with passkey!');
+      toast.success(t('auth.login.passkeySuccess', 'Signed in with passkey!'));
       navigate(nextDestination(), { replace: true });
     } catch (e: any) {
       if (e.name === 'NotAllowedError') {
         // User cancelled
       } else {
-        toast.error(e.message ?? 'Passkey login failed');
+        toast.error(e.message ?? t('auth.login.passkeyFailed', 'Passkey login failed'));
       }
     } finally {
       setPasskeyLoading(false);
@@ -104,14 +106,19 @@ export function Login() {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Sign in</h2>
+        <h2 className="text-xl font-semibold text-foreground">
+          {t('auth.login.title', 'Sign in')}
+        </h2>
         <p className="text-sm text-foreground/60 mt-1">
-          Enter your credentials to access your account
+          {t('auth.login.subtitle', 'Enter your credentials to access your account')}
         </p>
       </div>
 
       <div className="space-y-4">
-        <FormField label="Email or username" error={errors.identifier?.message}>
+        <FormField
+          label={t('auth.login.identifierLabel', 'Email or username')}
+          error={errors.identifier?.message}
+        >
           <Input
             placeholder="you@example.com"
             autoComplete="username"
@@ -119,7 +126,10 @@ export function Login() {
             {...register('identifier')}
           />
         </FormField>
-        <FormField label="Password" error={errors.password?.message}>
+        <FormField
+          label={t('auth.common.password', 'Password')}
+          error={errors.password?.message}
+        >
           <Input
             type="password"
             placeholder="••••••••"
@@ -131,7 +141,7 @@ export function Login() {
       </div>
 
       <Button type="submit" isLoading={status === 'pending'} className="w-full">
-        Sign in
+        {t('auth.login.title', 'Sign in')}
       </Button>
 
       {/* Passkey login */}
@@ -155,7 +165,7 @@ export function Login() {
             d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
           />
         </svg>
-        Sign in with passkey
+        {t('auth.login.passkeyButton', 'Sign in with passkey')}
       </Button>
 
       <div className="relative py-2">
@@ -164,7 +174,7 @@ export function Login() {
         </div>
         <div className="relative flex justify-center text-xs">
           <span className="bg-background px-2 text-foreground/60">
-            or continue with
+            {t('auth.common.orContinueWith', 'or continue with')}
           </span>
         </div>
       </div>
@@ -173,10 +183,10 @@ export function Login() {
 
       <div className="text-sm flex items-center justify-between pt-2">
         <Link to="/forgot-password" className="text-primary hover:underline">
-          Forgot password?
+          {t('auth.login.forgotPassword', 'Forgot password?')}
         </Link>
         <Link to="/register" className="text-primary hover:underline">
-          Create account
+          {t('auth.login.createAccount', 'Create account')}
         </Link>
       </div>
     </form>

@@ -38,6 +38,8 @@ import {
 } from '@org/transliteration';
 import { cn } from '@org/utils';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { diffText, isUnchanged, type DiffSegment } from './revision-diff';
 
 import { EditorToolbar } from './components/EditorToolbar';
 import {
@@ -117,6 +119,8 @@ export interface TemplateEditorProps {
   onComments?: () => void;
   /** When provided (bound docs), shows a Signatures action in the top bar. */
   onSignatures?: () => void;
+  /** Extra rendered HTML appended in the preview (e.g. signatures + audit). */
+  previewAppendHtml?: string;
 }
 
 function TemplateEditorInner({
@@ -132,6 +136,7 @@ function TemplateEditorInner({
   onHistory,
   onComments,
   onSignatures,
+  previewAppendHtml,
 }: {
   persistence: EditorPersistence;
   backHref?: string;
@@ -152,7 +157,9 @@ function TemplateEditorInner({
   onHistory?: () => void;
   onComments?: () => void;
   onSignatures?: () => void;
+  previewAppendHtml?: string;
 }) {
+  const { t } = useTranslation();
   const { enabled, language } = useTransliteration();
   const bound = persistence.mode === 'bound';
   // Recover any in-progress local draft (local mode only).
@@ -166,24 +173,24 @@ function TemplateEditorInner({
     pageSize: PageSizeKey;
   }>(() => {
     if (persistence.mode === 'bound') {
-      const t =
+      const tpl =
         getTemplateById(persistence.initial.templateId ?? '') ??
         synthesizeTemplate(persistence.initial);
       return {
-        template: t,
+        template: tpl,
         values: persistence.initial.values,
         html: persistence.initial.html,
         savedAt: persistence.savedAt ?? null,
         pageSize: persistence.initial.pageSize ?? 'a4',
       };
     }
-    const t =
+    const tpl =
       getTemplateById(restored?.templateId ?? DEFAULT_TEMPLATE_ID) ??
       TEMPLATES[0];
     return {
-      template: t,
-      values: restored?.values ?? seedValues(t.placeholders),
-      html: restored?.html ?? t.html,
+      template: tpl,
+      values: restored?.values ?? seedValues(tpl.placeholders),
+      html: restored?.html ?? tpl.html,
       savedAt: restored?.savedAt ?? null,
       pageSize: restored?.pageSize ?? 'a4',
     };
@@ -333,9 +340,11 @@ function TemplateEditorInner({
   // One-time notice if we recovered a draft from a previous visit.
   useEffect(() => {
     if (restored) {
-      toast.message('Restored your last draft', {
-        description:
+      toast.message(t('editor.toast.draftRestored', 'Restored your last draft'), {
+        description: t(
+          'editor.toast.draftRestoredDesc',
           'Your in-progress document was recovered from this browser.',
+        ),
       });
     }
   }, []);
@@ -353,7 +362,7 @@ function TemplateEditorInner({
       return;
     }
     const p = persistenceRef.current;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (p.mode === 'bound') {
         p.onSave({
           templateId: template.id,
@@ -373,7 +382,7 @@ function TemplateEditorInner({
         setSavedAt(now);
       }
     }, 700);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [template.id, template.name, html, values, pageSize]);
 
   // Bound mode: reflect the parent-reported save time in the status bar.
@@ -387,29 +396,33 @@ function TemplateEditorInner({
     persistence.mode === 'bound' ? !!persistence.saving : !!savingToCloud;
 
   const loadTemplate = useCallback(
-    (t: DocumentTemplate) => {
-      setTemplate(t);
-      const seeded = seedValues(t.placeholders);
+    (tpl: DocumentTemplate) => {
+      setTemplate(tpl);
+      const seeded = seedValues(tpl.placeholders);
       setValues(seeded);
-      setHtml(t.html);
-      editor?.commands.setContent(t.html);
+      setHtml(tpl.html);
+      editor?.commands.setContent(tpl.html);
       setActivePage(0);
-      toast.success(`Loaded template: ${t.name}`);
+      toast.success(
+        t('editor.toast.templateLoaded', 'Loaded template: {{name}}', {
+          name: tpl.name,
+        }),
+      );
     },
-    [editor],
+    [editor, t],
   );
 
   const handleGenerate = useCallback(async () => {
     if (!editor) return;
     // Fallback when no AI provider is wired: re-seed from the template.
-    toast.message('Reloading template...');
+    toast.message(t('editor.toast.reloadingTemplate', 'Reloading template...'));
     await new Promise((r) => setTimeout(r, 400));
     editor.commands.setContent(template.html);
     setHtml(template.html);
     setValues(seedValues(template.placeholders));
     setActivePage(0);
-    toast.success('Template reloaded');
-  }, [editor, template]);
+    toast.success(t('editor.toast.templateReloaded', 'Template reloaded'));
+  }, [editor, template, t]);
 
   const [aiBusy, setAiBusy] = useState(false);
 
@@ -428,7 +441,7 @@ function TemplateEditorInner({
     if (!editor || !onAiGenerate || !generateBrief.trim()) return;
     setGenerateModalOpen(false);
     setAiBusy(true);
-    toast.message('Drafting with AI…');
+    toast.message(t('editor.toast.drafting', 'Drafting with AI…'));
     try {
       const { html: out, disclaimer } = await onAiGenerate(
         generateBrief.trim(),
@@ -439,20 +452,30 @@ function TemplateEditorInner({
       setValues({});
       setActivePage(0);
       toast.success(
-        'Draft generated',
+        t('editor.toast.draftGenerated', 'Draft generated'),
         disclaimer ? { description: disclaimer } : undefined,
       );
     } catch {
-      toast.error('AI generation failed. Check your AI provider / quota.');
+      toast.error(
+        t(
+          'editor.toast.generateFailed',
+          'AI generation failed. Check your AI provider / quota.',
+        ),
+      );
     } finally {
       setAiBusy(false);
     }
-  }, [editor, onAiGenerate, generateBrief, generateLanguage]);
+  }, [editor, onAiGenerate, generateBrief, generateLanguage, t]);
 
   // --- Modal state for AI Revise ---
   const [reviseModalOpen, setReviseModalOpen] = useState(false);
   const [reviseInstruction, setReviseInstruction] = useState('');
   const [reviseLanguage, setReviseLanguage] = useState('');
+  // Staged AI revision awaiting the user's accept/reject decision.
+  const [pendingRevision, setPendingRevision] = useState<{
+    before: string;
+    after: string;
+  } | null>(null);
 
   const handleAiReviseOpen = useCallback(() => {
     if (!editor || !onAiRevise) return;
@@ -471,25 +494,60 @@ function TemplateEditorInner({
     if (!instruction) return;
     setReviseModalOpen(false);
     setAiBusy(true);
-    toast.message('Revising with AI…');
+    toast.message(t('editor.toast.revising', 'Revising with AI…'));
     try {
       const { html: out } = await onAiRevise(
         instruction,
         html,
         reviseLanguage || undefined,
       );
-      editor.commands.setContent(out);
-      setHtml(out);
-      setActivePage(0);
-      toast.success('Document revised', {
-        description: 'Press Ctrl/Cmd+Z to undo if needed.',
-      });
+      // Don't apply yet — stage it and let the user review the diff.
+      setPendingRevision({ before: html, after: out });
     } catch {
-      toast.error('AI revision failed. Check your AI provider / quota.');
+      toast.error(
+        t(
+          'editor.toast.reviseFailed',
+          'AI revision failed. Check your AI provider / quota.',
+        ),
+      );
     } finally {
       setAiBusy(false);
     }
-  }, [editor, onAiRevise, reviseInstruction, reviseLanguage, html]);
+  }, [editor, onAiRevise, reviseInstruction, reviseLanguage, html, t]);
+
+  const acceptRevision = useCallback(() => {
+    if (!editor || !pendingRevision) return;
+    editor.commands.setContent(pendingRevision.after);
+    setHtml(pendingRevision.after);
+    setActivePage(0);
+    setPendingRevision(null);
+    toast.success(t('editor.toast.revisionApplied', 'Revision applied'));
+  }, [editor, pendingRevision, t]);
+
+  const rejectRevision = useCallback(() => {
+    setPendingRevision(null);
+    toast.message(t('editor.toast.revisionDiscarded', 'Revision discarded'));
+  }, [t]);
+
+  // Inline word-level diff of the staged revision (plain text — shows what the
+  // AI changed, not HTML structure).
+  const revisionDiff = useMemo<DiffSegment[] | null>(() => {
+    if (!pendingRevision) return null;
+    return diffText(
+      stripHtmlToText(pendingRevision.before),
+      stripHtmlToText(pendingRevision.after),
+    );
+  }, [pendingRevision]);
+  const revisionUnchanged = useMemo(
+    () =>
+      pendingRevision
+        ? isUnchanged(
+            stripHtmlToText(pendingRevision.before),
+            stripHtmlToText(pendingRevision.after),
+          )
+        : false,
+    [pendingRevision],
+  );
 
   // --- Modal state for Insert Placeholder ---
   const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
@@ -505,12 +563,12 @@ function TemplateEditorInner({
     if (!editor) return;
     const cleaned = placeholderKey.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!cleaned) {
-      toast.error('Invalid field key');
+      toast.error(t('editor.toast.invalidFieldKey', 'Invalid field key'));
       return;
     }
     setPlaceholderModalOpen(false);
     editor.chain().focus().insertContent(`{{${cleaned}}}`).run();
-  }, [editor, placeholderKey]);
+  }, [editor, placeholderKey, t]);
 
   const handleInsertPageBreak = useCallback(() => {
     editor?.chain().focus().insertPageBreak().run();
@@ -600,11 +658,11 @@ function TemplateEditorInner({
     const rendered = renderTemplateHtml(html, values);
     try {
       await navigator.clipboard.writeText(stripHtmlToText(rendered));
-      toast.success('Copied document text to clipboard');
+      toast.success(t('editor.toast.copied', 'Copied document text to clipboard'));
     } catch {
-      toast.error('Could not copy');
+      toast.error(t('editor.toast.copyFailed', 'Could not copy'));
     }
-  }, [html, values]);
+  }, [html, values, t]);
 
   const handleExportWord = useCallback(() => {
     downloadWordDoc({
@@ -613,14 +671,14 @@ function TemplateEditorInner({
       html,
       values,
     });
-    toast.success('Word document downloaded');
-  }, [template.name, html, values]);
+    toast.success(t('editor.toast.wordDownloaded', 'Word document downloaded'));
+  }, [template.name, html, values, t]);
 
   const handlePrint = useCallback(() => {
     const rendered = renderTemplateHtml(html, values);
     const w = window.open('', '_blank', 'width=900,height=1100');
     if (!w) {
-      toast.error('Could not open print window');
+      toast.error(t('editor.toast.printFailed', 'Could not open print window'));
       return;
     }
     const scriptOpen = '<' + 'script>';
@@ -629,7 +687,7 @@ function TemplateEditorInner({
       `<!doctype html><html><head><meta charset="utf-8"><title>${escapeAttr(template.name)}</title><style>${PRINT_CSS}</style></head><body>${rendered}${scriptOpen}window.onload=()=>setTimeout(()=>window.print(),200)${scriptClose}</body></html>`,
     );
     w.document.close();
-  }, [html, values, template]);
+  }, [html, values, template, t]);
 
   // Sidebar fields panel knows known + unknown keys.
   const fieldsFromTemplate: PlaceholderDef[] = useMemo(() => {
@@ -651,7 +709,7 @@ function TemplateEditorInner({
           {backHref && (
             <Link
               to={backHref}
-              aria-label="Back"
+              aria-label={t('editor.back', 'Back')}
               className="flex size-8 flex-none items-center justify-center rounded text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
             >
               <BackIcon />
@@ -665,9 +723,12 @@ function TemplateEditorInner({
               {template.name}
             </div>
             <div className="truncate text-[11px] text-foreground/55">
-              {template.category} · {completionStats.filled}/
-              {completionStats.total} fields filled
-              {enabled && ' · Transliteration on'}
+              {t('editor.meta.fieldsFilled', '{{category}} · {{filled}}/{{total}} fields filled', {
+                category: template.category,
+                filled: completionStats.filled,
+                total: completionStats.total,
+              })}
+              {enabled && t('editor.meta.transliterationOn', ' · Transliteration on')}
             </div>
           </div>
         </div>
@@ -680,7 +741,7 @@ function TemplateEditorInner({
             className="gap-1.5 text-xs"
           >
             <GalleryIcon />
-            Templates
+            {t('editor.toolbar.templates', 'Templates')}
           </Button>
           {persistence.mode === 'local' && onSaveToCloud && (
             <Button
@@ -698,7 +759,7 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <CloudIcon />
-              Save to my documents
+              {t('editor.toolbar.saveToDocuments', 'Save to my documents')}
             </Button>
           )}
           {onAiGenerate ? (
@@ -710,7 +771,7 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <SparklesIcon />
-              Draft with AI
+              {t('editor.toolbar.draftWithAi', 'Draft with AI')}
             </Button>
           ) : (
             <Button
@@ -720,7 +781,7 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <SparklesIcon />
-              Reload template
+              {t('editor.toolbar.reloadTemplate', 'Reload template')}
             </Button>
           )}
           {onAiRevise && (
@@ -732,7 +793,7 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <SparklesIcon />
-              Revise with AI
+              {t('editor.toolbar.reviseWithAi', 'Revise with AI')}
             </Button>
           )}
           <Button
@@ -742,7 +803,7 @@ function TemplateEditorInner({
             className="gap-1.5 text-xs"
           >
             <CopyIcon />
-            Copy
+            {t('editor.toolbar.copy', 'Copy')}
           </Button>
           {onComments && (
             <Button
@@ -751,7 +812,7 @@ function TemplateEditorInner({
               onClick={onComments}
               className="gap-1.5 text-xs"
             >
-              Comments
+              {t('editor.toolbar.comments', 'Comments')}
             </Button>
           )}
           {onSignatures && (
@@ -761,7 +822,7 @@ function TemplateEditorInner({
               onClick={onSignatures}
               className="gap-1.5 text-xs"
             >
-              Signatures
+              {t('editor.toolbar.signatures', 'Signatures')}
             </Button>
           )}
           {onHistory && (
@@ -771,7 +832,7 @@ function TemplateEditorInner({
               onClick={onHistory}
               className="gap-1.5 text-xs"
             >
-              History
+              {t('editor.toolbar.history', 'History')}
             </Button>
           )}
           {onShare && (
@@ -781,7 +842,7 @@ function TemplateEditorInner({
               onClick={onShare}
               className="gap-1.5 text-xs"
             >
-              Share
+              {t('editor.toolbar.share', 'Share')}
             </Button>
           )}
           <PageSizeSelect
@@ -796,7 +857,7 @@ function TemplateEditorInner({
             className="gap-1.5 text-xs"
           >
             <DownloadIcon />
-            Word
+            {t('editor.toolbar.word', 'Word')}
           </Button>
           {onExportPdf ? (
             <Button
@@ -806,7 +867,7 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <PrintIcon />
-              Export PDF
+              {t('editor.toolbar.exportPdf', 'Export PDF')}
             </Button>
           ) : (
             <Button
@@ -816,10 +877,16 @@ function TemplateEditorInner({
               className="gap-1.5 text-xs"
             >
               <PrintIcon />
-              Print
+              {t('editor.toolbar.print', 'Print')}
             </Button>
           )}
-          <Tooltip content={showPreview ? 'Hide preview' : 'Show preview'}>
+          <Tooltip
+            content={
+              showPreview
+                ? t('editor.toolbar.hidePreview', 'Hide preview')
+                : t('editor.toolbar.showPreview', 'Show preview')
+            }
+          >
             <Button
               variant={showPreview ? 'primary' : 'outline'}
               size="sm"
@@ -850,7 +917,7 @@ function TemplateEditorInner({
               <div className="border-b border-border px-3 py-2">
                 <TabsList className="w-full">
                   <TabsTrigger value="fields" className="flex-1 text-xs">
-                    Fields
+                    {t('editor.tabs.fields', 'Fields')}
                     {completionStats.total > 0 && (
                       <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
                         {completionStats.filled}/{completionStats.total}
@@ -858,7 +925,7 @@ function TemplateEditorInner({
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="pages" className="flex-1 text-xs">
-                    Pages
+                    {t('editor.tabs.pages', 'Pages')}
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -868,7 +935,7 @@ function TemplateEditorInner({
                   {completionStats.total > 0 && (
                     <div className="border-b border-border bg-secondary/15 px-4 py-2">
                       <div className="flex items-center justify-between text-[11px] text-foreground/60">
-                        <span>Completion</span>
+                        <span>{t('editor.completion', 'Completion')}</span>
                         <span>{completionStats.pct}%</span>
                       </div>
                       <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
@@ -940,11 +1007,13 @@ function TemplateEditorInner({
             </div>
             <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
               <span>
-                {editor?.getText().length ?? 0} chars ·{' '}
-                {editor
-                  ? editor.getText().split(/\s+/).filter(Boolean).length
-                  : 0}{' '}
-                words · Page {activePage + 1}
+                {t('editor.status.counts', '{{chars}} chars · {{words}} words · Page {{page}}', {
+                  chars: editor?.getText().length ?? 0,
+                  words: editor
+                    ? editor.getText().split(/\s+/).filter(Boolean).length
+                    : 0,
+                  page: activePage + 1,
+                })}
               </span>
               <span className="flex items-center gap-1.5">
                 <span
@@ -954,12 +1023,12 @@ function TemplateEditorInner({
                   )}
                 />
                 {isSaving
-                  ? 'Saving…'
+                  ? t('editor.status.saving', 'Saving…')
                   : savedAt
-                    ? `${bound ? 'Saved to cloud' : 'Saved'} ${formatTime(savedAt)}`
+                    ? `${bound ? t('editor.status.savedToCloud', 'Saved to cloud') : t('editor.status.saved', 'Saved')} ${formatTime(savedAt)}`
                     : bound
-                      ? 'Saving…'
-                      : 'Not saved yet'}
+                      ? t('editor.status.saving', 'Saving…')
+                      : t('editor.status.notSaved', 'Not saved yet')}
               </span>
             </div>
           </section>
@@ -981,6 +1050,7 @@ function TemplateEditorInner({
                 html={html}
                 values={values}
                 pageSize={pageSize}
+                appendHtml={previewAppendHtml}
                 className="h-full"
               />
             </Panel>
@@ -999,17 +1069,24 @@ function TemplateEditorInner({
       <Dialog open={generateModalOpen} onOpenChange={setGenerateModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Draft with AI</DialogTitle>
+            <DialogTitle>{t('editor.toolbar.draftWithAi', 'Draft with AI')}</DialogTitle>
             <DialogDescription>
-              Describe the document you want to draft. Be specific about
-              parties, terms, and key details.
+              {t(
+                'editor.generate.description',
+                'Describe the document you want to draft. Be specific about parties, terms, and key details.',
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">
-            <Label htmlFor="ai-generate-brief">Document description</Label>
+            <Label htmlFor="ai-generate-brief">
+              {t('editor.generate.briefLabel', 'Document description')}
+            </Label>
             <Textarea
               id="ai-generate-brief"
-              placeholder='e.g. "Rent agreement, landlord Ramesh, tenant Priya, 2BHK Pune, ₹25,000/mo, 11-month term"'
+              placeholder={t(
+                'editor.generate.briefPlaceholder',
+                'e.g. "Rent agreement, landlord Ramesh, tenant Priya, 2BHK Pune, ₹25,000/mo, 11-month term"',
+              )}
               value={generateBrief}
               onChange={(e) => setGenerateBrief(e.target.value)}
               onKeyDown={(e) => {
@@ -1021,7 +1098,7 @@ function TemplateEditorInner({
               autoFocus
             />
             <Label htmlFor="ai-generate-language" className="mt-1">
-              Language
+              {t('editor.generate.language', 'Language')}
             </Label>
             <LanguageSelect
               id="ai-generate-language"
@@ -1035,14 +1112,14 @@ function TemplateEditorInner({
               size="sm"
               onClick={() => setGenerateModalOpen(false)}
             >
-              Cancel
+              {t('editor.cancel', 'Cancel')}
             </Button>
             <Button
               size="sm"
               disabled={!generateBrief.trim()}
               onClick={handleAiGenerateSubmit}
             >
-              Generate
+              {t('editor.generate.submit', 'Generate')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1052,16 +1129,24 @@ function TemplateEditorInner({
       <Dialog open={reviseModalOpen} onOpenChange={setReviseModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Revise with AI</DialogTitle>
+            <DialogTitle>{t('editor.toolbar.reviseWithAi', 'Revise with AI')}</DialogTitle>
             <DialogDescription>
-              Tell the AI how to modify the current document.
+              {t(
+                'editor.revise.description',
+                'Tell the AI how to modify the current document.',
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">
-            <Label htmlFor="ai-revise-instruction">Revision instruction</Label>
+            <Label htmlFor="ai-revise-instruction">
+              {t('editor.revise.instructionLabel', 'Revision instruction')}
+            </Label>
             <Textarea
               id="ai-revise-instruction"
-              placeholder='e.g. "make the deposit 2 months", "add a no-pets clause", "make it more tenant-friendly"'
+              placeholder={t(
+                'editor.revise.instructionPlaceholder',
+                'e.g. "make the deposit 2 months", "add a no-pets clause", "make it more tenant-friendly"',
+              )}
               value={reviseInstruction}
               onChange={(e) => setReviseInstruction(e.target.value)}
               onKeyDown={(e) => {
@@ -1073,7 +1158,7 @@ function TemplateEditorInner({
               autoFocus
             />
             <Label htmlFor="ai-revise-language" className="mt-1">
-              Translate to (optional)
+              {t('editor.revise.translateTo', 'Translate to (optional)')}
             </Label>
             <LanguageSelect
               id="ai-revise-language"
@@ -1088,14 +1173,78 @@ function TemplateEditorInner({
               size="sm"
               onClick={() => setReviseModalOpen(false)}
             >
-              Cancel
+              {t('editor.cancel', 'Cancel')}
             </Button>
             <Button
               size="sm"
               disabled={!reviseInstruction.trim() && !reviseLanguage}
               onClick={handleAiReviseSubmit}
             >
-              Revise
+              {t('editor.revise.submit', 'Revise')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Revision — review diff before applying */}
+      <Dialog
+        open={!!pendingRevision}
+        onOpenChange={(v) => {
+          if (!v) rejectRevision();
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('editor.diff.title', 'Review AI revision')}</DialogTitle>
+            <DialogDescription>
+              <span className="bg-success/25">
+                {t('editor.diff.green', 'Green')}
+              </span>{' '}
+              {t('editor.diff.isAdded', 'is added,')}{' '}
+              <span className="bg-error/20 line-through">
+                {t('editor.diff.red', 'red')}
+              </span>{' '}
+              {t(
+                'editor.diff.isRemoved',
+                'is removed. Accept to apply, or reject to keep the current document.',
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {revisionUnchanged ? (
+            <p className="py-3 text-sm text-foreground/60">
+              {t(
+                'editor.diff.noChanges',
+                'The AI returned no visible text changes (formatting or placeholder tweaks only). You can still apply it.',
+              )}
+            </p>
+          ) : (
+            <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-secondary-accent/40 p-3 text-sm leading-relaxed text-foreground/80">
+              {revisionDiff?.map((seg, idx) =>
+                seg.op === 'equal' ? (
+                  <span key={idx} className="text-foreground/70">
+                    {seg.text}
+                  </span>
+                ) : seg.op === 'added' ? (
+                  <span key={idx} className="rounded-sm bg-success/25">
+                    {seg.text}
+                  </span>
+                ) : (
+                  <span
+                    key={idx}
+                    className="rounded-sm bg-error/20 line-through opacity-80"
+                  >
+                    {seg.text}
+                  </span>
+                ),
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={rejectRevision}>
+              {t('editor.diff.reject', 'Reject')}
+            </Button>
+            <Button size="sm" onClick={acceptRevision}>
+              {t('editor.diff.accept', 'Accept revision')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1108,17 +1257,23 @@ function TemplateEditorInner({
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Insert field placeholder</DialogTitle>
+            <DialogTitle>
+              {t('editor.placeholder.title', 'Insert field placeholder')}
+            </DialogTitle>
             <DialogDescription>
-              Enter a key for the placeholder field. Use letters, numbers, or
-              underscores only.
+              {t(
+                'editor.placeholder.description',
+                'Enter a key for the placeholder field. Use letters, numbers, or underscores only.',
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">
-            <Label htmlFor="placeholder-key">Field key</Label>
+            <Label htmlFor="placeholder-key">
+              {t('editor.placeholder.fieldKey', 'Field key')}
+            </Label>
             <Input
               id="placeholder-key"
-              placeholder="e.g. tenant_name"
+              placeholder={t('editor.placeholder.keyPlaceholder', 'e.g. tenant_name')}
               value={placeholderKey}
               onChange={(e) => setPlaceholderKey(e.target.value)}
               onKeyDown={(e) => {
@@ -1135,14 +1290,14 @@ function TemplateEditorInner({
               size="sm"
               onClick={() => setPlaceholderModalOpen(false)}
             >
-              Cancel
+              {t('editor.cancel', 'Cancel')}
             </Button>
             <Button
               size="sm"
               disabled={!placeholderKey.trim()}
               onClick={handleInsertPlaceholderSubmit}
             >
-              Insert
+              {t('editor.placeholder.insert', 'Insert')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1164,6 +1319,7 @@ export function TemplateEditor({
   onHistory,
   onComments,
   onSignatures,
+  previewAppendHtml,
 }: TemplateEditorProps = {}) {
   return (
     <TransliterationProvider defaultLanguage="hi" defaultEnabled={false}>
@@ -1180,6 +1336,7 @@ export function TemplateEditor({
         onHistory={onHistory}
         onComments={onComments}
         onSignatures={onSignatures}
+        previewAppendHtml={previewAppendHtml}
       />
     </TransliterationProvider>
   );

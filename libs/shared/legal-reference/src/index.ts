@@ -24,3 +24,24 @@ export {
   type DocumentPreset,
   type DocumentPresetCategory,
 } from './lib/document-presets';
+
+export {
+  buildSignatureBlockHtml,
+  buildSignatureAuditHtml,
+  appendSignaturesToHtml,
+  type SignatureSignerInput,
+} from './lib/signature-block';
+
+export {
+  SCHEDULE_1_EXCLUSIONS,
+  SCHEDULE_1_NOTE,
+  ESIGN_EXCLUDED_KEYS,
+  isESignExcluded,
+  type Schedule1Exclusion,
+} from './lib/schedule1';
+
+export {
+  validateCitations,
+  citationWarnings,
+  type CitationFinding,
+} from './lib/citation-validator';

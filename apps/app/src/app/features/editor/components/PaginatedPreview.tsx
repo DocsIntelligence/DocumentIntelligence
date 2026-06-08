@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { cn } from '@org/utils';
 import { renderTemplateHtml } from '@org/ui';
 import { pageProfiles, type PageSizeKey } from '@org/document-templates';
@@ -12,6 +19,8 @@ export type PaginatedPreviewProps = {
   values: Record<string, string>;
   /** Paper size — drives page dimensions, margins, and stamp-paper reserved zone. */
   pageSize?: PageSizeKey;
+  /** Extra already-rendered HTML appended after the body (e.g. signatures + audit). */
+  appendHtml?: string;
   className?: string;
 };
 
@@ -29,10 +38,72 @@ export function PaginatedPreview({
   html,
   values,
   pageSize = 'a4',
+  appendHtml,
   className,
 }: PaginatedPreviewProps) {
-  const pages = useMemo(() => splitOnPageBreaks(html), [html]);
+  const chunks = useMemo(
+    () => splitOnPageBreaks(appendHtml ? html + appendHtml : html),
+    [html, appendHtml],
+  );
   const p = pageProfiles[pageSize] ?? pageProfiles.a4;
+  const valuesKey = useMemo(() => JSON.stringify(values), [values]);
+
+  // Auto-pagination: render each manual-break chunk offscreen, measure its
+  // top-level blocks, and pack them into page-height buckets so an
+  // overflowing chunk flows onto the next page (matching the printed PDF)
+  // rather than growing into one tall sheet.
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const [pages, setPages] = useState<string[]>(() =>
+    chunks.map((c) => renderTemplateHtml(c, values)),
+  );
+
+  useLayoutEffect(() => {
+    const host = measureRef.current;
+    if (!host) return;
+    const mmToPx = (mm: number) => (mm * 96) / 25.4;
+    const fullH = mmToPx(p.heightMm - p.marginTopMm - p.marginBottomMm);
+    const firstH = Math.max(40, fullH - mmToPx(p.reservedTopMm));
+    host.style.width = `${mmToPx(p.widthMm - p.marginLeftMm - p.marginRightMm)}px`;
+
+    const out: string[] = [];
+    let onFirstPage = true;
+    for (const chunk of chunks) {
+      host.innerHTML = renderTemplateHtml(chunk, values);
+      const kids = Array.from(host.children) as HTMLElement[];
+      if (kids.length === 0) {
+        out.push('');
+        onFirstPage = false;
+        continue;
+      }
+      let budget = onFirstPage ? firstH : fullH;
+      let used = 0;
+      let bucket: string[] = [];
+      const flush = () => {
+        if (bucket.length) {
+          out.push(bucket.join(''));
+          bucket = [];
+        }
+      };
+      for (const el of kids) {
+        const cs = getComputedStyle(el);
+        const h =
+          el.offsetHeight +
+          parseFloat(cs.marginTop || '0') +
+          parseFloat(cs.marginBottom || '0');
+        if (used > 0 && used + h > budget) {
+          flush();
+          budget = fullH; // only the very first page reserves the stamp zone
+          used = 0;
+        }
+        bucket.push(el.outerHTML);
+        used += h;
+      }
+      flush();
+      onFirstPage = false;
+    }
+    host.innerHTML = '';
+    setPages(out.length ? out : ['']);
+  }, [chunks, valuesKey, pageSize, p, values]);
 
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const zoomRef = useRef(zoom);
@@ -93,6 +164,20 @@ export function PaginatedPreview({
         className,
       )}
     >
+      {/* Offscreen measuring host for auto-pagination (not visible). */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        className="document-preview-page"
+        style={{
+          position: 'absolute',
+          left: '-99999px',
+          top: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        }}
+      />
+
       <div className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-lg border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
         <ZoomButton label="Zoom out" onClick={zoomOut}>
           <MinusIcon />
@@ -145,9 +230,7 @@ export function PaginatedPreview({
                   )}
                   <div
                     className="document-preview-page"
-                    dangerouslySetInnerHTML={{
-                      __html: renderTemplateHtml(pageHtml, values),
-                    }}
+                    dangerouslySetInnerHTML={{ __html: pageHtml }}
                   />
                 </div>
                 <div className="mt-1.5 text-center text-[11px] font-medium text-foreground/45">

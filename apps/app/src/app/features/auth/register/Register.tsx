@@ -8,6 +8,7 @@ import {
 } from '@org/store';
 import { Button, FormField, Input, OAuthButtons } from '@org/ui';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { APP_ENV } from '../../../../config';
@@ -15,6 +16,7 @@ import { APP_ENV } from '../../../../config';
 const API_BASE_URL = APP_ENV.apiUrl;
 
 export function Register() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { status } = useAppSelector(selectAuth);
@@ -28,24 +30,29 @@ export function Register() {
   const onSubmit = handleSubmit(async (values) => {
     const result = await dispatch(registerThunk(values));
     if (registerThunk.fulfilled.match(result)) {
-      toast.success('Account created');
+      toast.success(t('auth.register.created', 'Account created'));
       navigate('/dashboard', { replace: true });
     } else {
-      toast.error('Registration failed');
+      toast.error(t('auth.register.failed', 'Registration failed'));
     }
   });
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Create account</h2>
+        <h2 className="text-xl font-semibold text-gray-900">
+          {t('auth.register.title', 'Create account')}
+        </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Fill in your details to get started
+          {t('auth.register.subtitle', 'Fill in your details to get started')}
         </p>
       </div>
 
       <div className="space-y-4">
-        <FormField label="Name" error={errors.name?.message}>
+        <FormField
+          label={t('auth.register.name', 'Name')}
+          error={errors.name?.message}
+        >
           <Input
             placeholder="John Doe"
             autoComplete="name"
@@ -53,7 +60,10 @@ export function Register() {
             {...hookRegister('name')}
           />
         </FormField>
-        <FormField label="Username" error={errors.username?.message}>
+        <FormField
+          label={t('auth.register.username', 'Username')}
+          error={errors.username?.message}
+        >
           <Input
             placeholder="johndoe"
             autoComplete="username"
@@ -61,7 +71,10 @@ export function Register() {
             {...hookRegister('username')}
           />
         </FormField>
-        <FormField label="Email" error={errors.email?.message}>
+        <FormField
+          label={t('auth.common.email', 'Email')}
+          error={errors.email?.message}
+        >
           <Input
             type="email"
             placeholder="you@example.com"
@@ -70,7 +83,10 @@ export function Register() {
             {...hookRegister('email')}
           />
         </FormField>
-        <FormField label="Password" error={errors.password?.message}>
+        <FormField
+          label={t('auth.common.password', 'Password')}
+          error={errors.password?.message}
+        >
           <Input
             type="password"
             placeholder="••••••••"
@@ -82,7 +98,7 @@ export function Register() {
       </div>
 
       <Button type="submit" isLoading={status === 'pending'} className="w-full">
-        Sign up
+        {t('auth.register.submit', 'Sign up')}
       </Button>
 
       <div className="relative py-2">
@@ -91,7 +107,7 @@ export function Register() {
         </div>
         <div className="relative flex justify-center text-xs">
           <span className="bg-background px-2 text-foreground/60">
-            or continue with
+            {t('auth.common.orContinueWith', 'or continue with')}
           </span>
         </div>
       </div>
@@ -99,9 +115,9 @@ export function Register() {
       <OAuthButtons apiUrl={API_BASE_URL} />
 
       <p className="text-sm text-center text-gray-600 pt-2">
-        Already have an account?{' '}
+        {t('auth.register.haveAccount', 'Already have an account?')}{' '}
         <Link to="/login" className="text-blue-600 hover:underline font-medium">
-          Sign in
+          {t('auth.login.title', 'Sign in')}
         </Link>
       </p>
     </form>

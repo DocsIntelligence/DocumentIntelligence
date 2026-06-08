@@ -17,6 +17,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
@@ -55,6 +56,7 @@ interface Props {
  * the source of truth for form metadata, risks, and known templates.
  */
 export function BuilderShell({ documentId }: Props) {
+  const { t } = useTranslation();
   const { data: doc, isLoading } = useDocument(documentId);
   const patch = usePatchDocument(documentId);
   const { mutate: patchMutate } = patch;
@@ -86,12 +88,16 @@ export function BuilderShell({ documentId }: Props) {
   useEffect(() => {
     if (exportState.phase === 'ready') {
       window.open(exportState.url, '_blank', 'noopener,noreferrer');
-      toast.success('PDF ready — opened in a new tab');
+      toast.success(t('builder.toast.pdfReady', 'PDF ready — opened in a new tab'));
     }
     if (exportState.phase === 'failed') {
-      toast.error(`Export failed: ${exportState.error}`);
+      toast.error(
+        t('builder.toast.exportFailed', 'Export failed: {{error}}', {
+          error: exportState.error,
+        }),
+      );
     }
-  }, [exportState]);
+  }, [exportState, t]);
 
   // Hydrate once per document id. Tracks the last-saved snapshot so the
   // autosave effect can no-op when the debounced draft hasn't diverged.
@@ -141,7 +147,9 @@ export function BuilderShell({ documentId }: Props) {
     if (!doc?.documentType?.key) return;
     const current = getAtPath(draft, fieldPath);
     if (typeof current !== 'string' || !current.trim()) {
-      toast.info('Type something first, then click AI to refine it.');
+      toast.info(
+        t('builder.toast.typeFirst', 'Type something first, then click AI to refine it.'),
+      );
       return;
     }
     setAiBusyField(fieldPath);
@@ -155,10 +163,16 @@ export function BuilderShell({ documentId }: Props) {
         jurisdiction: doc.jurisdiction ?? 'IN-*',
       });
       setDraft((d) => setAtPath(structuredClone(d), fieldPath, res.text));
-      toast.success(res.cached ? 'AI suggestion (cached)' : 'AI suggestion');
+      toast.success(
+        res.cached
+          ? t('builder.toast.aiSuggestionCached', 'AI suggestion (cached)')
+          : t('builder.toast.aiSuggestion', 'AI suggestion'),
+      );
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'AI request failed',
+        err instanceof Error
+          ? err.message
+          : t('builder.toast.aiFailed', 'AI request failed'),
       );
     } finally {
       setAiBusyField(null);
@@ -187,13 +201,19 @@ export function BuilderShell({ documentId }: Props) {
         templateKey: 'freeform',
         data: { html: gen.html, values: {}, templateId: 'freeform' },
       });
-      toast.success(`Draft created in ${targetLang}`, {
-        description: gen.disclaimer,
-      });
+      toast.success(
+        t('builder.toast.draftCreated', 'Draft created in {{lang}}', {
+          lang: targetLang,
+        }),
+        { description: gen.disclaimer },
+      );
       navigate(`/documents/${newDoc.id}/draft`);
     } catch {
       toast.error(
-        'Could not generate in that language. Check your AI provider / quota.',
+        t(
+          'builder.toast.generateFailed',
+          'Could not generate in that language. Check your AI provider / quota.',
+        ),
       );
     } finally {
       setLangBusy(false);
@@ -203,7 +223,9 @@ export function BuilderShell({ documentId }: Props) {
   if (isLoading || !doc) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <p className="text-foreground/60 text-sm">Loading document…</p>
+        <p className="text-foreground/60 text-sm">
+          {t('builder.loading', 'Loading document…')}
+        </p>
       </div>
     );
   }
@@ -221,30 +243,36 @@ export function BuilderShell({ documentId }: Props) {
           {key ? (
             <>
               <p className="text-destructive font-medium">
-                Editor not available for &ldquo;{doc.documentType?.name ?? key}&rdquo;.
+                {t('builder.noSchema.title', 'Editor not available for “{{name}}”.', {
+                  name: doc.documentType?.name ?? key,
+                })}
               </p>
               <p className="text-foreground/70 text-sm mt-2">
-                This document type ({key}) doesn&apos;t have a schema
-                registered in <code>libs/document-schema</code> yet. Pick a
-                different document, or come back once the schema is shipped.
+                {t(
+                  'builder.noSchema.body',
+                  "This document type ({{key}}) doesn't have a schema registered in libs/document-schema yet. Pick a different document, or come back once the schema is shipped.",
+                  { key },
+                )}
               </p>
             </>
           ) : (
             <>
               <p className="text-destructive font-medium">
-                This document is missing its type.
+                {t('builder.noType.title', 'This document is missing its type.')}
               </p>
               <p className="text-foreground/70 text-sm mt-2">
-                The document has no <code>documentType</code> associated with
-                it — likely the type was removed after the document was
-                created. Open the document from your documents list to
-                continue, or delete this draft.
+                {t(
+                  'builder.noType.body',
+                  'The document has no documentType associated with it — likely the type was removed after the document was created. Open the document from your documents list to continue, or delete this draft.',
+                )}
               </p>
             </>
           )}
           <div className="mt-4 flex gap-2">
             <Button asChild variant="outline" size="sm">
-              <a href="/documents">Back to documents</a>
+              <a href="/documents">
+                {t('builder.backToDocuments', 'Back to documents')}
+              </a>
             </Button>
           </div>
         </Card>
@@ -262,7 +290,7 @@ export function BuilderShell({ documentId }: Props) {
       <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 sm:gap-3 sm:px-4">
         <Link
           to="/documents"
-          aria-label="Back to documents"
+          aria-label={t('builder.backToDocuments', 'Back to documents')}
           className="flex size-9 flex-none items-center justify-center rounded-md text-foreground/60 hover:bg-secondary/60 hover:text-foreground"
         >
           <BackIcon />
@@ -271,24 +299,26 @@ export function BuilderShell({ documentId }: Props) {
           value={draftTitle}
           onChange={(e) => setDraftTitle(e.target.value)}
           className="min-w-0 flex-1 rounded px-2 py-1 text-base font-medium bg-transparent border-0 focus:bg-foreground/5 focus:outline-none"
-          placeholder="Untitled document"
+          placeholder={t('builder.untitled', 'Untitled document')}
         />
 
         {/* Mobile pane switcher */}
         <div className="flex items-center rounded-lg border border-border p-0.5 lg:hidden">
-          {(['form', 'preview'] as const).map((t) => (
+          {(['form', 'preview'] as const).map((tab) => (
             <button
-              key={t}
+              key={tab}
               type="button"
-              onClick={() => setMobileTab(t)}
+              onClick={() => setMobileTab(tab)}
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors',
-                mobileTab === t
+                mobileTab === tab
                   ? 'bg-primary/10 text-primary'
                   : 'text-foreground/55 hover:text-foreground',
               )}
             >
-              {t}
+              {tab === 'form'
+                ? t('builder.tab.form', 'Form')
+                : t('builder.tab.preview', 'Preview')}
             </button>
           ))}
         </div>
@@ -304,7 +334,11 @@ export function BuilderShell({ documentId }: Props) {
                   : 'bg-emerald-500',
             )}
           />
-          {patch.isPending ? 'Saving…' : patch.isError ? 'Save failed' : 'Saved'}
+          {patch.isPending
+            ? t('builder.status.saving', 'Saving…')
+            : patch.isError
+              ? t('builder.status.saveFailed', 'Save failed')
+              : t('builder.status.saved', 'Saved')}
         </span>
         <PageSizeSelect
           value={doc.pageSize}
@@ -317,10 +351,12 @@ export function BuilderShell({ documentId }: Props) {
           isLoading={langBusy}
           onClick={() => setLangModalOpen(true)}
           className="hidden flex-none gap-1.5 sm:inline-flex"
-          title="Generate this document in another language"
+          title={t('builder.languageTooltip', 'Generate this document in another language')}
         >
           <GlobeIcon />
-          <span className="hidden md:inline">Language</span>
+          <span className="hidden md:inline">
+            {t('builder.language', 'Language')}
+          </span>
         </Button>
         <Button
           variant="outline"
@@ -328,7 +364,7 @@ export function BuilderShell({ documentId }: Props) {
           onClick={() => setCommentsOpen(true)}
           className="hidden flex-none lg:inline-flex"
         >
-          Comments
+          {t('builder.comments', 'Comments')}
         </Button>
         <Button
           variant="outline"
@@ -336,7 +372,7 @@ export function BuilderShell({ documentId }: Props) {
           onClick={() => setSignaturesOpen(true)}
           className="hidden flex-none lg:inline-flex"
         >
-          Signatures
+          {t('builder.signatures', 'Signatures')}
         </Button>
         <Button
           variant="outline"
@@ -344,7 +380,7 @@ export function BuilderShell({ documentId }: Props) {
           onClick={() => setHistoryOpen(true)}
           className="hidden flex-none lg:inline-flex"
         >
-          History
+          {t('builder.history', 'History')}
         </Button>
         <Button
           variant="outline"
@@ -352,7 +388,7 @@ export function BuilderShell({ documentId }: Props) {
           onClick={() => setShareOpen(true)}
           className="hidden flex-none sm:inline-flex"
         >
-          Share
+          {t('builder.share', 'Share')}
         </Button>
         <Button
           size="sm"
@@ -362,7 +398,9 @@ export function BuilderShell({ documentId }: Props) {
           disabled={exportState.phase === 'queued'}
           className="flex-none"
         >
-          {exportState.phase === 'queued' ? 'Rendering…' : 'Export PDF'}
+          {exportState.phase === 'queued'
+            ? t('builder.rendering', 'Rendering…')
+            : t('builder.exportPdf', 'Export PDF')}
         </Button>
       </header>
 
@@ -454,21 +492,27 @@ export function BuilderShell({ documentId }: Props) {
         documentId={documentId}
         open={signaturesOpen}
         onOpenChange={setSignaturesOpen}
+        docTypeKey={doc.documentType?.key}
       />
 
       {/* Generate-in-language modal */}
       <Dialog open={langModalOpen} onOpenChange={setLangModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Generate in another language</DialogTitle>
+            <DialogTitle>
+              {t('builder.langModal.title', 'Generate in another language')}
+            </DialogTitle>
             <DialogDescription>
-              AI will draft a full, editable copy of this document in the
-              chosen language using your entered details. It opens as a
-              freeform draft you can refine and export.
+              {t(
+                'builder.langModal.description',
+                'AI will draft a full, editable copy of this document in the chosen language using your entered details. It opens as a freeform draft you can refine and export.',
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">
-            <Label htmlFor="builder-lang">Language</Label>
+            <Label htmlFor="builder-lang">
+              {t('builder.language', 'Language')}
+            </Label>
             <LanguageSelect
               id="builder-lang"
               value={targetLang}
@@ -481,10 +525,10 @@ export function BuilderShell({ documentId }: Props) {
               size="sm"
               onClick={() => setLangModalOpen(false)}
             >
-              Cancel
+              {t('builder.cancel', 'Cancel')}
             </Button>
             <Button size="sm" isLoading={langBusy} onClick={generateInLanguage}>
-              Generate
+              {t('builder.langModal.generate', 'Generate')}
             </Button>
           </DialogFooter>
         </DialogContent>

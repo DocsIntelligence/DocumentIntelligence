@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PageSize } from '@prisma/client';
+import { PageSize, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import puppeteer, { type Browser } from 'puppeteer-core';
+import {
+  appendSignaturesToHtml,
+  type SignatureSignerInput,
+} from '@org/legal-reference';
 import { DatabaseService } from '../../database/database.service';
 import { StorageService } from '../../storage/storage.service';
 import { errorMessage, errorDetail } from '../../common/error.util';
@@ -40,12 +44,14 @@ export class PdfRendererService {
       throw new Error('ARTBOARD_URL is not set');
     }
 
-    // Fetch the document data here, then push it inline through the URL.
-    // This avoids a second network call from inside the (Browserless)
-    // browser back to the API — that call would have to resolve a
-    // hostname reachable from inside the container, which is a fragile
-    // setup that's bitten us already. Encoding is URL-encoded JSON,
-    // UTF-8 safe (the legacy base64 atob path mangled non-ASCII text).
+    // Fetch the document data, then push it into the page as an injected
+    // global (NOT the URL). Earlier this rode along the URL query string,
+    // but a large document (long court drafts, embedded images, or a
+    // signature block) blows past the artboard server's request-line /
+    // header size limit and comes back HTTP 431. `evaluateOnNewDocument`
+    // ships the payload over the DevTools protocol instead — no size cap —
+    // and still avoids a second network call back to the API (the fragile
+    // in-container hostname resolution we moved away from).
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
       select: { data: true },
@@ -55,17 +61,20 @@ export class PdfRendererService {
       throw new Error(`Document ${documentId} not found`);
     }
 
+    // Append captured signatures (+ audit page) for freeform/HTML docs, so the
+    // exported PDF matches the render-payload path and the live preview.
+    const renderData = await this.withSignatures(documentId, doc.data);
+
     // When connecting to a remote browser (Browserless in Docker), the
     // browser sees a different "localhost" than the API process does.
     // Rewrite to host.docker.internal so dev "just works" on macOS/Windows.
     // Set ARTBOARD_URL explicitly to override (e.g. on Linux without the
     // host-gateway alias, point at the host's LAN IP).
     const artboardUrl = this.rewriteForRemoteBrowser(rawArtboardUrl);
-    const encodedData = encodeURIComponent(JSON.stringify(doc.data ?? {}));
 
     const url = `${artboardUrl.replace(/\/$/, '')}/render/${encodeURIComponent(
       componentKey,
-    )}?data=${encodedData}&pageSize=${encodeURIComponent(pageSize)}`;
+    )}?pageSize=${encodeURIComponent(pageSize)}`;
 
     let acquired: { browser: Browser; dispose: () => Promise<void> } | null =
       null;
@@ -73,6 +82,14 @@ export class PdfRendererService {
       acquired = await this.acquireBrowser();
       const page = await acquired.browser.newPage();
       await page.setViewport({ width: 1240, height: 1754 });
+
+      // Inject the document data before any page script runs. RenderRoute
+      // reads `window.__ARTBOARD_DATA__` first, falling back to ?data= / the
+      // API for older callers.
+      await page.evaluateOnNewDocument((injected) => {
+        (globalThis as unknown as Record<string, unknown>).__ARTBOARD_DATA__ =
+          injected;
+      }, (renderData ?? {}) as Prisma.JsonValue);
 
       this.logger.debug(`Rendering ${url}`);
       const response = await page.goto(url, {
@@ -134,6 +151,49 @@ export class PdfRendererService {
         }
       }
     }
+  }
+
+  /**
+   * For freeform/HTML documents, append captured signatures (+ an audit page)
+   * to the body so the exported PDF includes them. Mirrors
+   * `DocumentsService.renderPayload` — kept in sync deliberately since the PDF
+   * worker reads `doc.data` directly rather than going through that endpoint.
+   */
+  private async withSignatures(
+    documentId: string,
+    data: Prisma.JsonValue | null,
+  ): Promise<Prisma.JsonValue | null> {
+    const body = data as { html?: unknown } | null;
+    if (!body || typeof body.html !== 'string') return data;
+
+    const signers = await this.db.documentSigner.findMany({
+      where: { documentId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (signers.length === 0) return data;
+
+    const str = (v: unknown) => (typeof v === 'string' ? v : null);
+    const mapped: SignatureSignerInput[] = signers.map((s) => {
+      const ev = (s.evidence ?? {}) as Record<string, unknown>;
+      return {
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        status: s.status,
+        method: s.provider ?? str(ev.method),
+        image: str(ev.image),
+        typedText: str(ev.typedText),
+        font: str(ev.font),
+        signedAt: s.signedAt ? s.signedAt.toISOString() : str(ev.signedAt),
+        ip: str(ev.ip),
+        userAgent: str(ev.userAgent),
+      };
+    });
+
+    return {
+      ...(body as object),
+      html: appendSignaturesToHtml(body.html, mapped),
+    } as Prisma.JsonValue;
   }
 
   /**

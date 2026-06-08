@@ -27,7 +27,10 @@ export function downloadWordDoc(opts: {
   h2 { font-size: 13pt; text-decoration: underline; }
   h3 { font-size: 12pt; }
   p { margin: 0 0 8pt; text-align: justify; }
-  ul, ol { margin: 0 0 8pt 24pt; }
+  ul, ol { margin: 0 0 8pt 24pt; padding: 0; }
+  ul { list-style: disc outside; }
+  ol { list-style: decimal outside; }
+  li { display: list-item; }
 </style>
 </head>
 <body>${body}</body>

@@ -21,6 +21,7 @@ import {
 } from '@org/legal-reference';
 import { useCreateDocument, useDocumentCatalog } from './queries';
 import { useLegalAiService } from './services-context';
+import { warnCitations } from '../editor/DraftEditorPage';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
 
 const PRESET_CATEGORIES: DocumentPresetCategory[] = [
@@ -64,6 +65,7 @@ export function NewDocumentPicker() {
         documentTypeKey: 'freeform',
         presetKey: preset?.key,
       });
+      warnCitations(gen.citationWarnings);
       const doc = await create.mutateAsync({
         title: preset?.name ?? t('newDoc.aiDraftTitle', 'AI draft'),
         documentTypeKey: 'freeform',

@@ -52,9 +52,9 @@ export function Settings() {
         setIdentities(ids);
         setPasskeys(pks);
       })
-      .catch(() => toast.error('Failed to load settings'))
+      .catch(() => toast.error(t('settings.loadError', 'Failed to load settings')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const unlinkProvider = async (id: string) => {
     try {
@@ -67,9 +67,9 @@ export function Settings() {
         throw new Error(data.message);
       }
       setIdentities((prev) => prev.filter((i) => i.id !== id));
-      toast.success('Provider disconnected');
+      toast.success(t('settings.providerDisconnected', 'Provider disconnected'));
     } catch (e: any) {
-      toast.error(e.message ?? 'Failed to unlink');
+      toast.error(e.message ?? t('settings.unlinkError', 'Failed to unlink'));
     }
   };
 
@@ -96,7 +96,9 @@ export function Settings() {
       const credential = await startRegistration({ optionsJSON: options });
 
       // Verify with server
-      const label = prompt('Name this passkey (optional):') ?? undefined;
+      const label =
+        prompt(t('settings.namePasskeyPrompt', 'Name this passkey (optional):')) ??
+        undefined;
       const verifyRes = await fetch(
         `${API_BASE_URL}/auth/passkey/register/verify`,
         {
@@ -108,7 +110,7 @@ export function Settings() {
       );
       if (!verifyRes.ok) throw new Error('Verification failed');
 
-      toast.success('Passkey registered!');
+      toast.success(t('settings.passkeyRegistered', 'Passkey registered!'));
       // Refresh passkeys list
       const pks = await fetch(`${API_BASE_URL}/auth/passkeys`, {
         credentials: 'include',
@@ -116,9 +118,13 @@ export function Settings() {
       setPasskeys(pks);
     } catch (e: any) {
       if (e.name === 'NotAllowedError') {
-        toast.error('Passkey registration cancelled');
+        toast.error(
+          t('settings.passkeyCancelled', 'Passkey registration cancelled'),
+        );
       } else {
-        toast.error(e.message ?? 'Failed to register passkey');
+        toast.error(
+          e.message ?? t('settings.passkeyError', 'Failed to register passkey'),
+        );
       }
     } finally {
       setRegistering(false);
@@ -133,9 +139,11 @@ export function Settings() {
       });
       if (!res.ok) throw new Error('Failed to delete');
       setPasskeys((prev) => prev.filter((p) => p.id !== id));
-      toast.success('Passkey removed');
+      toast.success(t('settings.passkeyRemoved', 'Passkey removed'));
     } catch (e: any) {
-      toast.error(e.message ?? 'Failed to delete passkey');
+      toast.error(
+        e.message ?? t('settings.passkeyDeleteError', 'Failed to delete passkey'),
+      );
     }
   };
 
@@ -143,22 +151,31 @@ export function Settings() {
 
   if (loading) {
     return (
-      <div className="text-sm text-foreground/60">Loading settings...</div>
+      <div className="text-sm text-foreground/60">
+        {t('settings.loading', 'Loading settings...')}
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">Settings</h2>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {t('settings.title', 'Settings')}
+        </h2>
         <p className="text-foreground/60 mt-1">
-          Manage your account, connected providers, and passkeys
+          {t(
+            'settings.subtitle',
+            'Manage your account, connected providers, and passkeys',
+          )}
         </p>
       </div>
 
       {/* Profile */}
       <Card className="rounded-xl p-6">
-        <h3 className="font-medium text-foreground mb-4">Profile</h3>
+        <h3 className="font-medium text-foreground mb-4">
+          {t('settings.profile', 'Profile')}
+        </h3>
         <div className="flex items-center gap-4">
           <UserAvatar name={user?.name} size="lg" />
           <div>
@@ -176,7 +193,9 @@ export function Settings() {
 
       {/* Connected Accounts */}
       <Card className="rounded-xl p-6">
-        <h3 className="font-medium text-foreground mb-4">Connected Accounts</h3>
+        <h3 className="font-medium text-foreground mb-4">
+          {t('settings.connectedAccounts', 'Connected Accounts')}
+        </h3>
         <div className="space-y-3">
           {allProviders.map((provider) => {
             const identity = identities.find((i) => i.provider === provider);
@@ -201,7 +220,7 @@ export function Settings() {
                     size="sm"
                     onClick={() => unlinkProvider(identity.id)}
                   >
-                    Disconnect
+                    {t('settings.disconnect', 'Disconnect')}
                   </Button>
                 ) : (
                   <Button
@@ -209,7 +228,7 @@ export function Settings() {
                     size="sm"
                     onClick={() => linkProvider(provider)}
                   >
-                    Connect
+                    {t('settings.connect', 'Connect')}
                   </Button>
                 )}
               </div>
@@ -222,19 +241,24 @@ export function Settings() {
       <Card className="rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-medium text-foreground">Passkeys</h3>
+            <h3 className="font-medium text-foreground">
+              {t('settings.passkeys', 'Passkeys')}
+            </h3>
             <p className="text-xs text-foreground/60 mt-0.5">
-              Sign in with fingerprint, face, or security key
+              {t(
+                'settings.passkeysHint',
+                'Sign in with fingerprint, face, or security key',
+              )}
             </p>
           </div>
           <Button size="sm" onClick={registerPasskey} isLoading={registering}>
-            Add passkey
+            {t('settings.addPasskey', 'Add passkey')}
           </Button>
         </div>
 
         {passkeys.length === 0 ? (
           <p className="text-sm text-foreground/50">
-            No passkeys registered yet.
+            {t('settings.noPasskeys', 'No passkeys registered yet.')}
           </p>
         ) : (
           <div className="space-y-3">
@@ -245,11 +269,15 @@ export function Settings() {
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {pk.label || 'Unnamed passkey'}
+                    {pk.label || t('settings.unnamedPasskey', 'Unnamed passkey')}
                   </p>
                   <p className="text-xs text-foreground/50">
-                    {pk.deviceType ?? 'Unknown device'} · Added{' '}
-                    {new Date(pk.createdAt).toLocaleDateString()}
+                    {t('settings.passkeyMeta', '{{device}} · Added {{date}}', {
+                      device:
+                        pk.deviceType ??
+                        t('settings.unknownDevice', 'Unknown device'),
+                      date: new Date(pk.createdAt).toLocaleDateString(),
+                    })}
                   </p>
                 </div>
                 <Button
@@ -257,7 +285,7 @@ export function Settings() {
                   size="sm"
                   onClick={() => deletePasskey(pk.id)}
                 >
-                  Remove
+                  {t('settings.remove', 'Remove')}
                 </Button>
               </div>
             ))}

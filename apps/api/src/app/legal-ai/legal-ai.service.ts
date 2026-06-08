@@ -11,7 +11,7 @@ import {
   getBundle,
   type PromptDefinition,
 } from '@org/document-schema';
-import { CRIMINAL_CODE_REFORM_NOTE } from '@org/legal-reference';
+import { CRIMINAL_CODE_REFORM_NOTE, citationWarnings } from '@org/legal-reference';
 import { scaffoldForPreset } from './court-scaffolds';
 import { AiService } from '../ai/ai.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
@@ -103,6 +103,7 @@ export class LegalAiService {
     cached: boolean;
     placeholders: string[];
     disclaimer: string;
+    citationWarnings: string[];
   }> {
     const bundle = dto.documentTypeKey
       ? getBundle(dto.documentTypeKey)
@@ -124,12 +125,19 @@ export class LegalAiService {
       userMessage,
       `gen:${dto.documentTypeKey ?? 'freeform'}`,
     );
+    const warnings = citationWarnings(stripHtml(html));
+    if (warnings.length) {
+      this.logger.warn(
+        `Generated doc cites repealed code(s): ${warnings.join(' | ')}`,
+      );
+    }
     return {
       html,
       model,
       cached,
       placeholders: extractPlaceholders(html),
       disclaimer: DISCLAIMER.trim(),
+      citationWarnings: warnings,
     };
   }
 
@@ -142,6 +150,7 @@ export class LegalAiService {
     model: string;
     cached: boolean;
     placeholders: string[];
+    citationWarnings: string[];
   }> {
     const bundle = dto.documentTypeKey
       ? getBundle(dto.documentTypeKey)
@@ -160,7 +169,13 @@ export class LegalAiService {
       userMessage,
       `rev:${dto.documentTypeKey ?? 'freeform'}`,
     );
-    return { html, model, cached, placeholders: extractPlaceholders(html) };
+    return {
+      html,
+      model,
+      cached,
+      placeholders: extractPlaceholders(html),
+      citationWarnings: citationWarnings(stripHtml(html)),
+    };
   }
 
   /** Shared HTML-generation path: quota → cache → AI → strip fences → meter. */
@@ -287,6 +302,11 @@ function stripCodeFences(s: string): string {
 }
 
 /** Pull every {{key}} from an HTML string. Order preserved, duplicates removed. */
+/** Strip HTML tags to plain text for citation scanning. */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ');
+}
+
 function extractPlaceholders(html: string): string[] {
   const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
   const seen = new Set<string>();

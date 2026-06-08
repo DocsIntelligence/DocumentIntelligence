@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import { Button, Separator, Tooltip, TransliterationToolbar } from '@org/ui';
 import { cn } from '@org/utils';
+import { useTranslation } from 'react-i18next';
 
 export type EditorToolbarProps = {
   editor: Editor;
@@ -13,33 +14,34 @@ export function EditorToolbar({
   onInsertPlaceholder,
   onInsertPageBreak,
 }: EditorToolbarProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-background px-2 py-1.5">
       <Btn
         active={editor.isActive('bold')}
         onClick={() => editor.chain().focus().toggleBold().run()}
-        tooltip="Bold (Ctrl+B)"
+        tooltip={t('editor.format.bold', 'Bold (Ctrl+B)')}
       >
         <BoldIcon />
       </Btn>
       <Btn
         active={editor.isActive('italic')}
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        tooltip="Italic (Ctrl+I)"
+        tooltip={t('editor.format.italic', 'Italic (Ctrl+I)')}
       >
         <ItalicIcon />
       </Btn>
       <Btn
         active={editor.isActive('underline')}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
-        tooltip="Underline (Ctrl+U)"
+        tooltip={t('editor.format.underline', 'Underline (Ctrl+U)')}
       >
         <UnderlineIcon />
       </Btn>
       <Btn
         active={editor.isActive('strike')}
         onClick={() => editor.chain().focus().toggleStrike().run()}
-        tooltip="Strikethrough"
+        tooltip={t('editor.format.strikethrough', 'Strikethrough')}
       >
         <StrikeIcon />
       </Btn>
@@ -51,7 +53,7 @@ export function EditorToolbar({
         onClick={() =>
           editor.chain().focus().toggleHeading({ level: 1 }).run()
         }
-        tooltip="Heading 1"
+        tooltip={t('editor.format.heading1', 'Heading 1')}
       >
         H1
       </Btn>
@@ -60,7 +62,7 @@ export function EditorToolbar({
         onClick={() =>
           editor.chain().focus().toggleHeading({ level: 2 }).run()
         }
-        tooltip="Heading 2"
+        tooltip={t('editor.format.heading2', 'Heading 2')}
       >
         H2
       </Btn>
@@ -69,7 +71,7 @@ export function EditorToolbar({
         onClick={() =>
           editor.chain().focus().toggleHeading({ level: 3 }).run()
         }
-        tooltip="Heading 3"
+        tooltip={t('editor.format.heading3', 'Heading 3')}
       >
         H3
       </Btn>
@@ -79,21 +81,21 @@ export function EditorToolbar({
       <Btn
         active={editor.isActive('bulletList')}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        tooltip="Bullet list"
+        tooltip={t('editor.format.bulletList', 'Bullet list')}
       >
         <ListIcon />
       </Btn>
       <Btn
         active={editor.isActive('orderedList')}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        tooltip="Numbered list"
+        tooltip={t('editor.format.numberedList', 'Numbered list')}
       >
         <OrderedListIcon />
       </Btn>
       <Btn
         active={editor.isActive('blockquote')}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        tooltip="Quote"
+        tooltip={t('editor.format.quote', 'Quote')}
       >
         <QuoteIcon />
       </Btn>
@@ -103,28 +105,28 @@ export function EditorToolbar({
       <Btn
         active={editor.isActive({ textAlign: 'left' })}
         onClick={() => editor.chain().focus().setTextAlign('left').run()}
-        tooltip="Align left"
+        tooltip={t('editor.format.alignLeft', 'Align left')}
       >
         <AlignLeftIcon />
       </Btn>
       <Btn
         active={editor.isActive({ textAlign: 'center' })}
         onClick={() => editor.chain().focus().setTextAlign('center').run()}
-        tooltip="Align center"
+        tooltip={t('editor.format.alignCenter', 'Align center')}
       >
         <AlignCenterIcon />
       </Btn>
       <Btn
         active={editor.isActive({ textAlign: 'right' })}
         onClick={() => editor.chain().focus().setTextAlign('right').run()}
-        tooltip="Align right"
+        tooltip={t('editor.format.alignRight', 'Align right')}
       >
         <AlignRightIcon />
       </Btn>
       <Btn
         active={editor.isActive({ textAlign: 'justify' })}
         onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-        tooltip="Justify"
+        tooltip={t('editor.format.justify', 'Justify')}
       >
         <AlignJustifyIcon />
       </Btn>
@@ -134,7 +136,7 @@ export function EditorToolbar({
       <Btn
         active={editor.isActive('highlight')}
         onClick={() => editor.chain().focus().toggleHighlight().run()}
-        tooltip="Highlight"
+        tooltip={t('editor.format.highlight', 'Highlight')}
       >
         <HighlightIcon />
       </Btn>
@@ -142,7 +144,7 @@ export function EditorToolbar({
       <Separator orientation="vertical" className="mx-1 h-5" />
 
       {onInsertPlaceholder && (
-        <Tooltip content="Insert placeholder token">
+        <Tooltip content={t('editor.format.insertPlaceholder', 'Insert placeholder token')}>
           <Button
             variant="ghost"
             size="sm"
@@ -150,12 +152,12 @@ export function EditorToolbar({
             className="h-7 gap-1 px-1.5 text-[11px] font-medium"
           >
             <span className="font-mono">{'{{'}</span>
-            Field
+            {t('editor.format.field', 'Field')}
           </Button>
         </Tooltip>
       )}
       {onInsertPageBreak && (
-        <Tooltip content="Insert page break (Ctrl+Enter)">
+        <Tooltip content={t('editor.format.insertPageBreak', 'Insert page break (Ctrl+Enter)')}>
           <Button
             variant="ghost"
             size="sm"
@@ -163,7 +165,7 @@ export function EditorToolbar({
             className="h-7 gap-1 px-1.5 text-[11px] font-medium"
           >
             <PageBreakIcon />
-            Page Break
+            {t('editor.format.pageBreak', 'Page Break')}
           </Button>
         </Tooltip>
       )}
@@ -175,14 +177,14 @@ export function EditorToolbar({
       <div className="ml-auto flex items-center gap-1">
         <Btn
           onClick={() => editor.chain().focus().undo().run()}
-          tooltip="Undo"
+          tooltip={t('editor.format.undo', 'Undo')}
           disabled={!editor.can().undo()}
         >
           <UndoIcon />
         </Btn>
         <Btn
           onClick={() => editor.chain().focus().redo().run()}
-          tooltip="Redo"
+          tooltip={t('editor.format.redo', 'Redo')}
           disabled={!editor.can().redo()}
         >
           <RedoIcon />

@@ -1,4 +1,5 @@
 import type { DocumentSigner, SignerRole } from '@org/api-client';
+import { SCHEDULE_1_NOTE, isESignExcluded } from '@org/legal-reference';
 import {
   Badge,
   Button,
@@ -52,12 +53,16 @@ export function SignaturesDialog({
   documentId,
   open,
   onOpenChange,
+  docTypeKey,
 }: {
   documentId: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Doc-type / preset key — used to flag Schedule-1 eSign-excluded types. */
+  docTypeKey?: string;
 }) {
   const { t } = useTranslation();
+  const excluded = isESignExcluded(docTypeKey);
   const signers = useSigners(documentId, open);
   const add = useAddSigner(documentId);
   const remove = useRemoveSigner(documentId);
@@ -94,6 +99,12 @@ export function SignaturesDialog({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {excluded && (
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-xs text-foreground/80">
+            {t('signatures.schedule1', SCHEDULE_1_NOTE)}
+          </div>
+        )}
 
         <div className="max-h-72 space-y-2 overflow-y-auto py-1">
           {signers.isLoading && (

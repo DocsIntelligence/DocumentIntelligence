@@ -8,10 +8,12 @@ import { useParams, useSearchParams } from 'react-router-dom';
  * and waits for `window.__ARTBOARD_READY__ === true` before invoking
  * `page.pdf()`.
  *
- * The artboard fetches the document from the API using an internal
- * service token (not the user's session). For local dev, the route also
- * accepts a base64'd `?data=` query-parameter so you can render without
- * the API loop.
+ * Data is resolved in priority order:
+ *   1. `window.__ARTBOARD_DATA__` — injected by the PDF worker via
+ *      `page.evaluateOnNewDocument` (no URL size limit; avoids HTTP 431).
+ *   2. `?data=` URL-encoded JSON — convenient for local dev / older callers.
+ *   3. `?docId=&token=` — fetch the render-payload from the API with an
+ *      internal service token (not the user's session).
  */
 
 interface RenderState {
@@ -38,6 +40,8 @@ declare global {
   interface Window {
     __ARTBOARD_READY__?: boolean;
     __ARTBOARD_ERROR__?: string;
+    /** Document data injected by the PDF worker (avoids a huge ?data= URL). */
+    __ARTBOARD_DATA__?: unknown;
   }
 }
 
@@ -61,6 +65,14 @@ export function RenderRoute() {
         : 'a4';
 
       try {
+        // Preferred path: the PDF worker injects the data as a global before
+        // any script runs (no URL size limit → no HTTP 431 on big docs).
+        if (window.__ARTBOARD_DATA__ !== undefined) {
+          if (!cancelled)
+            setState({ data: window.__ARTBOARD_DATA__, pageSize });
+          return;
+        }
+
         if (dataParam) {
           // URL-encoded JSON (UTF-8 safe). Legacy callers that base64'd
           // ASCII data still work because `decodeURIComponent` is a no-op

@@ -1,15 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  buildSignatureAuditHtml,
+  buildSignatureBlockHtml,
+  type SignatureSignerInput,
+} from '@org/legal-reference';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageLoader } from '@org/ui';
 import { TemplateEditor, type EditorDraftState } from './TemplateEditor';
-import { useDocument, usePatchDocument } from '../documents/queries';
+import {
+  useDocument,
+  usePatchDocument,
+  useSigners,
+} from '../documents/queries';
 import { useLegalAiService } from '../documents/services-context';
 import { useExportPdf } from '../documents/builder/useExportPdf';
 import { ShareDialog } from '../documents/ShareDialog';
 import { VersionHistoryDialog } from '../documents/VersionHistoryDialog';
 import { CommentsDialog } from '../documents/CommentsDialog';
 import { SignaturesDialog } from '../documents/SignaturesDialog';
+
+/** Surface repealed-code (IPC/CrPC/Evidence) citation warnings from the API. */
+export function warnCitations(warnings?: string[]) {
+  if (warnings && warnings.length) {
+    toast.warning('Check statutory citations', {
+      description: warnings.join('\n'),
+      duration: 10_000,
+    });
+  }
+}
 
 /**
  * `/documents/:id/draft` — the freeform editor bound to a backend Document.
@@ -27,6 +46,32 @@ export function DraftEditorPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [signaturesOpen, setSignaturesOpen] = useState(false);
+
+  // Captured signatures → rendered into the live preview (and the PDF via the
+  // backend render-payload) so they appear on the document.
+  const signers = useSigners(id ?? '', !!id);
+  const signaturesHtml = useMemo(() => {
+    const list = signers.data ?? [];
+    if (!list.length) return undefined;
+    const str = (v: unknown) => (typeof v === 'string' ? v : null);
+    const mapped: SignatureSignerInput[] = list.map((s) => {
+      const ev = (s.evidence ?? {}) as Record<string, unknown>;
+      return {
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        status: s.status,
+        method: s.provider ?? str(ev.method),
+        image: str(ev.image),
+        typedText: str(ev.typedText),
+        font: str(ev.font),
+        signedAt: s.signedAt ?? str(ev.signedAt),
+        ip: str(ev.ip),
+        userAgent: str(ev.userAgent),
+      };
+    });
+    return buildSignatureBlockHtml(mapped) + buildSignatureAuditHtml(mapped);
+  }, [signers.data]);
 
   // Reliable PDF via the backend Puppeteer service — open it when ready.
   useEffect(() => {
@@ -46,6 +91,7 @@ export function DraftEditorPage() {
         language,
         documentTypeKey: docTypeKey,
       });
+      warnCitations(r.citationWarnings);
       return { html: r.html, disclaimer: r.disclaimer };
     },
     [legalAi, docTypeKey],
@@ -58,6 +104,7 @@ export function DraftEditorPage() {
         language,
         documentTypeKey: docTypeKey,
       });
+      warnCitations(r.citationWarnings);
       return { html: r.html };
     },
     [legalAi, docTypeKey],
@@ -121,6 +168,7 @@ export function DraftEditorPage() {
             documentId={id}
             open={signaturesOpen}
             onOpenChange={setSignaturesOpen}
+            docTypeKey={doc?.documentType?.key}
           />
         </>
       )}
@@ -130,6 +178,7 @@ export function DraftEditorPage() {
         onHistory={() => setHistoryOpen(true)}
         onComments={() => setCommentsOpen(true)}
         onSignatures={() => setSignaturesOpen(true)}
+        previewAppendHtml={signaturesHtml}
         persistence={{
         mode: 'bound',
         initial: {

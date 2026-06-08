@@ -23,29 +23,39 @@ risk engine, stamp-paper-aware templates, TipTap editor with transliteration, **
 
 ---
 
+> **Implementation status — audited 2026-06-08 against the codebase.**
+> Legend: `[x]` shipped · `[~]` partial / shipped via a different mechanism than specified · `[ ]` not started.
+> Where the build deviates from the spec, the `_Status_` note says how. Net: **Phase A largely shipped
+> (freeform-HTML flavour, not Zod-structured)**, **Phase C delivered as AI presets (no structured court
+> templates yet)**, **Phase D half-done (share/comments/signatures yes; eSign no)**, **Phases B & E mostly open.**
+
 ## Phase A — AI drafting copilot (the headline upgrade) · ~Weeks 1–4
 
 **Goal:** the user can *generate* and *update* a whole document with AI, not just rewrite one clause.
 
-- [ ] **Add a Claude provider** to `apps/api/src/app/ai/providers/` alongside OpenAI + Gemini
+- [x] **Add a Claude provider** to `apps/api/src/app/ai/providers/` alongside OpenAI + Gemini
       (`claude.provider.ts`, `@anthropic-ai/sdk`, default `claude-opus-4-8`). Wire `ANTHROPIC_API_KEY`
       / `ANTHROPIC_MODEL` into `config/schema.ts`. Make Claude the default provider for drafting.
-- [ ] **Document-level generation endpoint** `POST /legal-ai/generate` — natural-language brief →
+- [~] **Document-level generation endpoint** `POST /legal-ai/generate` — natural-language brief →
       structured data conforming to the doc type's Zod schema (via Claude **structured outputs**),
       validated, returned as `Document.data`. ("Draft a rent agreement: landlord Ramesh, tenant
       Priya, 2BHK in Pune, ₹25,000/mo, 11-month term, ₹50,000 deposit.")
-- [ ] **Document-level update endpoint** `POST /legal-ai/revise` — existing `data` + instruction
+      _Status: partial — endpoint ships, but generates **freeform HTML** (with `{{placeholders}}`), not Zod-schema-structured `data` via structured outputs. Schema-structured generation for the form builder is a follow-up._
+- [~] **Document-level update endpoint** `POST /legal-ai/revise` — existing `data` + instruction
       → patched `data` ("make the deposit 2 months", "add a no-pets clause", "make it
       tenant-friendly"). Returns a diff the user approves before it's applied.
+      _Status: partial — `/legal-ai/revise` ships (HTML revise + translate), but there is **no accept/reject diff** UI yet (it replaces, relying on undo)._
 - [ ] **Conversational intake** (optional, behind a flag): a tool-use loop where Claude asks for
       missing required fields before generating, instead of silently inventing them.
-- [ ] **Builder UI**: "Draft with AI" entry on document creation; inline "Ask AI to revise"
+- [~] **Builder UI**: "Draft with AI" entry on document creation; inline "Ask AI to revise"
       on each section; show AI changes as an accept/reject diff. Reuse existing
       `PlaceholderHighlightExtension` to surface still-empty `{{fields}}`.
-- [ ] **Guardrails carried over + extended**: disclaimer on every output; PII stripped from logs;
+      _Status: partial — "Draft with AI" entry + inline Revise shipped; placeholder highlighting in use; **accept/reject diff not built**._
+- [~] **Guardrails carried over + extended**: disclaimer on every output; PII stripped from logs;
       refuse to impersonate judicial authority; **every statutory citation validated against the
       curated citation library, not trusted from the model** (see new-criminal-codes risk).
-- [ ] **Metering**: generation/revision decrement `Feature.ai_attempts` / `ai_tokens` via existing
+      _Status: partial — disclaimer, no-judicial-impersonation, `{{applicable_law}}` placeholder, and the criminal-code-reform guardrail (`@org/legal-reference`) are wired into the prompts. **Programmatic citation validation + PII log-stripping not yet implemented** (AI is instructed not to emit citations rather than validated against the library)._
+- [x] **Metering**: generation/revision decrement `Feature.ai_attempts` / `ai_tokens` via existing
       `wallet-usage.service.ts`. Cache identical (type, input) for 24h.
 
 **Done when:** a user types one sentence, gets a schema-valid draft rendered in the live preview,
@@ -56,8 +66,9 @@ and can say "change X" and watch it update — within free-tier quota.
 **Goal:** advocates can get an **editable DOCX**, not just a locked PDF. This is a hard requirement
 for the B2B court-document market.
 
-- [ ] **DOCX export** in the exports pipeline (`docx` npm lib or a headless LibreOffice worker).
+- [~] **DOCX export** in the exports pipeline (`docx` npm lib or a headless LibreOffice worker).
       Wire `DocumentExport.format = 'docx'` through `ExportsService` + a BullMQ processor.
+      _Status: partial — editable Word export ships, but as a **client-side `.doc`** (Word-openable HTML, `export-word.ts`), **not** true OOXML through the exports pipeline. The backend DOCX worker was intentionally removed. Good enough to open/edit in Word; not spec-faithful OOXML._
 - [ ] **PNG/preview-image export** for thumbnails and share cards (already enum-supported).
 - [ ] **Calibration ruler PDF** for stamp-paper printer alignment (trust-builder for agencies).
 - [ ] **Branded output** for verified advocates/agencies: `BrandingProfile` (logo, footer, Bar
@@ -73,17 +84,26 @@ Word, optionally on their letterhead.
 then add types cheaply.
 
 Rollout order (each is one `DocumentTypeBundle` + template):
-- [ ] **Legal notice** family first (bridge between consumer and court): consumer, employment,
+
+> _Status: the whole court-doc family ships as **AI presets** (`DOCUMENT_PRESETS` in `@org/legal-reference`) → New-document picker "Court & legal" section → AI draft with a per-preset structural scaffold (`apps/api/.../legal-ai/court-scaffolds.ts`) + the criminal-code guardrail → freeform editor. **No structured `DocumentTypeBundle` + React template** exists for any of them yet — that's the deliberate trade-off (court docs are prose-heavy). Hence every item below is `[~]`._
+
+- [~] **Legal notice** family first (bridge between consumer and court): consumer, employment,
       civil, **cheque-bounce u/s 138 NI Act**. High willingness-to-pay, high AI value.
-- [ ] **Consumer complaint** under Consumer Protection Act 2019 (District/State/National
+      _Status: partial — AI presets `notice-138` + general notice; no dedicated structured templates._
+- [~] **Consumer complaint** under Consumer Protection Act 2019 (District/State/National
       Commission formats).
-- [ ] **Affidavits**: name-change, address-proof, lost-document, general (A4, no stamp paper).
-- [ ] **Bail application** (regular + anticipatory) — **must cite BNSS, not CrPC**.
-- [ ] **Plaint / Written Statement** (civil suit) + **Vakalatnama** + **Memo of Parties**.
+      _Status: partial — AI preset `consumer-complaint` (CPA 2019); commission-format variants via the brief._
+- [~] **Affidavits**: name-change, address-proof, lost-document, general (A4, no stamp paper).
+      _Status: partial — AI preset `affidavit-general`; specific variants via the brief._
+- [~] **Bail application** (regular + anticipatory) — **must cite BNSS, not CrPC**.
+      _Status: partial — AI presets `bail-regular` + `bail-anticipatory`, steered to **BNSS** by the scaffold + guardrail._
+- [~] **Plaint / Written Statement** (civil suit) + **Vakalatnama** + **Memo of Parties**.
+      _Status: partial — AI presets `plaint`, `written-statement`, `vakalatnama`._
 - [ ] **Writ petition** scaffold (Art. 226/32) — advanced; gate behind advocate accounts.
-- [ ] **Curated citation library** (`libs/document-schema/.../citations.ts`) with **effective dates**
+- [~] **Curated citation library** (`libs/document-schema/.../citations.ts`) with **effective dates**
       mapping old→new codes (IPC→BNS, CrPC→BNSS, Evidence Act→BSA). The AI must look up citations
       here, never emit them freely.
+      _Status: partial — built at `libs/shared/legal-reference/.../citations.ts` (not `document-schema`): `CRIMINAL_CODE_REFORMS` act-level mapping is authoritative + dated (eff. 2024-07-01); section-level maps are confidence-flagged + "verify against bare act". Wired as a **prompt guardrail**, but there is **no server-side citation-fill/validation step** yet (AI is told to use `{{applicable_law}}`, not to look up + insert)._
 
 **Done when:** an advocate drafts a §138 cheque-bounce notice and a regular bail application with
 correct BNSS sections, on their letterhead, exported to editable DOCX.
@@ -94,22 +114,29 @@ correct BNSS sections, on their letterhead, exported to editable DOCX.
 
 ## Phase D — Sharing, signing, collaboration · ~Weeks 8–14 (parallelizable)
 
-- [ ] Share links (`DocumentShare`, view/comment/edit modes) rendered on `apps/web` (Next.js).
-- [ ] Section-anchored comments (`DocumentComment`) over REST + SSE.
-- [ ] Multi-signer flow (`DocumentSigner`): drawn/typed signatures first (visual only).
+- [x] Share links (`DocumentShare`, view/comment/edit modes) rendered on `apps/web` (Next.js).
+      _Status: done — `shares` module + api-client + `ShareDialog` (mode/password/expiry) + public `/s/:token` `SharedDocumentView`. **Public view lives in `apps/app`, not `apps/web`.**_
+- [~] Section-anchored comments (`DocumentComment`) over REST + SSE.
+      _Status: partial — REST done (`comments` module, `CommentsDialog` in both builders, guest comments via share token). **SSE live-refresh not done** (react-query refetch); `anchor` is stored but UI is document-level._
+- [x] Multi-signer flow (`DocumentSigner`): drawn/typed signatures first (visual only).
+      _Status: done — `signers` module + `SignaturesDialog` with **draw / image-upload / typed** capture, status tracking, auto-marks doc `signed` when all sign. (Rendering the signature onto the exported PDF + reorder UI are follow-ups.)_
 - [ ] **One eSign provider** (Digio recommended): invite → provider OTP → webhook → signed PDF in
       S3 → `SignerStatus.signed`. **Hard-gate eSign off for Schedule-1-excluded doc types** (wills,
       PoA, trusts, immovable-property conveyance) per [`01-market-analysis-india.md`](01-market-analysis-india.md) §4.1.
+      _Status: not started — deferred (Digio is paid in prod). The Schedule-1 hard-gate is still open (free, provider-independent)._
 - [ ] Audit-trail page appended to signed PDF (who/when/IP/OTP txn id).
 
 ## Phase E — Multi-persona, marketplace, long tail · ~Weeks 14+
 
 - [ ] Organisation/agency multi-tenancy (`Organisation`/`OrgMember`/`OrgRole` already modelled).
+      _Status: not started — models + access checks exist (comments/signers honour `ownerOrgId`), but no org UI/flows._
 - [ ] Advocate verification (manual BCI number review → `BrandingProfile.barCouncilNumber`).
 - [ ] Template marketplace (advocate publishes a template, platform takes 20–30%; `DocumentTemplate.ownerType` already supports this).
 - [ ] White-label share subdomains (Next.js middleware + DNS wildcard).
-- [ ] Long-tail consumer docs: NDA, MoU, partnership deed, will, gift deed, GPA, sale agreement, RTI.
-- [ ] Hindi UI on `apps/app` (i18next plumbing exists — content + QA work).
+- [~] Long-tail consumer docs: NDA, MoU, partnership deed, will, gift deed, GPA, sale agreement, RTI.
+      _Status: partial — available as **AI presets** in `DOCUMENT_PRESETS` (NDA, MoU, partnership deed, will, gift deed, GPA, RTI). No structured templates._
+- [~] Hindi UI on `apps/app` (i18next plumbing exists — content + QA work).
+      _Status: partial — shell, dashboard, documents list, new-document picker, and the document dialogs (share/comments/signatures/version) translated with real Hindi. **Remaining:** auth pages, editors + sub-components, SharedDocumentView, finish Settings; + native-speaker QA._
 - [ ] eStamp aggregator integration; PWA + offline drafting (redux-persist already wires storage).
 
 ---

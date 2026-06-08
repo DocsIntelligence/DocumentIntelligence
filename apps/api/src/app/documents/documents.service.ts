@@ -6,6 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Document, Feature, PageSize, Prisma } from '@prisma/client';
+import {
+  appendSignaturesToHtml,
+  type SignatureSignerInput,
+} from '@org/legal-reference';
 import { DatabaseService } from '../database/database.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import {
@@ -320,9 +324,44 @@ export class DocumentsService {
       include: { template: true },
     });
     if (!doc) throw new NotFoundException('Document not found');
+
+    // For freeform/HTML documents, render captured signatures (+ audit page)
+    // into the body so the exported PDF includes them.
+    let data = doc.data;
+    const body = data as { html?: unknown } | null;
+    if (body && typeof body.html === 'string') {
+      const signers = await this.db.documentSigner.findMany({
+        where: { documentId: id },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      });
+      if (signers.length > 0) {
+        const mapped: SignatureSignerInput[] = signers.map((s) => {
+          const ev = (s.evidence ?? {}) as Record<string, unknown>;
+          const str = (v: unknown) => (typeof v === 'string' ? v : null);
+          return {
+            name: s.name,
+            email: s.email,
+            role: s.role,
+            status: s.status,
+            method: s.provider ?? str(ev.method),
+            image: str(ev.image),
+            typedText: str(ev.typedText),
+            font: str(ev.font),
+            signedAt: s.signedAt ? s.signedAt.toISOString() : str(ev.signedAt),
+            ip: str(ev.ip),
+            userAgent: str(ev.userAgent),
+          };
+        });
+        data = {
+          ...(body as object),
+          html: appendSignaturesToHtml(body.html, mapped),
+        } as Prisma.JsonValue;
+      }
+    }
+
     return {
       componentKey: doc.template.componentKey,
-      data: doc.data,
+      data,
       pageSize: doc.pageSize,
       language: doc.language,
       jurisdiction: doc.jurisdiction,

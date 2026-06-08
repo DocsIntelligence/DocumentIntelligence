@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@org/ui';
 import { cn } from '@org/utils';
 
@@ -21,13 +22,16 @@ export function PageNavigator({
   onRemovePage,
   activePage,
 }: PageNavigatorProps) {
+  const { t } = useTranslation();
   const pages = useMemo(() => extractPagePreviews(html), [html]);
 
   return (
     <div className="flex flex-col gap-2 px-4 py-4">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-          Pages ({pages.length})
+          {t('editor.pages.heading', 'Pages ({{count}})', {
+            count: pages.length,
+          })}
         </span>
         <Button
           size="sm"
@@ -35,7 +39,8 @@ export function PageNavigator({
           className="h-6 gap-1 px-2 text-[11px]"
           onClick={onAddPage}
         >
-          <span className="text-sm leading-none">+</span> Add Page
+          <span className="text-sm leading-none">+</span>{' '}
+          {t('editor.pages.add', 'Add Page')}
         </Button>
       </div>
 
@@ -58,10 +63,11 @@ export function PageNavigator({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-medium">
-                  {preview.title || `Page ${i + 1}`}
+                  {preview.title ||
+                    t('editor.pages.pageN', 'Page {{n}}', { n: i + 1 })}
                 </div>
                 <div className="mt-0.5 line-clamp-2 text-[10px] text-foreground/55">
-                  {preview.snippet || '(empty)'}
+                  {preview.snippet || t('editor.pages.empty', '(empty)')}
                 </div>
               </div>
             </button>
@@ -70,8 +76,10 @@ export function PageNavigator({
                 type="button"
                 onClick={() => onRemovePage(i)}
                 className="flex w-7 flex-none items-center justify-center text-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                title="Remove page"
-                aria-label={`Remove page ${i + 1}`}
+                title={t('editor.pages.remove', 'Remove page')}
+                aria-label={t('editor.pages.removeN', 'Remove page {{n}}', {
+                  n: i + 1,
+                })}
               >
                 <svg
                   className="size-3.5"
@@ -91,9 +99,13 @@ export function PageNavigator({
       </div>
 
       <p className="mt-1 text-[10px] leading-relaxed text-foreground/45">
-        Tip: press <kbd className="rounded bg-secondary/40 px-1">Ctrl</kbd>+
-        <kbd className="rounded bg-secondary/40 px-1">Enter</kbd> in the editor
-        to insert a page break at the cursor.
+        {t('editor.pages.tipPrefix', 'Tip: press')}{' '}
+        <kbd className="rounded bg-secondary/40 px-1">Ctrl</kbd>+
+        <kbd className="rounded bg-secondary/40 px-1">Enter</kbd>{' '}
+        {t(
+          'editor.pages.tipSuffix',
+          'in the editor to insert a page break at the cursor.',
+        )}
       </p>
     </div>
   );

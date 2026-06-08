@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Input,
   Label,
@@ -30,6 +31,7 @@ export const PlaceholderForm = forwardRef<
   PlaceholderFormHandle,
   PlaceholderFormProps
 >(({ fields, values, onChange, unknownKeys = [], className }, ref) => {
+  const { t } = useTranslation();
   const refs = useRef<Record<string, HTMLElement | null>>({});
 
   useImperativeHandle(
@@ -59,11 +61,15 @@ export const PlaceholderForm = forwardRef<
       >
         <div className="mb-3 text-3xl opacity-40">📝</div>
         <p className="text-sm font-medium text-foreground/70">
-          No placeholders in this document
+          {t('editor.fields.empty', 'No placeholders in this document')}
         </p>
         <p className="mt-1 text-xs text-foreground/50">
-          Add <code className="rounded bg-secondary/40 px-1 py-0.5">{'{{name}}'}</code>{' '}
-          tokens in the editor and they will appear here automatically.
+          {t('editor.fields.emptyHintPrefix', 'Add')}{' '}
+          <code className="rounded bg-secondary/40 px-1 py-0.5">{'{{name}}'}</code>{' '}
+          {t(
+            'editor.fields.emptyHintSuffix',
+            'tokens in the editor and they will appear here automatically.',
+          )}
         </p>
       </div>
     );
@@ -89,7 +95,7 @@ export const PlaceholderForm = forwardRef<
       {extra.length > 0 && (
         <>
           <div className="mt-2 border-t border-border pt-3 text-[11px] font-semibold uppercase tracking-wide text-foreground/50">
-            Custom Fields
+            {t('editor.fields.custom', 'Custom Fields')}
           </div>
           {extra.map((key) => (
             <Field
@@ -118,6 +124,7 @@ type FieldProps = {
 };
 
 function Field({ field, value, onChange, inputRef }: FieldProps) {
+  const { t } = useTranslation();
   const id = `pl-${field.key}`;
   const filled = !!value.trim();
 
@@ -132,7 +139,11 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
             'inline-block size-1.5 rounded-full transition-colors',
             filled ? 'bg-emerald-500' : 'bg-amber-400',
           )}
-          aria-label={filled ? 'filled' : 'empty'}
+          aria-label={
+            filled
+              ? t('editor.fields.filled', 'filled')
+              : t('editor.fields.emptyState', 'empty')
+          }
         />
       </div>
 
@@ -142,7 +153,12 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
           ref={inputRef as React.Ref<HTMLTextAreaElement>}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder ?? `Enter ${field.label.toLowerCase()}`}
+          placeholder={
+            field.placeholder ??
+            t('editor.fields.enterPlaceholder', 'Enter {{label}}', {
+              label: field.label.toLowerCase(),
+            })
+          }
           rows={3}
           className="resize-y text-sm"
         />
@@ -153,7 +169,11 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
             ref={inputRef as React.Ref<HTMLButtonElement>}
             className="text-sm"
           >
-            <SelectValue placeholder={`Choose ${field.label.toLowerCase()}`} />
+            <SelectValue
+              placeholder={t('editor.fields.choosePlaceholder', 'Choose {{label}}', {
+                label: field.label.toLowerCase(),
+              })}
+            />
           </SelectTrigger>
           <SelectContent>
             {field.options.map((opt) => (
@@ -178,7 +198,12 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
           }
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder ?? `Enter ${field.label.toLowerCase()}`}
+          placeholder={
+            field.placeholder ??
+            t('editor.fields.enterPlaceholder', 'Enter {{label}}', {
+              label: field.label.toLowerCase(),
+            })
+          }
         />
       )}
 

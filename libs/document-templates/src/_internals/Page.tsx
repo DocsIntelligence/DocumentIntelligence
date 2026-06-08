@@ -29,14 +29,18 @@ export function Page({
 
   const style: CSSProperties = {
     width: `${p.widthMm}mm`,
-    height: `${p.heightMm}mm`,
+    // min-height (not fixed height) + visible overflow: a logical page that's
+    // longer than one physical sheet flows onto the next sheet in the paged
+    // renderer instead of being clipped. `break-after: page` still starts each
+    // logical page on a fresh sheet.
+    minHeight: `${p.heightMm}mm`,
     boxSizing: 'border-box',
     paddingTop: `${reservedTop + p.marginTopMm}mm`,
     paddingRight: `${p.marginRightMm}mm`,
     paddingBottom: `${p.marginBottomMm}mm`,
     paddingLeft: `${p.marginLeftMm}mm`,
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
     background: '#ffffff',
     color: '#111',
     pageBreakAfter: 'always',
@@ -83,8 +87,18 @@ export function PagePrintStyles({ pageSize }: { pageSize: PageSizeKey }) {
     .doc-page p { margin: 0 0 6pt; text-align: justify; font-size: 11pt; }
     .doc-page h1 { font-size: 16pt; text-align: center; margin: 0 0 12pt; letter-spacing: 0.03em; text-transform: uppercase; }
     .doc-page h2 { font-size: 12pt; margin: 12pt 0 4pt; text-decoration: underline; }
+    /* Lists: re-assert markers (resets elsewhere strip list-style) and keep them inside the printable column. */
+    .doc-page ul, .doc-page ol { margin: 0 0 6pt; padding-left: 22pt; }
+    .doc-page ul { list-style: disc outside; }
+    .doc-page ol { list-style: decimal outside; }
+    .doc-page ul ul { list-style: circle outside; }
+    .doc-page ol ol { list-style: lower-alpha outside; }
+    .doc-page li { display: list-item; margin: 0 0 2pt; font-size: 11pt; }
     .doc-page table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
     .doc-page td, .doc-page th { padding: 3pt 4pt; vertical-align: top; }
+    /* Avoid splitting these awkwardly across a physical page break. */
+    .doc-page h1, .doc-page h2, .doc-page h3 { break-after: avoid; }
+    .doc-page li, .doc-page tr, .doc-page img { break-inside: avoid; }
   `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }

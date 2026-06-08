@@ -3,10 +3,12 @@ import { forgotPasswordSchema, type ForgotPasswordDto } from '@org/dto';
 import { forgotPasswordThunk, useAppDispatch } from '@org/store';
 import { Button, FormField, Input } from '@org/ui';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export function ForgotPassword() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
 
   const {
@@ -20,23 +22,30 @@ export function ForgotPassword() {
   const onSubmit = handleSubmit(async (values) => {
     const result = await dispatch(forgotPasswordThunk(values));
     if (forgotPasswordThunk.fulfilled.match(result)) {
-      toast.success('If an account exists, we sent a reset link.');
+      toast.success(
+        t('auth.forgot.sent', 'If an account exists, we sent a reset link.'),
+      );
     } else {
-      toast.error('Could not start reset flow.');
+      toast.error(t('auth.forgot.error', 'Could not start reset flow.'));
     }
   });
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Forgot password</h2>
+        <h2 className="text-xl font-semibold text-gray-900">
+          {t('auth.forgot.title', 'Forgot password')}
+        </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Enter your email and we'll send you a reset link
+          {t('auth.forgot.subtitle', "Enter your email and we'll send you a reset link")}
         </p>
       </div>
 
       <div className="space-y-4">
-        <FormField label="Email" error={errors.email?.message}>
+        <FormField
+          label={t('auth.common.email', 'Email')}
+          error={errors.email?.message}
+        >
           <Input
             type="email"
             placeholder="you@example.com"
@@ -47,12 +56,12 @@ export function ForgotPassword() {
       </div>
 
       <Button type="submit" isLoading={isSubmitting} className="w-full">
-        Send reset link
+        {t('auth.forgot.submit', 'Send reset link')}
       </Button>
 
       <div className="text-sm pt-2">
         <Link to="/login" className="text-blue-600 hover:underline">
-          ← Back to sign in
+          {t('auth.common.backToSignIn', '← Back to sign in')}
         </Link>
       </div>
     </form>

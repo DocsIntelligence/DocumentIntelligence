@@ -6,6 +6,7 @@ import {
   type SharedDocument,
 } from '@org/api-client';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PaginatedPreview } from '../editor/components/PaginatedPreview';
@@ -17,6 +18,7 @@ import { useSharesService } from './services-context';
  * ProtectedRoute in app.tsx.
  */
 export function SharedDocumentView() {
+  const { t } = useTranslation();
   const { token = '' } = useParams<{ token: string }>();
   const shares = useSharesService();
 
@@ -47,13 +49,15 @@ export function SharedDocumentView() {
         }
       } catch (e) {
         setError(
-          e instanceof Error ? e.message : 'This link is invalid or expired.',
+          e instanceof Error
+            ? e.message
+            : t('shared.linkInvalid', 'This link is invalid or expired.'),
         );
       } finally {
         setLoading(false);
       }
     },
-    [shares, token],
+    [shares, token, t],
   );
 
   useEffect(() => {
@@ -71,9 +75,9 @@ export function SharedDocumentView() {
       });
       setComments((prev) => [...prev, c]);
       setCommentBody('');
-      toast.success('Comment added');
+      toast.success(t('shared.commentAdded', 'Comment added'));
     } catch {
-      toast.error('Could not post comment');
+      toast.error(t('shared.commentError', 'Could not post comment'));
     } finally {
       setPosting(false);
     }
@@ -91,7 +95,9 @@ export function SharedDocumentView() {
     return (
       <Centered>
         <Card className="rounded-xl p-6 text-center">
-          <p className="font-medium text-foreground">Link unavailable</p>
+          <p className="font-medium text-foreground">
+            {t('shared.linkUnavailable', 'Link unavailable')}
+          </p>
           <p className="mt-1 text-sm text-foreground/60">{error}</p>
         </Card>
       </Centered>
@@ -102,9 +108,11 @@ export function SharedDocumentView() {
     return (
       <Centered>
         <Card className="w-full max-w-sm rounded-xl p-6">
-          <p className="font-medium text-foreground">Password required</p>
+          <p className="font-medium text-foreground">
+            {t('shared.passwordRequired', 'Password required')}
+          </p>
           <p className="mt-1 text-sm text-foreground/60">
-            This shared document is password-protected.
+            {t('shared.passwordHint', 'This shared document is password-protected.')}
           </p>
           <form
             className="mt-4 space-y-3"
@@ -114,7 +122,9 @@ export function SharedDocumentView() {
             }}
           >
             <div className="grid gap-1.5">
-              <Label htmlFor="share-pw">Password</Label>
+              <Label htmlFor="share-pw">
+                {t('shared.password', 'Password')}
+              </Label>
               <Input
                 id="share-pw"
                 type="password"
@@ -124,7 +134,7 @@ export function SharedDocumentView() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={!password}>
-              Unlock
+              {t('shared.unlock', 'Unlock')}
             </Button>
           </form>
         </Card>
@@ -148,11 +158,17 @@ export function SharedDocumentView() {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{doc.title}</div>
           <div className="truncate text-[11px] text-foreground/55">
-            {doc.documentType.name} · shared ({shared.mode}) · read-only
+            {t('shared.metaLine', '{{type}} · shared ({{mode}}) · read-only', {
+              type: doc.documentType.name,
+              mode: shared.mode,
+            })}
           </div>
         </div>
         <span className="hidden flex-none text-[11px] text-foreground/45 sm:inline">
-          AI-assisted draft — verify with a qualified advocate
+          {t(
+            'shared.aiDisclaimer',
+            'AI-assisted draft — verify with a qualified advocate',
+          )}
         </span>
       </header>
 
@@ -168,10 +184,14 @@ export function SharedDocumentView() {
             <Centered>
               <Card className="rounded-xl p-6 text-center">
                 <p className="font-medium text-foreground">
-                  Preview not available here
+                  {t('shared.previewUnavailable', 'Preview not available here')}
                 </p>
                 <p className="mt-1 text-sm text-foreground/60">
-                  “{doc.documentType.name}” documents open in the app.
+                  {t(
+                    'shared.previewUnavailableHint',
+                    '“{{type}}” documents open in the app.',
+                    { type: doc.documentType.name },
+                  )}
                 </p>
               </Card>
             </Centered>
@@ -181,12 +201,12 @@ export function SharedDocumentView() {
         {canComment && (
           <aside className="flex w-80 flex-none flex-col border-l border-border bg-background">
             <div className="border-b border-border px-4 py-2.5 text-sm font-semibold">
-              Comments
+              {t('shared.comments', 'Comments')}
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
               {comments.length === 0 && (
                 <p className="py-6 text-center text-sm text-foreground/55">
-                  No comments yet. Be the first.
+                  {t('shared.noComments', 'No comments yet. Be the first.')}
                 </p>
               )}
               {comments.map((c) => (
@@ -207,12 +227,12 @@ export function SharedDocumentView() {
             </div>
             <div className="space-y-2 border-t border-border p-3">
               <Input
-                placeholder="Your name"
+                placeholder={t('shared.yourName', 'Your name')}
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
               />
               <Textarea
-                placeholder="Add a comment…"
+                placeholder={t('shared.addComment', 'Add a comment…')}
                 rows={3}
                 value={commentBody}
                 onChange={(e) => setCommentBody(e.target.value)}
@@ -224,7 +244,7 @@ export function SharedDocumentView() {
                 disabled={!guestName.trim() || !commentBody.trim()}
                 onClick={postComment}
               >
-                Comment
+                {t('shared.commentButton', 'Comment')}
               </Button>
             </div>
           </aside>

@@ -38,6 +38,8 @@ export interface GenerateDocumentResponse {
   cached: boolean;
   placeholders: string[];
   disclaimer: string;
+  /** Repealed-code (IPC/CrPC/Evidence) references detected in the output. */
+  citationWarnings: string[];
 }
 
 export interface ReviseDocumentPayload {
@@ -53,6 +55,8 @@ export interface ReviseDocumentResponse {
   model: string;
   cached: boolean;
   placeholders: string[];
+  /** Repealed-code (IPC/CrPC/Evidence) references detected in the output. */
+  citationWarnings: string[];
 }
 
 export const createLegalAiService = (http: HttpClient) => ({
