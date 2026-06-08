@@ -115,7 +115,12 @@ export function DraftEditorPage() {
       patch.mutate(
         {
           title: s.title,
-          data: { html: s.html, values: s.values, templateId: s.templateId },
+          data: {
+            html: s.html,
+            values: s.values,
+            templateId: s.templateId,
+            fontFamily: s.fontFamily,
+          },
         },
         { onSuccess: () => setSavedAt(Date.now()) },
       );
@@ -143,6 +148,7 @@ export function DraftEditorPage() {
     html?: string;
     values?: Record<string, string>;
     templateId?: string;
+    fontFamily?: string;
   };
 
   return (
@@ -187,6 +193,7 @@ export function DraftEditorPage() {
           html: data.html ?? '<p></p>',
           values: data.values ?? {},
           pageSize: doc.pageSize,
+          fontFamily: data.fontFamily,
         },
         onSave: handleSave,
         onPageSizeChange: (size) => patch.mutate({ pageSize: size }),

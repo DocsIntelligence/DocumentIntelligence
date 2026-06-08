@@ -19,7 +19,8 @@
       "@org/api-client": ["libs/shared/api-client/src/index.ts"],
       "@org/ui": ["libs/shared/ui/src/index.ts"],
       "@org/hooks": ["libs/shared/hooks/src/index.ts"],
-      "@org/store": ["libs/shared/store/src/index.ts"]
+      "@org/store": ["libs/shared/store/src/index.ts"],
+      "@org/transliteration": ["libs/shared/transliteration/src/index.ts"]
     },
     "types": ["node"]
   },

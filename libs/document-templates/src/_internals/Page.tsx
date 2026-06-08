@@ -83,10 +83,32 @@ export function PagePrintStyles({ pageSize }: { pageSize: PageSizeKey }) {
       html, body { background: #fff; }
       .doc-page { box-shadow: none; margin: 0; }
     }
-    .doc-page * { line-height: 1.5; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+    /* Content must never spill outside the page column — wrap long tokens,
+       cap media width. (Keep in sync with .document-preview-page.) */
+    /* Root font-size/color MUST match .document-preview-page's root, or content
+       not pinned by the p/li/h rules below (wrapper divs, bare text) renders at
+       the UA default (~16px) here vs 11pt in the preview — making the PDF
+       measure taller, break pages early, and leave blank space at the foot. */
+    .doc-page { overflow-wrap: anywhere; word-break: break-word; font-size: 11pt; color: #111; }
+    .doc-page img { max-width: 100%; height: auto; }
+    .doc-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .doc-page td, .doc-page th { overflow-wrap: anywhere; }
+    /* Font stack MUST match .document-preview-page (editor.css) exactly — or the
+       PDF measures/paints at different metrics than the live preview and pages
+       break at different places. --doc-font is the per-document chosen font
+       (any Google family, set on the page root); it falls back to bundled Inter,
+       and "Noto Sans Devanagari" always trails it to cover Hindi glyphs the
+       chosen font may lack. Inter + Noto are bundled via @fontsource. */
+    .doc-page * { line-height: 1.5; font-family: var(--doc-font, "Inter"), "Noto Sans Devanagari", "Segoe UI", system-ui, sans-serif; }
     .doc-page p { margin: 0 0 6pt; text-align: justify; font-size: 11pt; }
     .doc-page h1 { font-size: 16pt; text-align: center; margin: 0 0 12pt; letter-spacing: 0.03em; text-transform: uppercase; }
     .doc-page h2 { font-size: 12pt; margin: 12pt 0 4pt; text-decoration: underline; }
+    /* h3–h6 MUST be pinned: the app preview gets a heading reset from Tailwind's
+       preflight (margin:0, font-size:inherit) but this artboard has no preflight,
+       so without these the UA defaults (1.17em + 1em margins) make every h3 ~38px
+       taller in the PDF than the preview → an extra page. Keep identical to
+       .document-preview-page (editor.css). */
+    .doc-page h3, .doc-page h4, .doc-page h5, .doc-page h6 { font-size: 11pt; font-weight: 600; margin: 0; }
     /* Lists: re-assert markers (resets elsewhere strip list-style) and keep them inside the printable column. */
     .doc-page ul, .doc-page ol { margin: 0 0 6pt; padding-left: 22pt; }
     .doc-page ul { list-style: disc outside; }

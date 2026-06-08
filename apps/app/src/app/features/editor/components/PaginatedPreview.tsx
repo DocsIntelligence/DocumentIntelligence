@@ -4,11 +4,22 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { cn } from '@org/utils';
 import { renderTemplateHtml } from '@org/ui';
-import { pageProfiles, type PageSizeKey } from '@org/document-templates';
+import {
+  pageProfiles,
+  paginateChunks,
+  splitHtmlOnPageBreaks,
+  useFontsReady,
+  useGoogleFont,
+  debugMeasure,
+  formatPaginationDebug,
+  isPaginationDebug,
+  type PageSizeKey,
+} from '@org/document-templates';
 
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3;
@@ -21,6 +32,13 @@ export type PaginatedPreviewProps = {
   pageSize?: PageSizeKey;
   /** Extra already-rendered HTML appended after the body (e.g. signatures + audit). */
   appendHtml?: string;
+  /** Document-level font (any Google Fonts family). Loaded on demand; applied
+   *  via the `--doc-font` CSS var. Must match what the exported PDF uses. */
+  fontFamily?: string;
+  /** Currently-selected page (0-based) — highlighted and scrolled into view. */
+  activePage?: number;
+  /** Called when the user clicks a page, so selection stays in sync elsewhere. */
+  onSelectPage?: (index: number) => void;
   className?: string;
 };
 
@@ -39,77 +57,67 @@ export function PaginatedPreview({
   values,
   pageSize = 'a4',
   appendHtml,
+  fontFamily,
+  activePage,
+  onSelectPage,
   className,
 }: PaginatedPreviewProps) {
+  const docFont = fontFamily?.trim() || undefined;
   const chunks = useMemo(
-    () => splitOnPageBreaks(appendHtml ? html + appendHtml : html),
+    () => splitHtmlOnPageBreaks(appendHtml ? html + appendHtml : html),
     [html, appendHtml],
   );
   const p = pageProfiles[pageSize] ?? pageProfiles.a4;
   const valuesKey = useMemo(() => JSON.stringify(values), [values]);
 
-  // Auto-pagination: render each manual-break chunk offscreen, measure its
-  // top-level blocks, and pack them into page-height buckets so an
-  // overflowing chunk flows onto the next page (matching the printed PDF)
-  // rather than growing into one tall sheet.
+  // Auto-pagination via the SHARED paginator (same algorithm the artboard PDF
+  // renderer uses) so the preview and the exported PDF break identically.
   const measureRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>(() =>
     chunks.map((c) => renderTemplateHtml(c, values)),
   );
 
+  // Re-measure once the document fonts have loaded — measuring against a system
+  // fallback breaks pages at the wrong place (and disagrees with the PDF).
+  const fontsReady = useFontsReady();
+  // The chosen Google font must also be loaded before measuring.
+  const docFontReady = useGoogleFont(docFont);
+
   useLayoutEffect(() => {
     const host = measureRef.current;
     if (!host) return;
-    const mmToPx = (mm: number) => (mm * 96) / 25.4;
-    const fullH = mmToPx(p.heightMm - p.marginTopMm - p.marginBottomMm);
-    const firstH = Math.max(40, fullH - mmToPx(p.reservedTopMm));
-    host.style.width = `${mmToPx(p.widthMm - p.marginLeftMm - p.marginRightMm)}px`;
-
-    const out: string[] = [];
-    let onFirstPage = true;
-    for (const chunk of chunks) {
-      host.innerHTML = renderTemplateHtml(chunk, values);
-      const kids = Array.from(host.children) as HTMLElement[];
-      if (kids.length === 0) {
-        out.push('');
-        onFirstPage = false;
-        continue;
-      }
-      let budget = onFirstPage ? firstH : fullH;
-      let used = 0;
-      let bucket: string[] = [];
-      const flush = () => {
-        if (bucket.length) {
-          out.push(bucket.join(''));
-          bucket = [];
-        }
-      };
-      for (const el of kids) {
-        const cs = getComputedStyle(el);
-        const h =
-          el.offsetHeight +
-          parseFloat(cs.marginTop || '0') +
-          parseFloat(cs.marginBottom || '0');
-        if (used > 0 && used + h > budget) {
-          flush();
-          budget = fullH; // only the very first page reserves the stamp zone
-          used = 0;
-        }
-        bucket.push(el.outerHTML);
-        used += h;
-      }
-      flush();
-      onFirstPage = false;
+    const filled = chunks.map((c) => renderTemplateHtml(c, values));
+    const next = paginateChunks(host, filled, p);
+    setPages(next);
+    if (isPaginationDebug() && fontsReady && docFontReady) {
+      console.log(
+        formatPaginationDebug(
+          debugMeasure(host, filled, p, 'PREVIEW/APP', next.length),
+        ),
+      );
     }
-    host.innerHTML = '';
-    setPages(out.length ? out : ['']);
-  }, [chunks, valuesKey, pageSize, p, values]);
+  }, [chunks, valuesKey, pageSize, p, values, fontsReady, docFontReady]);
+
+  // Per-document font applied to the measuring host and the visible pages (both
+  // descend from the container below) via the --doc-font custom property.
+  const docFontStyle = docFont
+    ? ({ ['--doc-font']: `'${docFont.replace(/'/g, '')}'` } as CSSProperties)
+    : undefined;
 
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pageEls = useRef<(HTMLDivElement | null)[]>([]);
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
+
+  // Scroll the selected page into view when the selection changes elsewhere
+  // (Pages panel / editor caret), keeping all three surfaces in sync.
+  useEffect(() => {
+    if (activePage == null) return;
+    const el = pageEls.current[activePage];
+    if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [activePage, pages.length]);
 
   const clamp = (z: number) =>
     Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
@@ -163,6 +171,7 @@ export function PaginatedPreview({
         'relative h-full min-h-0 bg-zinc-100 dark:bg-zinc-900',
         className,
       )}
+      style={docFontStyle}
     >
       {/* Offscreen measuring host for auto-pagination (not visible). */}
       <div
@@ -206,10 +215,22 @@ export function PaginatedPreview({
         >
           {pages.map((pageHtml, i) => {
             const reservedTop = i === 0 ? p.reservedTopMm : 0;
+            const isActive = activePage === i;
             return (
-              <div key={i} className="flex-none">
+              <div
+                key={i}
+                ref={(el) => {
+                  pageEls.current[i] = el;
+                }}
+                className="flex-none scroll-mt-8"
+              >
                 <div
-                  className="relative bg-white text-zinc-900 shadow-xl"
+                  onClick={onSelectPage ? () => onSelectPage(i) : undefined}
+                  className={cn(
+                    'relative bg-white text-zinc-900 shadow-xl outline-2 outline-offset-2 transition-[outline-color]',
+                    onSelectPage && 'cursor-pointer',
+                    isActive ? 'outline-primary' : 'outline-transparent',
+                  )}
                   style={{
                     width: `${p.widthMm}mm`,
                     minHeight: `${p.heightMm}mm`,
@@ -265,17 +286,6 @@ function ZoomButton({
       {children}
     </button>
   );
-}
-
-/** Split top-level HTML at every `<div data-page-break>...</div>` block. */
-function splitOnPageBreaks(html: string): string[] {
-  if (!html) return [''];
-  const re = /<div[^>]*data-page-break[^>]*>[\s\S]*?<\/div>/gi;
-  const parts = html.split(re);
-  const cleaned = parts
-    .map((s) => s.trim())
-    .filter((s, i, arr) => i === 0 || s.length > 0 || arr.length === 1);
-  return cleaned.length > 0 ? cleaned : [''];
 }
 
 function MinusIcon() {

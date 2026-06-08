@@ -55,6 +55,7 @@ import type { DocumentTemplate, PlaceholderDef } from './templates/types';
 import { downloadWordDoc } from './export-word';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
 import { PageSizeSelect } from '../../lib/page-sizes';
+import { DocumentFontSelect } from '../../lib/document-fonts';
 import type { PageSizeKey } from '@org/document-templates';
 
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
@@ -66,6 +67,8 @@ export type EditorDraftState = {
   title: string;
   html: string;
   values: Record<string, string>;
+  /** Document-level font (any Google Fonts family); persisted in `data`. */
+  fontFamily?: string;
 };
 
 /**
@@ -83,6 +86,7 @@ export type EditorPersistence =
         html: string;
         values: Record<string, string>;
         pageSize?: PageSizeKey;
+        fontFamily?: string;
       };
       onSave: (s: EditorDraftState) => void;
       /** Called when the user changes the paper size (bound mode persists it). */
@@ -172,6 +176,7 @@ function TemplateEditorInner({
     html: string;
     savedAt: number | null;
     pageSize: PageSizeKey;
+    fontFamily?: string;
   }>(() => {
     if (persistence.mode === 'bound') {
       const tpl =
@@ -183,6 +188,7 @@ function TemplateEditorInner({
         html: persistence.initial.html,
         savedAt: persistence.savedAt ?? null,
         pageSize: persistence.initial.pageSize ?? 'a4',
+        fontFamily: persistence.initial.fontFamily,
       };
     }
     const tpl =
@@ -194,6 +200,7 @@ function TemplateEditorInner({
       html: restored?.html ?? tpl.html,
       savedAt: restored?.savedAt ?? null,
       pageSize: restored?.pageSize ?? 'a4',
+      fontFamily: restored?.fontFamily,
     };
   }, []);
   const [template, setTemplate] = useState<DocumentTemplate>(init.template);
@@ -201,6 +208,9 @@ function TemplateEditorInner({
   const [html, setHtml] = useState<string>(init.html);
   const [savedAt, setSavedAt] = useState<number | null>(init.savedAt);
   const [pageSize, setPageSize] = useState<PageSizeKey>(init.pageSize);
+  const [fontFamily, setFontFamily] = useState<string | undefined>(
+    init.fontFamily,
+  );
 
   const handlePageSizeChange = useCallback(
     (size: PageSizeKey) => {
@@ -376,6 +386,7 @@ function TemplateEditorInner({
           title: template.name,
           html,
           values,
+          fontFamily,
         });
       } else {
         const now = Date.now();
@@ -384,13 +395,14 @@ function TemplateEditorInner({
           html,
           values,
           pageSize,
+          fontFamily,
           savedAt: now,
         });
         setSavedAt(now);
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [template.id, template.name, html, values, pageSize]);
+  }, [template.id, template.name, html, values, pageSize, fontFamily]);
 
   // Bound mode: reflect the parent-reported save time in the status bar.
   const boundSavedAt =
@@ -833,7 +845,10 @@ function TemplateEditorInner({
       html={html}
       values={values}
       pageSize={pageSize}
+      fontFamily={fontFamily}
       appendHtml={previewAppendHtml}
+      activePage={activePage}
+      onSelectPage={handleJumpToPage}
       className="h-full"
     />
   );
@@ -1062,7 +1077,8 @@ function TemplateEditorInner({
             </>
           )}
 
-          <div className="ml-auto flex flex-none items-center pl-2">
+          <div className="ml-auto flex flex-none items-center gap-2 pl-2">
+            <DocumentFontSelect value={fontFamily} onChange={setFontFamily} />
             <PageSizeSelect value={pageSize} onChange={handlePageSizeChange} />
           </div>
         </div>
@@ -1471,6 +1487,7 @@ type DraftData = {
   html: string;
   values: Record<string, string>;
   pageSize?: PageSizeKey;
+  fontFamily?: string;
   savedAt: number;
 };
 

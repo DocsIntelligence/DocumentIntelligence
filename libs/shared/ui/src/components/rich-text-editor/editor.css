@@ -122,64 +122,106 @@
 }
 
 /* Preview page styles */
+/*
+ * Kept in lockstep with `.doc-page` (PagePrintStyles in @org/document-templates):
+ * the live preview must look AND measure exactly like the exported PDF, or the
+ * shared paginator produces different page breaks in each. Any change here must
+ * be mirrored there (and vice versa).
+ */
 .document-preview-page {
-  font-family: 'Times New Roman', 'Noto Serif Devanagari', Georgia, serif;
   font-size: 11pt;
-  line-height: 1.6;
-  color: #1a1a1a;
+  color: #111;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.document-preview-page * {
+  line-height: 1.5;
+  /* --doc-font = per-document chosen font (set on the page root); keep this
+     stack byte-identical to .doc-page (document-templates Page.tsx) so the
+     preview and the exported PDF break pages at the same places. */
+  font-family: var(--doc-font, 'Inter'), 'Noto Sans Devanagari', 'Segoe UI',
+    system-ui, sans-serif;
+}
+
+.document-preview-page p {
+  margin: 0 0 6pt;
+  text-align: justify;
+  font-size: 11pt;
 }
 
 .document-preview-page h1 {
   font-size: 16pt;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  text-align: center;
+  margin: 0 0 12pt;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .document-preview-page h2 {
-  font-size: 13pt;
-  font-weight: 600;
-  margin-top: 0.75rem;
-  margin-bottom: 0.35rem;
+  font-size: 12pt;
+  margin: 12pt 0 4pt;
+  text-decoration: underline;
 }
 
-.document-preview-page h3 {
-  font-size: 11.5pt;
+/* h3–h6 pinned explicitly so the rendered PDF (.doc-page, which has no Tailwind
+   preflight reset) matches this preview exactly. margin:0/font-size:11pt mirrors
+   what preflight already yields here, so the preview's layout is unchanged. Keep
+   identical to .doc-page (document-templates Page.tsx). */
+.document-preview-page h3,
+.document-preview-page h4,
+.document-preview-page h5,
+.document-preview-page h6 {
+  font-size: 11pt;
   font-weight: 600;
-  margin-top: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.document-preview-page p {
-  margin-bottom: 0.4rem;
+  margin: 0;
 }
 
 .document-preview-page ul,
 .document-preview-page ol {
-  padding-left: 1.6rem;
-  margin-bottom: 0.4rem;
-  list-style-position: outside;
+  margin: 0 0 6pt;
+  padding-left: 22pt;
 }
 
 /* Re-assert markers — Tailwind's preflight resets ul/ol to list-style:none. */
 .document-preview-page ul {
-  list-style-type: disc;
+  list-style: disc outside;
 }
 
 .document-preview-page ol {
-  list-style-type: decimal;
+  list-style: decimal outside;
 }
 
 .document-preview-page li {
   display: list-item;
-  margin-bottom: 0.15rem;
+  margin: 0 0 2pt;
+  font-size: 11pt;
 }
 
 .document-preview-page ul ul {
-  list-style-type: circle;
+  list-style: circle outside;
 }
 
 .document-preview-page ol ol {
-  list-style-type: lower-alpha;
+  list-style: lower-alpha outside;
+}
+
+.document-preview-page table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5pt;
+}
+
+.document-preview-page td,
+.document-preview-page th {
+  padding: 3pt 4pt;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.document-preview-page img {
+  max-width: 100%;
+  height: auto;
 }
 
 .document-preview-page mark {

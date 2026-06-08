@@ -72,9 +72,18 @@ export class PdfRendererService {
     // host-gateway alias, point at the host's LAN IP).
     const artboardUrl = this.rewriteForRemoteBrowser(rawArtboardUrl);
 
+    // Opt-in pagination diagnostic: when PAGINATION_DEBUG is set, append the
+    // query flag so the artboard prints the measured page/block/font report
+    // into the PDF (see docs/PAGINATION_DEBUG.md). Off in normal exports.
+    const debugQs =
+      process.env.PAGINATION_DEBUG === '1' ||
+      process.env.PAGINATION_DEBUG === 'true'
+        ? '&paginationDebug=1'
+        : '';
+
     const url = `${artboardUrl.replace(/\/$/, '')}/render/${encodeURIComponent(
       componentKey,
-    )}?pageSize=${encodeURIComponent(pageSize)}`;
+    )}?pageSize=${encodeURIComponent(pageSize)}${debugQs}`;
 
     let acquired: { browser: Browser; dispose: () => Promise<void> } | null =
       null;

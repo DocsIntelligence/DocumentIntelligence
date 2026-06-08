@@ -1,4 +1,17 @@
 import './i18n';
+// Self-hosted document fonts — bundled (not system/Google-hosted) so the live
+// preview here and the Puppeteer-rendered PDF (apps/artboard) measure and paint
+// Hindi + Latin with byte-identical faces, and pagination breaks at the same
+// places. Keep weights in sync with apps/artboard/src/main.tsx and the
+// DOC_FONT_SPECS list in @org/document-templates' use-fonts-ready.
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/noto-sans-devanagari/400.css';
+import '@fontsource/noto-sans-devanagari/500.css';
+import '@fontsource/noto-sans-devanagari/600.css';
+import '@fontsource/noto-sans-devanagari/700.css';
 import {
   createAuthService,
   createDocumentsService,

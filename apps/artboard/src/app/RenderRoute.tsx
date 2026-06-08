@@ -1,4 +1,9 @@
-import { TemplateRenderer, type PageSizeKey } from '@org/document-templates';
+import {
+  TemplateRenderer,
+  loadDocumentFonts,
+  ensureGoogleFont,
+  type PageSizeKey,
+} from '@org/document-templates';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
@@ -115,14 +120,33 @@ export function RenderRoute() {
   }, [search]);
 
   useEffect(() => {
-    if (state) {
-      // Give the paginator a tick to settle before signalling readiness.
-      const t = setTimeout(() => {
-        window.__ARTBOARD_READY__ = true;
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    return undefined;
+    if (!state) return undefined;
+    let cancelled = false;
+    // Signal the PDF worker only AFTER the document fonts have loaded — the
+    // pagination measure re-runs on font load, so capturing before that would
+    // freeze page breaks computed against a system fallback. Two rAFs let the
+    // re-pagination layout effect flush and paint before `page.pdf()` fires.
+    // The document's chosen Google font (if any) lives in data.fontFamily and
+    // must be loaded before capture — both for the visible glyphs and so the
+    // measured pagination matches what is painted.
+    const chosenFont =
+      state.data && typeof state.data === 'object'
+        ? (state.data as { fontFamily?: string }).fontFamily
+        : undefined;
+    void Promise.all([
+      loadDocumentFonts(),
+      ensureGoogleFont(chosenFont),
+    ]).then(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) window.__ARTBOARD_READY__ = true;
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [state]);
 
   if (error) {

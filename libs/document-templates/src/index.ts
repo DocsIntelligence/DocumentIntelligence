@@ -7,6 +7,20 @@ export {
   type PageSizeKey,
   type PageProfile,
 } from './_internals/page-sizes';
+export {
+  splitHtmlOnPageBreaks,
+  paginateChunks,
+  debugMeasure,
+  formatPaginationDebug,
+  isPaginationDebug,
+  type PaginationDebug,
+} from './_internals/paginate-html';
+export { useFontsReady, loadDocumentFonts } from './_internals/use-fonts-ready';
+export {
+  useGoogleFont,
+  ensureGoogleFont,
+  googleFontCssUrl,
+} from './_internals/google-font';
 export { EditableField } from './_internals/EditableField';
 export {
   EditContextProvider,

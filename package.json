@@ -115,6 +115,8 @@
     "@anthropic-ai/sdk": "^0.102.0",
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/noto-sans-devanagari": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@langchain/core": "^1.1.45",
     "@langchain/google-genai": "^2.1.30",

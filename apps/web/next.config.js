@@ -16,6 +16,7 @@ const nextConfig = {
     '@org/ui',
     '@org/hooks',
     '@org/store',
+    '@org/transliteration',
   ],
 
   // Dev server port — avoids conflict with API (3000) and React app (4200)
