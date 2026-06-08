@@ -12,6 +12,7 @@ import {
 } from '@org/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   DOCUMENT_PRESETS,
@@ -33,6 +34,7 @@ const PRESET_CATEGORIES: DocumentPresetCategory[] = [
 
 export function NewDocumentPicker() {
   const { data: catalog, isLoading } = useDocumentCatalog();
+  const { t } = useTranslation();
   const create = useCreateDocument();
   const navigate = useNavigate();
   const legalAi = useLegalAiService();
@@ -63,15 +65,22 @@ export function NewDocumentPicker() {
         presetKey: preset?.key,
       });
       const doc = await create.mutateAsync({
-        title: preset?.name ?? 'AI draft',
+        title: preset?.name ?? t('newDoc.aiDraftTitle', 'AI draft'),
         documentTypeKey: 'freeform',
         templateKey: 'freeform',
         data: { html: gen.html, values: {}, templateId: 'freeform' },
       });
-      toast.success('AI draft created', { description: gen.disclaimer });
+      toast.success(t('newDoc.toastCreated', 'AI draft created'), {
+        description: gen.disclaimer,
+      });
       navigate(`/documents/${doc.id}/draft`);
     } catch {
-      toast.error('Could not draft with AI. Check your AI provider / quota.');
+      toast.error(
+        t(
+          'newDoc.toastError',
+          'Could not draft with AI. Check your AI provider / quota.',
+        ),
+      );
     } finally {
       setAiBusy(false);
     }
@@ -80,7 +89,9 @@ export function NewDocumentPicker() {
   async function startWithTemplate(templateKey: string) {
     if (!selectedType) return;
     const doc = await create.mutateAsync({
-      title: `Untitled ${selectedType.name}`,
+      title: t('newDoc.untitledType', 'Untitled {{name}}', {
+        name: selectedType.name,
+      }),
       documentTypeKey: selectedType.key,
       templateKey,
       pageSize: selectedType.defaultPageSize,
@@ -92,9 +103,14 @@ export function NewDocumentPicker() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h2 className="text-2xl font-semibold">New document</h2>
+        <h2 className="text-2xl font-semibold">
+          {t('common.newDocument', 'New document')}
+        </h2>
         <p className="text-foreground/60 mt-1">
-          Draft freely with AI, or pick a structured document type below.
+          {t(
+            'newDoc.subtitle',
+            'Draft freely with AI, or pick a structured document type below.',
+          )}
         </p>
       </div>
 
@@ -104,34 +120,44 @@ export function NewDocumentPicker() {
             <span className="text-xs font-medium uppercase tracking-wide text-primary">
               AI
             </span>
-            <h3 className="font-semibold text-foreground">Draft with AI</h3>
+            <h3 className="font-semibold text-foreground">
+              {t('dashboard.draftAiTitle', 'Draft with AI')}
+            </h3>
             <p className="text-sm text-foreground/60">
-              Describe what you need in plain English and let AI draft the full
-              document. Review and edit before use.
+              {t(
+                'newDoc.draftAiCardDesc',
+                'Describe what you need in plain English and let AI draft the full document. Review and edit before use.',
+              )}
             </p>
             <Button
               isLoading={aiBusy}
               onClick={() => openAiModal(null)}
               className="mt-1"
             >
-              {aiBusy ? 'Drafting…' : 'Draft with AI'}
+              {aiBusy
+                ? t('newDoc.drafting', 'Drafting…')
+                : t('dashboard.draftAiTitle', 'Draft with AI')}
             </Button>
           </Card>
           <Card className="rounded-xl p-5 space-y-2">
             <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">
-              Freeform
+              {t('newDoc.freeformBadge', 'Freeform')}
             </span>
-            <h3 className="font-semibold text-foreground">Blank document</h3>
+            <h3 className="font-semibold text-foreground">
+              {t('newDoc.blankTitle', 'Blank document')}
+            </h3>
             <p className="text-sm text-foreground/60">
-              Open the rich-text editor and write from scratch, with
-              transliteration, placeholders and page breaks.
+              {t(
+                'newDoc.blankCardDesc',
+                'Open the rich-text editor and write from scratch, with transliteration, placeholders and page breaks.',
+              )}
             </p>
             <Button
               variant="outline"
               onClick={() => navigate('/editor')}
               className="mt-1"
             >
-              Open editor
+              {t('newDoc.openEditor', 'Open editor')}
             </Button>
           </Card>
         </div>
@@ -140,7 +166,10 @@ export function NewDocumentPicker() {
       {!typeKey && (
         <div className="space-y-5">
           <div className="pt-2 text-sm font-medium text-foreground/60">
-            Draft any document with AI — pick a starting point
+            {t(
+              'newDoc.presetsHeading',
+              'Draft any document with AI — pick a starting point',
+            )}
           </div>
           {PRESET_CATEGORIES.map((cat) => {
             const items = DOCUMENT_PRESETS.filter((p) => p.category === cat);
@@ -148,7 +177,7 @@ export function NewDocumentPicker() {
             return (
               <div key={cat} className="space-y-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
-                  {cat}
+                  {t(`presetCategory.${cat}`, cat)}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {items.map((p) => (
@@ -175,32 +204,37 @@ export function NewDocumentPicker() {
 
       {!typeKey && (
         <div className="pt-2 text-sm font-medium text-foreground/60">
-          Or start from a structured template
+          {t('newDoc.orStructured', 'Or start from a structured template')}
         </div>
       )}
 
-      {isLoading && <p className="text-sm text-foreground/60">Loading…</p>}
+      {isLoading && (
+        <p className="text-sm text-foreground/60">
+          {t('common.loading', 'Loading…')}
+        </p>
+      )}
 
       {!isLoading && !typeKey && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {catalog?.map((t) => (
+          {catalog?.map((ct) => (
             <button
-              key={t.key}
+              key={ct.key}
               type="button"
-              onClick={() => setTypeKey(t.key)}
+              onClick={() => setTypeKey(ct.key)}
               className="text-left"
             >
               <Card className="rounded-xl p-5 hover:border-primary hover:shadow-md transition-all space-y-2 cursor-pointer">
                 <span className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
-                  {t.category}
+                  {ct.category}
                 </span>
-                <h3 className="font-semibold text-foreground">{t.name}</h3>
+                <h3 className="font-semibold text-foreground">{ct.name}</h3>
                 <p className="text-sm text-foreground/60 line-clamp-3">
-                  {t.description}
+                  {ct.description}
                 </p>
                 <p className="text-xs text-foreground/40">
-                  {t.templates.length} template
-                  {t.templates.length === 1 ? '' : 's'}
+                  {t('newDoc.templateCount', '{{count}} template', {
+                    count: ct.templates.length,
+                  })}
                 </p>
               </Card>
             </button>
@@ -212,10 +246,12 @@ export function NewDocumentPicker() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">
-              {selectedType.name} — pick a template
+              {t('newDoc.pickTemplate', '{{name}} — pick a template', {
+                name: selectedType.name,
+              })}
             </h3>
             <Button variant="ghost" onClick={() => setTypeKey(null)}>
-              Back
+              {t('common.back', 'Back')}
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -230,14 +266,16 @@ export function NewDocumentPicker() {
                 </div>
                 {tpl.isPremium && (
                   <span className="inline-block text-[10px] uppercase tracking-wide bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
-                    Premium
+                    {t('newDoc.premium', 'Premium')}
                   </span>
                 )}
                 <Button
                   disabled={create.isPending}
                   onClick={() => startWithTemplate(tpl.key)}
                 >
-                  {create.isPending ? 'Creating…' : 'Start with this template'}
+                  {create.isPending
+                    ? t('newDoc.creating', 'Creating…')
+                    : t('newDoc.startTemplate', 'Start with this template')}
                 </Button>
               </Card>
             ))}
@@ -249,18 +287,31 @@ export function NewDocumentPicker() {
       <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{preset ? preset.name : 'Draft with AI'}</DialogTitle>
+            <DialogTitle>
+              {preset ? preset.name : t('dashboard.draftAiTitle', 'Draft with AI')}
+            </DialogTitle>
             <DialogDescription>
               {preset
-                ? 'Fill in the details below (replace the {{placeholders}}), then generate. You can refine and translate it in the editor.'
-                : 'Describe the document you need in plain English. Be specific about parties, terms, and key details.'}
+                ? t(
+                    'newDoc.modalDescPreset',
+                    'Fill in the details below (replace the placeholder tokens), then generate. You can refine and translate it in the editor.',
+                  )
+                : t(
+                    'newDoc.modalDescFree',
+                    'Describe the document you need in plain English. Be specific about parties, terms, and key details.',
+                  )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-3">
-            <Label htmlFor="new-doc-ai-brief">Document description</Label>
+            <Label htmlFor="new-doc-ai-brief">
+              {t('newDoc.briefLabel', 'Document description')}
+            </Label>
             <Textarea
               id="new-doc-ai-brief"
-              placeholder='e.g. "Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months"'
+              placeholder={t(
+                'newDoc.briefPlaceholder',
+                'e.g. "Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months"',
+              )}
               value={aiBrief}
               onChange={(e) => setAiBrief(e.target.value)}
               onKeyDown={(e) => {
@@ -272,7 +323,7 @@ export function NewDocumentPicker() {
               autoFocus
             />
             <Label htmlFor="new-doc-ai-language" className="mt-1">
-              Language
+              {t('settings.language', 'Language')}
             </Label>
             <LanguageSelect
               id="new-doc-ai-language"
@@ -286,10 +337,10 @@ export function NewDocumentPicker() {
               size="sm"
               onClick={() => setAiModalOpen(false)}
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button size="sm" disabled={!aiBrief.trim()} onClick={draftWithAI}>
-              Generate
+              {t('newDoc.generate', 'Generate')}
             </Button>
           </DialogFooter>
         </DialogContent>

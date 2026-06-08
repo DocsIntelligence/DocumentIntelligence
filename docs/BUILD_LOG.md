@@ -167,3 +167,11 @@ Court-document scaffolding + citation library (BNS/BNSS/BSA), sharing/comments, 
 - Per request, the signature capture now offers **Draw / Upload / Type**. Upload accepts an image file, normalises it client-side through a canvas (scale to ≤600px wide, re-encode PNG) so it stays under the 2 MB cap and renders like a drawn signature; shows a preview before saving.
 - Backend `RecordSignatureDto` method enum → `'draw' | 'upload' | 'typed'` (refine: typed⇒typedText, else⇒image); `provider`/`evidence.method` record `'upload'`. api-client `RecordSignaturePayload` + service `DrawnTypedEvidence` unions updated. Saved uploads display via the existing image-evidence path.
 - Verified: api `tsc` 0, app `tsc` 0, eslint clean on changed files. This is the interim signing approach until provider eSign (Digio) lands.
+
+### 2026-06-08 — Hindi UI i18n (cont.): Documents list + New-document picker
+- **DocumentsList**: title/subtitle, New-document CTA, load-error, empty state, card chrome (type/untitled/updated) and `StatusPill` now i18n'd (reusing common/dashboard/status keys + new `documents.*`).
+- **NewDocumentPicker**: all UI chrome — headings, the Draft-with-AI / Blank-document cards, preset section heading, preset **category labels** (`presetCategory.*`), structured-template heading, template count (plural via `templateCount_one/_other`), pick-template/back, Premium, create buttons, and the AI-draft modal (title, descriptions, brief label+placeholder, language label, Cancel/Generate) + the toast + default-title strings. New `newDoc.*` + `common.back/cancel/loading` keys, real Hindi added.
+- **Left in English on purpose:** data-driven content — preset names/descriptions (`@org/legal-reference`) and document-type catalog names/descriptions/categories (backend). Translating those is a separate content effort.
+- **Bug fixed:** in NewDocumentPicker the catalog `.map((t) => …)` param shadowed the translation `t` — renamed to `ct` so `t('newDoc.templateCount', …)` resolves correctly.
+- **Reworded** the preset modal description to drop a literal `{{placeholders}}` token (i18next would have interpolated it) → "replace the placeholder tokens".
+- Verified: app `tsc` exit 0, eslint clean (DocumentsList + NewDocumentPicker), both locale JSONs valid. Remaining #7 surfaces: editors + dialogs, auth, Settings finish, other toasts; + native-speaker QA.

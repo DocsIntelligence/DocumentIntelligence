@@ -1,10 +1,12 @@
 import { Button, Card } from '@org/ui';
 import { cn } from '@org/utils';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useDocumentList } from './queries';
 import { documentHref } from './document-href';
 
 export function DocumentsList() {
+  const { t } = useTranslation();
   const { data, isLoading, error } = useDocumentList();
   const docs = data ?? [];
 
@@ -13,14 +15,16 @@ export function DocumentsList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            My documents
+            {t('documents.title', 'My documents')}
           </h1>
           <p className="mt-1 text-foreground/60">
-            Drafts, signed copies, and shared documents.
+            {t('documents.subtitle', 'Drafts, signed copies, and shared documents.')}
           </p>
         </div>
         <Button asChild>
-          <Link to="/documents/new">New document</Link>
+          <Link to="/documents/new">
+            {t('common.newDocument', 'New document')}
+          </Link>
         </Button>
       </div>
 
@@ -38,20 +42,29 @@ export function DocumentsList() {
       {error && (
         <Card className="rounded-xl p-6">
           <p className="text-sm text-error">
-            Could not load documents. Please try again.
+            {t(
+              'documents.loadError',
+              'Could not load documents. Please try again.',
+            )}
           </p>
         </Card>
       )}
 
       {!isLoading && !error && docs.length === 0 && (
         <Card className="rounded-xl border-dashed p-10 text-center">
-          <p className="text-foreground/70">No documents yet.</p>
+          <p className="text-foreground/70">
+            {t('dashboard.emptyTitle', 'No documents yet.')}
+          </p>
           <p className="mt-1 text-sm text-foreground/50">
-            Start with a rent agreement, an RTI, a legal notice — or draft one
-            with AI.
+            {t(
+              'documents.emptyDesc',
+              'Start with a rent agreement, an RTI, a legal notice — or draft one with AI.',
+            )}
           </p>
           <Button asChild className="mt-4">
-            <Link to="/documents/new">Create your first document</Link>
+            <Link to="/documents/new">
+              {t('dashboard.createFirst', 'Create your first document')}
+            </Link>
           </Button>
         </Card>
       )}
@@ -66,18 +79,20 @@ export function DocumentsList() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[11px] font-medium uppercase tracking-wide text-foreground/50">
-                  {d.documentType?.name ?? 'Document'}
+                  {d.documentType?.name ?? t('common.document', 'Document')}
                 </span>
                 <StatusPill status={d.status} />
               </div>
               <p className="mt-2 truncate font-semibold text-foreground group-hover:text-primary">
-                {d.title || 'Untitled'}
+                {d.title || t('common.untitled', 'Untitled')}
               </p>
               <p className="mt-1 text-xs text-foreground/50">
                 {d.template?.name ?? '—'} · {d.pageSize.replace(/_/g, ' ')}
               </p>
               <p className="mt-auto pt-3 text-xs text-foreground/40">
-                Updated {new Date(d.updatedAt).toLocaleString()}
+                {t('dashboard.updated', 'Updated {{date}}', {
+                  date: new Date(d.updatedAt).toLocaleString(),
+                })}
               </p>
             </Link>
           ))}
@@ -88,6 +103,7 @@ export function DocumentsList() {
 }
 
 function StatusPill({ status }: { status: string }) {
+  const { t } = useTranslation();
   const tone: Record<string, string> = {
     draft: 'bg-amber-100 text-amber-800',
     in_review: 'bg-blue-100 text-blue-800',
@@ -102,7 +118,7 @@ function StatusPill({ status }: { status: string }) {
         tone[status] ?? 'bg-foreground/10 text-foreground/60',
       )}
     >
-      {status.replace(/_/g, ' ')}
+      {t(`status.${status}`, status.replace(/_/g, ' '))}
     </span>
   );
 }

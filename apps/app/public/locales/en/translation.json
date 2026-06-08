@@ -5,7 +5,44 @@
     "logout": "Log out",
     "viewAll": "View all",
     "document": "Document",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "back": "Back",
+    "cancel": "Cancel",
+    "loading": "Loading…"
+  },
+  "newDoc": {
+    "subtitle": "Draft freely with AI, or pick a structured document type below.",
+    "freeformBadge": "Freeform",
+    "draftAiCardDesc": "Describe what you need in plain English and let AI draft the full document. Review and edit before use.",
+    "drafting": "Drafting…",
+    "blankTitle": "Blank document",
+    "blankCardDesc": "Open the rich-text editor and write from scratch, with transliteration, placeholders and page breaks.",
+    "openEditor": "Open editor",
+    "presetsHeading": "Draft any document with AI — pick a starting point",
+    "orStructured": "Or start from a structured template",
+    "templateCount_one": "{{count}} template",
+    "templateCount_other": "{{count}} templates",
+    "pickTemplate": "{{name}} — pick a template",
+    "premium": "Premium",
+    "creating": "Creating…",
+    "startTemplate": "Start with this template",
+    "modalDescPreset": "Fill in the details below (replace the placeholder tokens), then generate. You can refine and translate it in the editor.",
+    "modalDescFree": "Describe the document you need in plain English. Be specific about parties, terms, and key details.",
+    "briefLabel": "Document description",
+    "briefPlaceholder": "e.g. \"Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months\"",
+    "generate": "Generate",
+    "aiDraftTitle": "AI draft",
+    "untitledType": "Untitled {{name}}",
+    "toastCreated": "AI draft created",
+    "toastError": "Could not draft with AI. Check your AI provider / quota."
+  },
+  "presetCategory": {
+    "Court Filings": "Court Filings",
+    "Notices": "Notices",
+    "Agreements": "Agreements",
+    "Personal": "Personal",
+    "Affidavits": "Affidavits",
+    "Information": "Information"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -32,6 +69,12 @@
     "emptyDesc": "Start with a rent agreement, RTI, legal notice — or an AI draft.",
     "createFirst": "Create your first document",
     "updated": "Updated {{date}}"
+  },
+  "documents": {
+    "title": "My documents",
+    "subtitle": "Drafts, signed copies, and shared documents.",
+    "loadError": "Could not load documents. Please try again.",
+    "emptyDesc": "Start with a rent agreement, an RTI, a legal notice — or draft one with AI."
   },
   "status": {
     "draft": "Draft",

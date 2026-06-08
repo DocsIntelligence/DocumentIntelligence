@@ -90,7 +90,7 @@
 | Template marketplace (revenue share) | ⬜ | `DocumentTemplate.ownerType` supports it |
 | White-label share subdomains | ⬜ | |
 | Long-tail consumer docs (NDA/MoU/will/RTI/…) | 🟡 | Available as AI presets in `@org/legal-reference` `DOCUMENT_PRESETS` (NDA, MoU, partnership deed, offer letter, gift deed, will, GPA, RTI). Structured templates optional later. |
-| Hindi UI on `apps/app` | 🟡 | App **shell + dashboard** now translated (MainLayout nav/CTA/logout + in-shell `LanguageSwitcher`, Dashboard greeting/cards/recent/status) with real Hindi in `hi/translation.json`. **Remaining:** DocumentsList, NewDocumentPicker, editors+dialogs, auth, Settings finish, toasts — plus native-speaker QA of the (AI-authored) Hindi. Pattern is `t('key','English default')`. |
+| Hindi UI on `apps/app` | 🟡 | Translated so far: **shell** (MainLayout nav/CTA/logout + in-shell `LanguageSwitcher`), **Dashboard**, **DocumentsList**, **NewDocumentPicker** (chrome + preset categories; data-driven preset/catalog names stay English). Real Hindi in `hi/translation.json`. **Remaining:** editors + dialogs (Share/Comments/Signatures/Version), auth pages, Settings finish, remaining toasts; + native-speaker QA of the (AI-authored) Hindi. Pattern is `t('key','English default')`. |
 | eStamp aggregator integration | ⬜ | manual stamped-paper upload first |
 | PWA + offline drafting | ⬜ | redux-persist already wires storage |
 
