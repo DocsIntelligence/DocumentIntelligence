@@ -54,6 +54,32 @@ export function buildExtractPrompt(schema: ExtractionSchema): {
   return { system: EXTRACT_SYSTEM, instruction };
 }
 
+const CRITIC_SYSTEM = [
+  'You are a meticulous verification pass over a legal-document extraction.',
+  'You are given fields a first pass was UNSURE about. Re-read the document carefully and extract ONLY these fields, correcting mistakes.',
+  'Rules:',
+  '- Look again at the exact location in the document; do not copy the first pass blindly.',
+  '- If a field is genuinely absent or illegible, omit it (do not guess).',
+  '- Preserve the source script and date format verbatim.',
+  '- Return data strictly via the provided tool/schema.',
+].join('\n');
+
+export function buildCriticPrompt(
+  schema: ExtractionSchema,
+  fieldKeys: string[],
+): { system: string; instruction: string } {
+  const fields = schema.fields.filter((f) => fieldKeys.includes(f.key));
+  const fieldList = fields.map((f) => describeField(f)).join('\n');
+  return {
+    system: CRITIC_SYSTEM,
+    instruction: [
+      `Re-verify these fields of this "${schema.name}" document — the first pass had low confidence:`,
+      '',
+      fieldList,
+    ].join('\n'),
+  };
+}
+
 const CLASSIFY_SYSTEM = [
   'You are a document classifier for an Indian legal-document platform.',
   'Decide which known document type the supplied document is, choosing only from the candidate keys provided.',

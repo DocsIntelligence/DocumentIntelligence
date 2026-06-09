@@ -1,11 +1,16 @@
 import { Logger } from '@nestjs/common';
 import {
+  buildCriticPrompt,
   buildExtractionToolSchema,
   buildExtractPrompt,
   computeOverallConfidence,
+  lowConfidenceFields,
+  mergeCritic,
+  subSchema,
   type ConfidenceMap,
   type ExtractionRequest,
   type ExtractionResult,
+  type ExtractionSchema,
   type FieldValues,
   type IExtractionEngine,
   type Provenance,
@@ -41,7 +46,40 @@ export class VlmExtractionEngine implements IExtractionEngine {
 
   async extract(req: ExtractionRequest): Promise<ExtractionResult> {
     const { system, instruction } = buildExtractPrompt(req.schema);
-    const toolSchema = buildExtractionToolSchema(req.schema);
+    return this.runOnce(req, req.schema, system, instruction);
+  }
+
+  /**
+   * Agentic critic re-verification (docs/05 §3). Re-extracts only the fields the
+   * first pass was unsure about and merges the higher-confidence values. A
+   * no-op (returns the primary result) when nothing is below threshold.
+   */
+  async critique(
+    req: ExtractionRequest,
+    primary: ExtractionResult,
+    threshold: number,
+  ): Promise<ExtractionResult> {
+    const lowConf = lowConfidenceFields(req.schema, primary, threshold);
+    if (lowConf.length === 0) return primary;
+
+    const sub = subSchema(req.schema, lowConf);
+    const { system, instruction } = buildCriticPrompt(req.schema, lowConf);
+    const second = await this.runOnce({ ...req, schema: sub }, sub, system, instruction);
+    const merged = mergeCritic(req.schema, primary, second);
+    this.logger.debug(
+      `critic rechecked ${lowConf.length} field(s); overall ${primary.overallConfidence.toFixed(2)} → ${merged.overallConfidence.toFixed(2)}`,
+    );
+    return merged;
+  }
+
+  /** One forced-tool extraction over `schema` with the given prompt. */
+  private async runOnce(
+    req: ExtractionRequest,
+    schema: ExtractionSchema,
+    system: string,
+    instruction: string,
+  ): Promise<ExtractionResult> {
+    const toolSchema = buildExtractionToolSchema(schema);
     const input = this.buildInput(req, instruction);
 
     const { data, model, provider } = await this.ai.extract<ToolOutput>(
@@ -70,18 +108,14 @@ export class VlmExtractionEngine implements IExtractionEngine {
       };
     }
 
-    const overallConfidence = computeOverallConfidence(
-      req.schema,
-      fields,
-      confidence,
-    );
+    const overallConfidence = computeOverallConfidence(schema, fields, confidence);
     this.logger.debug(
       `extracted ${Object.keys(fields).length} fields via ${provider}:${model} (overall ${overallConfidence.toFixed(2)})`,
     );
 
     return {
-      schemaKey: req.schema.key,
-      documentTypeKey: req.schema.documentTypeKey,
+      schemaKey: schema.key,
+      documentTypeKey: schema.documentTypeKey,
       fields,
       confidence,
       overallConfidence,

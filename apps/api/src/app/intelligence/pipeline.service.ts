@@ -6,12 +6,14 @@ import {
   Prisma,
 } from '@prisma/client';
 import {
+  DEFAULT_ROUTING,
   decideReview,
   genericExtractionSchema,
   getExtractionSchema,
   classifierCandidateKeys,
   type ExtractionResult,
   type ExtractionSchema,
+  type NormalizedDocument,
   type SourceInput,
 } from '@org/doc-intelligence';
 import { AiService } from '../ai/ai.service';
@@ -49,6 +51,9 @@ export class PipelineService {
   private readonly classifier: ClassifierEngine;
   private readonly vlm: VlmExtractionEngine;
   private readonly agentic: AgenticExtractionEngine;
+  /** Critic re-verification pass (docs/05 §3) — on by default; disable via env. */
+  private readonly criticEnabled: boolean;
+  private readonly criticThreshold = DEFAULT_ROUTING.fieldThreshold;
 
   constructor(
     private readonly db: DatabaseService,
@@ -61,6 +66,17 @@ export class PipelineService {
     this.classifier = new ClassifierEngine(ai);
     this.vlm = new VlmExtractionEngine(ai);
     this.agentic = new AgenticExtractionEngine(config, ai);
+    this.criticEnabled =
+      (config.get<string>('EXTRACTION_CRITIC_ENABLED') ?? 'true') !== 'false';
+  }
+
+  /** Run the VLM engine, then (optionally) the critic re-verification pass. */
+  private async extractWithCritic(
+    req: { schema: ExtractionSchema; source?: SourceInput; document?: NormalizedDocument },
+  ): Promise<ExtractionResult> {
+    const result = await this.vlm.extract(req);
+    if (!this.criticEnabled) return result;
+    return this.vlm.critique(req, result, this.criticThreshold);
   }
 
   async run(payload: IntelligenceJobPayload): Promise<void> {
@@ -250,7 +266,7 @@ export class PipelineService {
       };
     };
     const runVlm = async () => ({
-      result: await this.vlm.extract({ schema, source }),
+      result: await this.extractWithCritic({ schema, source }),
       engineUsed: `vlm:${this.vlm.name}`,
       usedAgentic: false,
     });
@@ -276,7 +292,7 @@ export class PipelineService {
           );
         }
         return {
-          result: await this.vlm.extract({ schema, document: parsed }),
+          result: await this.extractWithCritic({ schema, document: parsed }),
           engineUsed: `native:${parsed.source}`,
           usedAgentic: false,
         };
@@ -288,7 +304,7 @@ export class PipelineService {
         const parsed = await this.parseText(source);
         if (parsed) {
           return {
-            result: await this.vlm.extract({ schema, document: parsed }),
+            result: await this.extractWithCritic({ schema, document: parsed }),
             engineUsed: `native:${parsed.source}`,
             usedAgentic: false,
           };

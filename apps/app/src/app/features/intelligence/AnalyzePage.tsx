@@ -2,6 +2,7 @@ import { Button, Card, CardContent, Spinner } from '@org/ui';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useExtraction, useIntelligenceJob } from './queries';
+import { DocumentInsights } from './DocumentInsights';
 import { ReviewExtraction } from './ReviewExtraction';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -109,6 +110,7 @@ export function AnalyzePage() {
         </Button>
       </div>
       <ReviewExtraction extraction={extraction} sourceId={sourceId as string} />
+      <DocumentInsights sourceId={sourceId as string} />
     </div>
   );
 }

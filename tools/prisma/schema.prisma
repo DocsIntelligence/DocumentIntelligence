@@ -698,10 +698,55 @@ model SourceDocument {
 
   jobs        IntelligenceJob[]
   extractions Extraction[]
+  analyses    AnalysisRun[]
+  chunks      SourceChunk[]
 
   @@index([ownerUserId, updatedAt])
   @@index([ownerOrgId, updatedAt])
   @@index([status])
+}
+
+/// Phase 2 analysis (docs/05 §7): summary / parties / obligations / key dates /
+/// risk flags, plus cited-law health (repealed-citation findings verified
+/// against @org/legal-reference — the AI never asserts citations itself). All
+/// structured output is jsonb.
+model AnalysisRun {
+  id               String   @id @default(cuid())
+  sourceDocumentId String
+  summary          String?
+  /// [{ name, role }]
+  parties          Json?
+  /// [{ label, date }]
+  keyDates         Json?
+  /// [{ party, obligation }]
+  obligations      Json?
+  /// [{ severity, note }]
+  riskFlags        Json?
+  /// CitationFinding[] from @org/legal-reference (repealed IPC/CrPC/Evidence Act).
+  citationFindings Json?
+  createdAt        DateTime @default(now())
+
+  sourceDocument SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDocumentId, createdAt])
+}
+
+/// Phase 2 RAG (docs/05 §7): per-page text chunks + embeddings for "ask this
+/// document" with page-cited answers. Single-document retrieval, so cosine is
+/// computed in-process over the doc's chunks (no pgvector needed for v1); the
+/// embedding is stored as a float array.
+model SourceChunk {
+  id               String   @id @default(cuid())
+  sourceDocumentId String
+  page             Int
+  ordinal          Int // chunk order within the page
+  text             String
+  embedding        Float[]
+  createdAt        DateTime @default(now())
+
+  sourceDocument SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDocumentId])
 }
 
 /// One processing run over a SourceDocument. Idempotent + stage-guarded; the

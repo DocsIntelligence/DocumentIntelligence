@@ -24,10 +24,12 @@ import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
+  AskDto,
   PresignUploadDto,
   RegisterSourceDto,
   SaveReviewDto,
 } from './intelligence.dto';
+import { AnalysisService } from './analysis.service';
 import { IntelligenceService } from './intelligence.service';
 
 /** Coerce a query-string engine value to the enum; unknown/empty → auto. */
@@ -49,7 +51,10 @@ function parseEngineMode(value?: string): ExtractionEngineMode {
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class IntelligenceController {
-  constructor(private readonly intelligence: IntelligenceService) {}
+  constructor(
+    private readonly intelligence: IntelligenceService,
+    private readonly analysis: AnalysisService,
+  ) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -120,5 +125,32 @@ export class IntelligenceController {
   })
   convert(@CurrentUser() user: User, @Param('id') id: string) {
     return this.intelligence.convert(user.id, id);
+  }
+
+  @Post('sources/:id/analyze')
+  @ApiOperation({
+    summary:
+      'Analyse a document: summary, parties, obligations, key dates, risk flags + cited-law health.',
+  })
+  analyze(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.analysis.analyze(user.id, id);
+  }
+
+  @Get('sources/:id/analysis')
+  @ApiOperation({ summary: 'Get the latest analysis for a document' })
+  getAnalysis(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.analysis.getLatestAnalysis(user.id, id);
+  }
+
+  @Post('sources/:id/ask')
+  @ApiOperation({
+    summary: 'Ask a question about a document (RAG, page-cited answer)',
+  })
+  ask(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: AskDto,
+  ) {
+    return this.analysis.ask(user.id, id, body.question);
   }
 }

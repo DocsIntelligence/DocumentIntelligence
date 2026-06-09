@@ -141,6 +141,26 @@
       "notFound": "Not found",
       "missing": "Missing",
       "page": "p.{{n}}"
+    },
+    "insights": {
+      "title": "Analysis",
+      "subtitle": "Summary, parties, obligations, key dates, and cited-law health.",
+      "run": "Analyze document",
+      "rerun": "Re-analyze",
+      "analyzing": "Analyzing…",
+      "parties": "Parties",
+      "dates": "Key dates",
+      "obligations": "Obligations",
+      "risks": "Risk flags",
+      "citedLaw": "Cited-law health",
+      "noCitationIssues": "No repealed-law references detected."
+    },
+    "ask": {
+      "title": "Ask this document",
+      "subtitle": "Answers are grounded in the document and cite the page they came from.",
+      "placeholder": "e.g. What is the notice period?",
+      "ask": "Ask",
+      "asking": "Asking…"
     }
   }
 }

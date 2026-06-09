@@ -1,6 +1,24 @@
 # Document Intelligence — RESUME point (next session)
 
-**Status:** Phase 0 · tiered extraction · Phase 1 frontend · **Phase 3 convert bridge** — ALL DONE · **Updated:** 2026-06-09
+**Status:** docs/05 **Phases 0–3 CODE-COMPLETE** (Phase 4 = docs/07 design) · **Updated:** 2026-06-09
+
+> **docs/05 §7 phase status:** P0 ✅ (engine spike; **OCR-accuracy # un-run** — needs
+> real Hindi scans + API key), P1 ✅ (extraction + review UI + **agentic critic pass**;
+> **eval harness un-run on a gold set** — no fixtures), P2 ✅ (analysis, cited-law
+> health via @org/legal-reference, **RAG ask-this-document** with page citations),
+> P3 ✅ (convert bridge). The only outstanding docs/05 items are the two **data/runtime
+> exit metrics** (OCR accuracy, gold-set precision/recall/STP) — the harness + engines
+> are built and *runnable*; producing the numbers needs real documents + an API key.
+>
+> **Latest (tasks #18–21):** critic re-verification (lib `critic.ts` + `VlmExtractionEngine.critique`,
+> on by default); Phase 2 backend (`AnalysisService` analyze+ask, models `AnalysisRun`+`SourceChunk`,
+> migration `di_phase2_analysis_rag`); Phase 2 frontend (`DocumentInsights` on AnalyzePage).
+> All tsc/build/lint green; **NOT browser-verified.**
+>
+> **Next options:** (a) **browser smoke-test** the whole flow (upload→extract→review→convert,
+> analyze, ask) — needs app+API+OPENAI_API_KEY; (b) **build the pipeline engine** (docs/07
+> P4.1 — per-org configurable pipelines + batches); (c) seed a small gold fixture set + run
+> the eval harness to get real precision/recall/STP numbers; (d) the OCR/engine benchmark.
 
 > **Latest (tasks #15–#16, COMPLETE):** the convert bridge closes the loop.
 > `POST /intelligence/extractions/:id/convert` → structured prefill (field-map →
@@ -15,10 +33,17 @@
 >
 > **Next options:** (a) **browser smoke-test** the full flow (recommended first —
 > needs app+API+OPENAI_API_KEY; check the structured builder renders mapped data,
-> i.e. field-map path accuracy); (b) agentic critic re-verification pass (extraction
-> quality); (c) Phase 2 = citations via @org/legal-reference on extracted text + RAG
-> "ask this document" (embed() ready on OpenAI); (d) no-code ExtractionSchema authoring
-> UI; (e) bbox provenance for click-to-highlight (engine emits page-level only).
+> i.e. field-map path accuracy); (b) **build the configurable pipeline engine** —
+> designed in `docs/07-pipeline-engine.md` (per-org pipelines, batch via multi-file
+> first, per-stage auto-advance thresholds, review queue, export stages); start at
+> its **P4.1 engine core**; (c) agentic critic re-verification pass; (d) Phase 2 =
+> citations + RAG (embed() ready); (e) bbox provenance for click-to-highlight.
+>
+> **`docs/07-pipeline-engine.md` (design, no code yet):** the process-as-data
+> workflow engine — turns the fixed single-doc flow into org-configurable pipelines
+> over batches. Decisions locked: per-organisation tenancy; multi-file upload built
+> first (zip/S3/API deferred). Reuses every existing engine as a stage impl; nothing
+> there is a rewrite. Build order P4.1→P4.6 in §9.
 
 > **Latest (tasks #11–#14, COMPLETE — see BUILD_LOG):** shipped the Phase 1 frontend.
 > `intelligence.service.ts` in api-client (wired into main.tsx + services-context);

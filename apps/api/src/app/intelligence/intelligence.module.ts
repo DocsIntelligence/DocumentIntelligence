@@ -10,6 +10,7 @@ import {
   INTEL_QUEUE_ENABLED,
   IntelligenceService,
 } from './intelligence.service';
+import { AnalysisService } from './analysis.service';
 import { ParsingService } from './parsing.service';
 import { PipelineService } from './pipeline.service';
 import { ReconcilerService } from './reconciler.service';
@@ -47,6 +48,7 @@ export class IntelligenceModule {
           { provide: INTEL_QUEUE_ENABLED, useValue: false },
           ParsingService,
           PipelineService,
+          AnalysisService,
           IntelligenceService,
           ReconcilerService,
         ],
@@ -68,6 +70,7 @@ export class IntelligenceModule {
         { provide: INTEL_QUEUE_ENABLED, useValue: true },
         ParsingService,
         PipelineService,
+        AnalysisService,
         IntelligenceService,
         IntelligenceProcessor,
         ReconcilerService,

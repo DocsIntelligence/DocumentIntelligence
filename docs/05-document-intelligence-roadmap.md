@@ -235,7 +235,10 @@ Rough effort (1 eng); measurable exits.
   port the POC's process-as-data workflow engine (Postgres-native), assignment
   strategies, queues, exception lifecycle, bulk review. Plus: multi-document
   **matter/case workspace**, document comparison/diff, batch extraction,
-  redaction/PII tooling, webhooks/integration API.
+  redaction/PII tooling, webhooks/integration API. **→ Designed in detail in
+  [`docs/07-pipeline-engine.md`](07-pipeline-engine.md)** (configurable per-org
+  pipelines, batch ingest, per-stage auto-advance thresholds, review queue,
+  export stages) — promoted because the batch / multi-reviewer ICP is now real.
 
 ---
 

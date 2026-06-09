@@ -18,7 +18,31 @@ export {
   PROMPT_VERSION,
   buildExtractPrompt,
   buildClassifyPrompt,
+  buildCriticPrompt,
 } from './prompts';
+export {
+  lowConfidenceFields,
+  subSchema,
+  mergeCritic,
+} from './critic';
+export {
+  buildAnalysisPrompt,
+  buildAnalysisSchema,
+  type AnalysisData,
+  type AnalysisParty,
+  type AnalysisDate,
+  type AnalysisObligation,
+  type AnalysisRiskFlag,
+} from './analysis';
+export {
+  chunkPages,
+  cosineSimilarity,
+  topKChunks,
+  buildAskPrompt,
+  type TextChunk,
+  type EmbeddedChunk,
+  type RetrievedChunk,
+} from './rag';
 export {
   DEFAULT_ROUTING,
   computeOverallConfidence,

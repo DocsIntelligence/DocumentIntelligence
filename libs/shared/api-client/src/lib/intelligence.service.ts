@@ -134,11 +134,58 @@ export const createIntelligenceService = (http: HttpClient) => ({
         {},
       )
       .then((r) => r.data),
+
+  /** Run analysis (summary/parties/obligations/risk flags + cited-law health). */
+  analyze: (sourceId: string) =>
+    http
+      .post<AnalysisRun>(`/intelligence/sources/${sourceId}/analyze`, {})
+      .then((r) => r.data),
+
+  /** Get the latest analysis for a document (null if not analysed yet). */
+  getAnalysis: (sourceId: string) =>
+    http
+      .get<{ sourceDocumentId: string; analysis: AnalysisRun | null }>(
+        `/intelligence/sources/${sourceId}/analysis`,
+      )
+      .then((r) => r.data),
+
+  /** Ask a question about a document — page-cited answer (RAG). */
+  ask: (sourceId: string, question: string) =>
+    http
+      .post<AskAnswer>(`/intelligence/sources/${sourceId}/ask`, { question })
+      .then((r) => r.data),
 });
 
 export interface ConvertResult {
   documentId: string;
   mode: 'structured' | 'freeform';
+}
+
+// ─── Phase 2: analysis + Q&A ────────────────────────────────────────────────
+
+export interface CitationFinding {
+  matched: string;
+  code: 'IPC' | 'CrPC' | 'Evidence Act';
+  section?: string;
+  severity: 'warning';
+  message: string;
+  suggestion?: string;
+}
+
+export interface AnalysisRun {
+  id: string;
+  summary: string | null;
+  parties: { name: string; role?: string }[] | null;
+  keyDates: { label: string; date?: string }[] | null;
+  obligations: { party?: string; obligation: string }[] | null;
+  riskFlags: { severity: 'low' | 'medium' | 'high'; note: string }[] | null;
+  citationFindings: CitationFinding[] | null;
+  createdAt: string;
+}
+
+export interface AskAnswer {
+  answer: string;
+  citations: { page: number; snippet: string; score: number }[];
 }
 
 export type IntelligenceService = ReturnType<typeof createIntelligenceService>;

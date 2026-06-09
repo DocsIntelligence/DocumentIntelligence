@@ -100,6 +100,8 @@ export const envSchema = z.object({
   EXTRACTION_AGENTIC_MODEL: z.string().min(1).optional(),
   EXTRACTION_AGENTIC_RESPONSE_PATH: z.string().min(1).optional(),
   EXTRACTION_AGENTIC_PROVIDER: z.string().min(1).optional(),
+  // Agentic critic re-verification pass (docs/05 §3). Default on; 'false' to disable.
+  EXTRACTION_CRITIC_ENABLED: z.enum(['true', 'false']).optional(),
 
   // ── Storage: S3-compatible (optional — warn if missing)
   STORAGE_ENDPOINT: z.string().url().optional(),

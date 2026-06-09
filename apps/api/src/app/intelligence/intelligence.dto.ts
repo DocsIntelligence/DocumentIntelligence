@@ -44,3 +44,10 @@ const SaveReviewSchema = z.object({
 });
 
 export class SaveReviewDto extends createZodDto(SaveReviewSchema) {}
+
+/** Ask a question about a document (RAG, page-cited answer). */
+const AskSchema = z.object({
+  question: z.string().min(1).max(2000),
+});
+
+export class AskDto extends createZodDto(AskSchema) {}

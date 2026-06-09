@@ -13,6 +13,8 @@ export const intelligenceKeys = {
   job: (id: string) => ['intelligence', 'job', id] as const,
   extraction: (sourceId: string) =>
     ['intelligence', 'extraction', sourceId] as const,
+  analysis: (sourceId: string) =>
+    ['intelligence', 'analysis', sourceId] as const,
 };
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -60,6 +62,39 @@ export function useExtraction(sourceId: string | undefined, enabled = true) {
       : ['intelligence', 'extraction', 'none'],
     queryFn: () => svc.getExtraction(sourceId as string),
     enabled: !!sourceId && enabled,
+  });
+}
+
+/** Latest analysis for a document (null until analyzed). */
+export function useAnalysis(sourceId: string | undefined) {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: sourceId
+      ? intelligenceKeys.analysis(sourceId)
+      : ['intelligence', 'analysis', 'none'],
+    queryFn: () => svc.getAnalysis(sourceId as string),
+    enabled: !!sourceId,
+  });
+}
+
+/** Run (or re-run) analysis for a document. */
+export function useRunAnalysis(sourceId: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.analyze(sourceId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: intelligenceKeys.analysis(sourceId) }),
+    onError: (err) => toast.error(extractMessage(err, 'Analysis failed')),
+  });
+}
+
+/** Ask a question about a document (RAG, page-cited). */
+export function useAsk(sourceId: string) {
+  const svc = useIntelligenceService();
+  return useMutation({
+    mutationFn: (question: string) => svc.ask(sourceId, question),
+    onError: (err) => toast.error(extractMessage(err, 'Could not answer')),
   });
 }
 
