@@ -54,6 +54,8 @@ enum Feature {
   ai_attempts
   storage_mb
   api_calls
+  // Document Intelligence: premium (paid agentic) extraction runs. Free plan = 0.
+  premium_extraction
 }
 
 enum FeatureAction {
@@ -162,6 +164,9 @@ model User {
   orgMemberships    OrgMember[]
   authoredTemplates DocumentTemplate[] @relation("TemplateAuthor")
   brandingProfile   BrandingProfile?
+
+  // Document Intelligence domain (separate; see docs/05)
+  sourceDocuments SourceDocument[] @relation("SourceDocOwnerUser")
 
   @@index([email])
 }
@@ -591,6 +596,9 @@ model Organisation {
   documents Document[]
   templates DocumentTemplate[]
 
+  // Document Intelligence domain (separate; see docs/05)
+  sourceDocuments SourceDocument[]
+
   @@index([slug])
 }
 
@@ -620,4 +628,140 @@ model BrandingProfile {
 
   ownerUser    User?         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   organisation Organisation?
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DOCUMENT INTELLIGENCE (docs/05) — separate domain. Reads an EXISTING
+// document, understands it (classify → extract → analyse), and (Phase 3)
+// converts it via the public document-create API. Never edits Document/
+// DocumentVersion/editor. All structured values use jsonb (no JSON-as-string).
+// ═══════════════════════════════════════════════════════════════════
+
+enum SourceDocStatus {
+  uploaded
+  processing
+  processed
+  failed
+}
+
+enum IntelligenceJobStatus {
+  queued
+  processing
+  needs_review
+  completed
+  failed
+}
+
+/// Pipeline stages (docs/05 §4). A simple linear state machine for v1; the
+/// process-as-data workflow engine is deferred to Phase 4.
+enum IntelligenceStage {
+  uploaded
+  normalize
+  classify
+  extract
+  analyse
+  review
+  convert
+}
+
+/// Which extraction engine to use. `auto` = native-text fast path, escalating
+/// to vlm (scanned) or agentic (premium) as needed/entitled. `native`/`vlm`/
+/// `agentic` force a specific tier. `agentic` requires the premium entitlement.
+enum ExtractionEngineMode {
+  auto
+  native
+  vlm
+  agentic
+}
+
+/// An uploaded file to be understood. Stored privately (StorageService key);
+/// `normalizedText` holds per-page text/layout once OCR/parse completes.
+model SourceDocument {
+  id          String          @id @default(cuid())
+  ownerUserId String?
+  ownerOrgId  String?
+  filename    String
+  contentType String
+  byteSize    Int?
+  checksum    String?
+  s3Key       String // private storage key
+  pageCount   Int?
+  language    String? // detected primary language, e.g. "hi" / "en"
+  status      SourceDocStatus @default(uploaded)
+  /// Per-page normalized text/layout: [{ page, text, blocks? }]. jsonb.
+  normalizedText Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  ownerUser User?         @relation("SourceDocOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerOrg  Organisation? @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
+
+  jobs        IntelligenceJob[]
+  extractions Extraction[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerOrgId, updatedAt])
+  @@index([status])
+}
+
+/// One processing run over a SourceDocument. Idempotent + stage-guarded; the
+/// reconciler cron sweeps rows whose `heartbeatAt` went stale while processing.
+model IntelligenceJob {
+  id               String                @id @default(cuid())
+  sourceDocumentId String
+  status           IntelligenceJobStatus @default(queued)
+  stage            IntelligenceStage     @default(uploaded)
+  /// Requested engine tier (auto unless the caller forced one).
+  engineMode       ExtractionEngineMode  @default(auto)
+  /// The engine actually used (native-text / vlm / agentic provider name).
+  engineUsed       String?
+  /// Classifier output — the generator's DocumentType key when matched (§11.2).
+  documentTypeKey  String?
+  /// Per-step model attribution + cost/latency telemetry. jsonb.
+  telemetry        Json?
+  error            String?
+  attempts         Int                   @default(0)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  /// Liveness beat written during processing; the reconciler uses it.
+  heartbeatAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  sourceDocument SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  extraction     Extraction?
+
+  @@index([status, heartbeatAt])
+  @@index([sourceDocumentId])
+}
+
+/// Structured result of extracting a SourceDocument against an ExtractionSchema.
+/// Every field carries confidence + provenance (page/bbox); human edits are
+/// recorded in `edits` (originalValue/editedBy) — the audit trail (docs/05 §1).
+model Extraction {
+  id                String    @id @default(cuid())
+  sourceDocumentId  String
+  jobId             String?   @unique
+  /// ExtractionSchema identity; equals DocumentType.key when a known type.
+  schemaKey         String
+  documentTypeKey   String?
+  /// Structured field values: { fieldPath: value }. jsonb.
+  fields            Json
+  /// Per-field confidence + provenance: { fieldPath: { confidence, page, bbox, source } }. jsonb.
+  confidence        Json
+  /// Overall confidence 0..1 — drives review routing / straight-through (STP).
+  overallConfidence Float?
+  reviewed          Boolean   @default(false)
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  /// Provenance of every human edit: [{ fieldPath, originalValue, newValue, editedBy, at }]. jsonb.
+  edits             Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  sourceDocument SourceDocument   @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  job            IntelligenceJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([sourceDocumentId])
+  @@index([schemaKey])
 }

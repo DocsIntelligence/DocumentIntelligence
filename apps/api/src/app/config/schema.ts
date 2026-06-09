@@ -77,12 +77,29 @@ export const envSchema = z.object({
   REDIS_URL: z.string().min(1).optional(),
 
   // ── AI Providers (optional — warn if missing)
+  // Default provider for AiService priority/fallback (Document Intelligence
+  // extraction + legal-ai). Default: openai.
+  AI_DEFAULT_PROVIDER: z.enum(['openai', 'claude', 'gemini']).optional(),
+  // Optional allow-list of `provider:model` combos (comma-separated). Empty = all.
+  AI_MODEL_WHITELIST: z.string().optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   OPENAI_MODEL: z.string().min(1).optional(),
+  OPENAI_VISION_MODEL: z.string().min(1).optional(), // default: OPENAI_MODEL
+  OPENAI_EMBED_MODEL: z.string().min(1).optional(), // default: text-embedding-3-small
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_MODEL: z.string().min(1).optional(), // default: claude-opus-4-8
+  ANTHROPIC_VISION_MODEL: z.string().min(1).optional(), // default: ANTHROPIC_MODEL
+
+  // ── Document Intelligence: premium agentic extraction (optional)
+  // Vendor-agnostic hosted agentic parser (LlamaParse / Reducto / self-hosted).
+  // When BASE_URL + API_KEY are set, the premium extraction tier is available.
+  EXTRACTION_AGENTIC_BASE_URL: z.string().url().optional(),
+  EXTRACTION_AGENTIC_API_KEY: z.string().min(1).optional(),
+  EXTRACTION_AGENTIC_MODEL: z.string().min(1).optional(),
+  EXTRACTION_AGENTIC_RESPONSE_PATH: z.string().min(1).optional(),
+  EXTRACTION_AGENTIC_PROVIDER: z.string().min(1).optional(),
 
   // ── Storage: S3-compatible (optional — warn if missing)
   STORAGE_ENDPOINT: z.string().url().optional(),
@@ -136,6 +153,10 @@ const OPTIONAL_GROUPS = [
   { name: 'OpenAI', fields: ['OPENAI_API_KEY'] },
   { name: 'Gemini', fields: ['GEMINI_API_KEY'] },
   { name: 'Anthropic (Claude)', fields: ['ANTHROPIC_API_KEY'] },
+  {
+    name: 'Agentic Extraction (premium)',
+    fields: ['EXTRACTION_AGENTIC_BASE_URL', 'EXTRACTION_AGENTIC_API_KEY'],
+  },
   {
     name: 'Storage (S3)',
     fields: [

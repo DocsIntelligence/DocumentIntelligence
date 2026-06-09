@@ -13,6 +13,7 @@ import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
+import { IntelligenceModule } from './intelligence/intelligence.module';
 import { LegalAiModule } from './legal-ai/legal-ai.module';
 import { SharesModule } from './shares/shares.module';
 import { SignersModule } from './signers/signers.module';
@@ -41,6 +42,7 @@ import { UsersModule } from './users/users.module';
     StorageModule,
     DocumentsModule,
     LegalAiModule,
+    IntelligenceModule.forRootAsync(),
     SharesModule,
     CommentsModule,
     SignersModule,

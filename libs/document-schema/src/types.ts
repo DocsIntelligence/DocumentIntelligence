@@ -27,10 +27,18 @@ export type FieldWidget =
   | 'pincode'
   | 'address'
   | 'boolean'
+  | 'list'
+  | 'group'
   | 'inventory'
   | 'partyBlock'
   | 'witnessBlock'
   | 'lookup';
+
+/** A choice for a `select`/`lookup` widget. */
+export interface FieldOption {
+  value: string;
+  label: string;
+}
 
 export type ShowIfClause =
   | { field: string; equals: unknown }
@@ -47,6 +55,22 @@ export interface FieldMetadata {
   showIf?: ShowIfClause;
   lookupKey?: string; // when widget === 'lookup', resolves via LookupGroup
   placeholder?: string;
+  /**
+   * Choices for a `select` (or `lookup` with static options) widget. When
+   * absent, the builder falls back to a free-text input. Authored alongside
+   * the Zod enum so the form can render a real dropdown.
+   */
+  options?: FieldOption[];
+  /**
+   * For a `group` widget (an array of objects, e.g. witnesses): the metadata
+   * for each item's sub-fields, keyed by the item-relative path (`name`,
+   * `address`). The builder renders N repeating sub-forms with add/remove.
+   */
+  itemFields?: FormMetadata;
+  /** For a `group`/`list` widget: maximum number of items (add is capped). */
+  maxItems?: number;
+  /** For a `group` widget: singular item label, e.g. "Witness" → "Witness 1". */
+  itemLabel?: string;
 }
 
 export type FormMetadata = Record<string, FieldMetadata>;

@@ -6,8 +6,24 @@ export const legalNoticeFormMetadata: FormMetadata = {
     widget: 'select',
     helperText:
       'Drives the statutory framing (e.g. cheque bounce → NI Act §138).',
+    options: [
+      { value: 'cheque_bounce', label: 'Cheque bounce (NI Act §138)' },
+      { value: 'consumer', label: 'Consumer (CPA 2019)' },
+      { value: 'civil_recovery', label: 'Civil recovery of money' },
+      { value: 'employment', label: 'Employment' },
+      { value: 'general', label: 'General' },
+    ],
   },
-  deliveryMode: { label: 'Mode of service', widget: 'select' },
+  deliveryMode: {
+    label: 'Mode of service',
+    widget: 'select',
+    options: [
+      { value: 'registered_post_ad', label: 'Registered post (A/D)' },
+      { value: 'email', label: 'Email' },
+      { value: 'courier', label: 'Courier' },
+      { value: 'hand', label: 'By hand' },
+    ],
+  },
   throughAdvocate: {
     label: 'Issued through an advocate?',
     helperText:
@@ -57,6 +73,7 @@ export const legalNoticeFormMetadata: FormMetadata = {
   },
   'content.facts': {
     label: 'Facts / background',
+    widget: 'list',
     helperText: 'One numbered paragraph per line, in chronological order.',
     aiPromptKey: 'notice.tighten_facts',
   },

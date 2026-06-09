@@ -155,6 +155,11 @@ function Sidebar({
             icon={<DocsIcon />}
           />
           <NavItem
+            to="/analyze"
+            label={t('nav.analyze', 'Analyze')}
+            icon={<ScanIcon />}
+          />
+          <NavItem
             to="/editor"
             label={t('nav.quickEditor', 'Quick editor')}
             icon={<PenIcon />}
@@ -283,6 +288,18 @@ function DocsIcon() {
       <path d="M14 2v6h6" />
       <line x1="8" y1="13" x2="16" y2="13" />
       <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  );
+}
+
+function ScanIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      <line x1="7" y1="12" x2="17" y2="12" />
     </svg>
   );
 }

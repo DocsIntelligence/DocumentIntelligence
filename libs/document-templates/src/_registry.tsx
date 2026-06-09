@@ -3,6 +3,7 @@ import type { PageSizeKey } from './_internals/page-sizes';
 import { RentAgreementClassic } from './rent-agreement/classic';
 import { RtiDefault } from './rti/default';
 import { LegalNoticeFormal } from './legal-notice/formal';
+import { AffidavitDefault } from './affidavit/default';
 import { FreeformDocument } from './freeform';
 
 /**
@@ -31,6 +32,8 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   'rti.default': RtiDefault as TemplateComponent<unknown>,
   // Pre-litigation legal notice (branches on noticeType, incl. NI Act §138).
   'legal-notice.formal': LegalNoticeFormal as TemplateComponent<unknown>,
+  // General-purpose affidavit (deponent + numbered declarations + attestation).
+  'affidavit.default': AffidavitDefault as TemplateComponent<unknown>,
   // Freeform / AI-drafted documents — editor HTML rendered to pages.
   freeform: FreeformDocument as TemplateComponent<unknown>,
 };

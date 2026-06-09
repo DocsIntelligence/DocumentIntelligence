@@ -16,7 +16,9 @@ import {
   createAuthService,
   createDocumentsService,
   createHttpClient,
+  createIntelligenceService,
   createLegalAiService,
+  createLookupsService,
   createSharesService,
   createUsersService,
 } from '@org/api-client';
@@ -30,6 +32,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import App from './app/app';
 import { ConfirmProvider } from './app/components/confirm/ConfirmProvider';
+import { PromptProvider } from './app/components/confirm/PromptProvider';
 import { ServicesProvider } from './app/features/documents/services-context';
 import { APP_ENV } from './config';
 import './styles.css';
@@ -67,6 +70,8 @@ const users = createUsersService(http);
 const documents = createDocumentsService(http);
 const legalAi = createLegalAiService(http);
 const shares = createSharesService(http);
+const lookups = createLookupsService(http);
+const intelligence = createIntelligenceService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -93,11 +98,15 @@ root.render(
             documents={documents}
             legalAi={legalAi}
             shares={shares}
+            lookups={lookups}
+            intelligence={intelligence}
           >
             <BrowserRouter>
               <ConfirmProvider>
-                <App />
-                <Toaster richColors position="bottom-right" />
+                <PromptProvider>
+                  <App />
+                  <Toaster richColors position="bottom-right" />
+                </PromptProvider>
               </ConfirmProvider>
             </BrowserRouter>
           </ServicesProvider>

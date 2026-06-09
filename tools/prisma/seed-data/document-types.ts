@@ -132,6 +132,29 @@ export const documentTypes: DocumentTypeSeed[] = [
     ],
   },
   {
+    key: 'affidavit',
+    name: 'Affidavit',
+    category: 'declarations',
+    description:
+      'General-purpose sworn affidavit — name/address/DOB, income, gap, lost-document and similar declarations, with notary/oath-commissioner attestation.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'file-check',
+    sortOrder: 40,
+    schemaShape: {
+      sections: ['deponent', 'declaration', 'attestation'],
+    },
+    templates: [
+      {
+        key: 'affidavit-default-en',
+        name: 'General Affidavit (English)',
+        componentKey: 'affidavit.default',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
     key: 'freeform',
     name: 'Freeform / AI Draft',
     category: 'general',

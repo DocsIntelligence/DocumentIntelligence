@@ -47,6 +47,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "documents": "Documents",
+    "analyze": "Analyze",
     "quickEditor": "Quick editor",
     "settings": "Settings",
     "admin": "Admin"
@@ -91,5 +92,55 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System"
+  },
+  "intelligence": {
+    "upload": {
+      "title": "Analyze a document",
+      "subtitle": "Upload an existing document — we read it, extract the key fields, and let you review before using it.",
+      "fileTitle": "Document",
+      "fileHint": "PDF, Word (.docx), text, or an image (PNG/JPEG).",
+      "choose": "Choose a file to upload",
+      "clickToBrowse": "Click to browse",
+      "engine": "Extraction engine",
+      "engineHint": "Automatic uses the fast text path and escalates only when needed. Premium is a paid add-on.",
+      "uploading": "Uploading…",
+      "start": "Upload & analyze"
+    },
+    "engine": {
+      "auto": "Automatic (recommended)",
+      "native": "Fast — text layer only",
+      "vlm": "Vision — for scanned files",
+      "agentic": "Premium — agentic (highest accuracy)"
+    },
+    "analyze": {
+      "working": "Analyzing your document…",
+      "failed": "Extraction failed",
+      "failedHint": "Something went wrong.",
+      "tryAgain": "Try another document",
+      "noExtraction": "No extraction found.",
+      "reviewTitle": "Review extraction",
+      "newUpload": "Analyze another"
+    },
+    "stage": {
+      "uploaded": "Queued",
+      "normalize": "Reading document",
+      "classify": "Identifying document type",
+      "extract": "Extracting fields",
+      "analyse": "Analysing",
+      "review": "Finalising"
+    },
+    "review": {
+      "reviewed": "Reviewed",
+      "overall": "Overall confidence",
+      "saving": "Saving…",
+      "save": "Save review",
+      "creating": "Creating…",
+      "createDoc": "Create editable document",
+      "needsReview": "Needs review",
+      "lowConfidenceFields": "Some fields have low confidence — please verify the highlighted values.",
+      "notFound": "Not found",
+      "missing": "Missing",
+      "page": "p.{{n}}"
+    }
   }
 }

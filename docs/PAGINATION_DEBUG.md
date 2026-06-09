@@ -7,6 +7,11 @@ space, an extra page, a block bumped down, different page counts).
 It exists permanently in the codebase behind a runtime flag — nothing is
 commented out, and you never need to rebuild to use it.
 
+> **See also** [`PDF_PRINT_LEARNINGS.md`](PDF_PRINT_LEARNINGS.md) — the portable
+> principles + checklist behind all this (page sizing, fonts, the reset trap),
+> written to carry the approach to another app. This doc is the debugger; that
+> one is the rulebook.
+
 ---
 
 ## Why preview and PDF can diverge

@@ -1,5 +1,6 @@
 import type {
   FieldMetadata,
+  FieldOption,
   FormMetadata,
   ShowIfClause,
 } from '@org/document-schema';
@@ -17,6 +18,8 @@ interface Props {
   data: Record<string, unknown>;
   formMetadata: FormMetadata;
   sectionOrder: string[];
+  /** Resolved `lookup` options keyed by `lookupKey` (from public lookups). */
+  lookupOptions?: Record<string, FieldOption[]>;
   onChange: (data: Record<string, unknown>) => void;
   onAiAssist?: (promptKey: string, fieldPath: string) => void;
   aiBusyField?: string | null;
@@ -37,7 +40,15 @@ export interface BuilderFormHandle {
  */
 export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
   function BuilderForm(
-    { data, formMetadata, sectionOrder, onChange, onAiAssist, aiBusyField },
+    {
+      data,
+      formMetadata,
+      sectionOrder,
+      lookupOptions,
+      onChange,
+      onAiAssist,
+      aiBusyField,
+    },
     ref,
   ) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -95,11 +106,35 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
                   if (meta.showIf && !evalShowIf(meta.showIf, data)) {
                     return null;
                   }
+                  // Repeating object-array (e.g. witnesses): its own editor
+                  // with add/remove rows, spanning the full grid width.
+                  if (meta.widget === 'group') {
+                    return (
+                      <GroupEditor
+                        key={path}
+                        path={path}
+                        meta={meta}
+                        data={data}
+                        setAt={setAt}
+                      />
+                    );
+                  }
+                  // Resolve `lookup` fields against the fetched options, so a
+                  // DB-backed list (e.g. states) renders as a real dropdown.
+                  const resolved =
+                    meta.widget === 'lookup' &&
+                    meta.lookupKey &&
+                    lookupOptions?.[meta.lookupKey]
+                      ? {
+                          ...meta,
+                          options: meta.options ?? lookupOptions[meta.lookupKey],
+                        }
+                      : meta;
                   return (
                     <Field
                       key={path}
                       path={path}
-                      meta={meta}
+                      meta={resolved}
                       value={deepGet(data, path)}
                       onChange={(v) => setAt(path, v)}
                       onAiAssist={onAiAssist}
@@ -138,7 +173,10 @@ function Field({
   const widget = meta.widget ?? 'text';
   const id = `f-${path.replace(/\./g, '-')}`;
   const isFullWidth =
-    widget === 'textarea' || widget === 'address' || widget === 'inventory';
+    widget === 'textarea' ||
+    widget === 'address' ||
+    widget === 'inventory' ||
+    widget === 'list';
 
   return (
     <label
@@ -173,6 +211,29 @@ function Field({
   );
 }
 
+const BASE_INPUT_CLS =
+  'rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
+
+/**
+ * Input affordances for India-specific text widgets. Light-touch: keyboard
+ * hint + length cap + (PAN) uppercase. Authoritative validation stays in the
+ * Zod schema, so these never block typing.
+ */
+const MASKED_INPUTS: Record<
+  string,
+  {
+    inputMode?: 'tel' | 'numeric' | 'text';
+    maxLength?: number;
+    upper?: boolean;
+    placeholder?: string;
+  }
+> = {
+  phone: { inputMode: 'tel', maxLength: 15, placeholder: '+91 98765 43210' },
+  pincode: { inputMode: 'numeric', maxLength: 6, placeholder: '560001' },
+  aadhaar: { inputMode: 'numeric', maxLength: 14, placeholder: 'XXXX XXXX 1234' },
+  pan: { inputMode: 'text', maxLength: 10, upper: true, placeholder: 'ABCDE1234F' },
+};
+
 function renderInput(
   id: string,
   widget: string,
@@ -180,14 +241,40 @@ function renderInput(
   onChange: (v: unknown) => void,
   meta: FieldMetadata,
 ) {
-  const baseCls =
-    'rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
-
+  // Repeated, editable list of strings (e.g. RTI questions, affidavit
+  // statements, facts, inventory). Add/edit/remove rows; stored as string[].
+  if (widget === 'list') {
+    return (
+      <ListEditor id={id} value={value} meta={meta} onChange={onChange} />
+    );
+  }
+  // Real dropdown when the field carries enum options; `lookup` reuses this and
+  // falls back to a text input when no static options are supplied (dynamic
+  // DB-backed lookups are a separate, future data source).
+  if (widget === 'select' || widget === 'lookup') {
+    if (meta.options && meta.options.length > 0) {
+      return (
+        <select
+          id={id}
+          className={BASE_INPUT_CLS}
+          value={asString(value)}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        >
+          <option value="">{meta.placeholder ?? 'Select…'}</option>
+          {meta.options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+  }
   if (widget === 'textarea' || widget === 'address') {
     return (
       <textarea
         id={id}
-        className={baseCls}
+        className={BASE_INPUT_CLS}
         rows={3}
         placeholder={meta.placeholder}
         value={asString(value)}
@@ -202,7 +289,7 @@ function renderInput(
       <input
         id={id}
         type="number"
-        className={baseCls}
+        className={BASE_INPUT_CLS}
         placeholder={meta.placeholder}
         value={value === null || value === undefined ? '' : String(value)}
         onChange={(e) => {
@@ -217,7 +304,7 @@ function renderInput(
       <input
         id={id}
         type="date"
-        className={baseCls}
+        className={BASE_INPUT_CLS}
         value={asString(value)}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -235,29 +322,171 @@ function renderInput(
       </span>
     );
   }
-  if (widget === 'select') {
-    // Default: show a text input. A future iteration can render proper
-    // <Select> options once form-metadata carries enums.
+  // Specialised text widgets: better mobile keyboards + length caps + PAN
+  // auto-uppercase. Validation still lives in the Zod schema (gate on export).
+  const masked = MASKED_INPUTS[widget];
+  if (masked) {
     return (
       <input
         id={id}
         type="text"
-        className={baseCls}
-        placeholder={meta.placeholder}
+        className={BASE_INPUT_CLS}
+        inputMode={masked.inputMode}
+        maxLength={masked.maxLength}
+        autoCapitalize={masked.upper ? 'characters' : undefined}
+        placeholder={meta.placeholder ?? masked.placeholder}
         value={asString(value)}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) =>
+          onChange(masked.upper ? e.target.value.toUpperCase() : e.target.value)
+        }
       />
     );
   }
+  // Plain text + any select/lookup without options.
   return (
     <input
       id={id}
       type="text"
-      className={baseCls}
+      className={BASE_INPUT_CLS}
       placeholder={meta.placeholder}
       value={asString(value)}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+// ─── List editor (string[] fields) ───────────────────────────────────────
+
+function ListEditor({
+  id,
+  value,
+  meta,
+  onChange,
+}: {
+  id: string;
+  value: unknown;
+  meta: FieldMetadata;
+  onChange: (v: unknown) => void;
+}) {
+  const items = Array.isArray(value)
+    ? value.map((v) => (v == null ? '' : String(v)))
+    : [];
+  const commit = (next: string[]) => onChange(next);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((item, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <textarea
+            id={i === 0 ? id : undefined}
+            className={`${BASE_INPUT_CLS} flex-1`}
+            rows={2}
+            placeholder={meta.placeholder}
+            value={item}
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+              const next = items.slice();
+              next[i] = e.target.value;
+              commit(next);
+            }}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Remove item"
+            className="mt-1 shrink-0"
+            onClick={() => commit(items.filter((_, j) => j !== i))}
+          >
+            ✕
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="self-start"
+        onClick={() => commit([...items, ''])}
+      >
+        + Add
+      </Button>
+    </div>
+  );
+}
+
+// ─── Group editor (object-array fields, e.g. witnesses) ───────────────────
+
+function GroupEditor({
+  path,
+  meta,
+  data,
+  setAt,
+}: {
+  path: string;
+  meta: FieldMetadata;
+  data: Record<string, unknown>;
+  setAt: (path: string, value: unknown) => void;
+}) {
+  const raw = deepGet(data, path);
+  const items = Array.isArray(raw) ? raw : [];
+  const itemFields = Object.entries(meta.itemFields ?? {});
+  const maxItems = meta.maxItems ?? Number.POSITIVE_INFINITY;
+  const itemLabel = meta.itemLabel ?? 'Item';
+  const setItems = (next: unknown[]) => setAt(path, next);
+
+  return (
+    <div className="flex flex-col gap-3 sm:col-span-2">
+      <span className="font-medium text-foreground/80">{meta.label}</span>
+      {meta.helperText && (
+        <span className="-mt-2 text-xs text-foreground/50">
+          {meta.helperText}
+        </span>
+      )}
+      {items.map((_item, idx) => (
+        <div
+          key={idx}
+          className="flex flex-col gap-3 rounded-md border border-border p-3"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground/70">
+              {itemLabel} {idx + 1}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${itemLabel} ${idx + 1}`}
+              onClick={() => setItems(items.filter((_, j) => j !== idx))}
+            >
+              ✕
+            </Button>
+          </div>
+          {itemFields.map(([sub, subMeta]) => {
+            const fullPath = `${path}.${idx}.${sub}`;
+            return (
+              <Field
+                key={fullPath}
+                path={fullPath}
+                meta={subMeta}
+                value={deepGet(data, fullPath)}
+                onChange={(v) => setAt(fullPath, v)}
+              />
+            );
+          })}
+        </div>
+      ))}
+      {items.length < maxItems && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() => setItems([...items, {}])}
+        >
+          + Add {itemLabel}
+        </Button>
+      )}
+    </div>
   );
 }
 

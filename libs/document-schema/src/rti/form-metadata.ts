@@ -1,4 +1,10 @@
-import type { FormMetadata } from '../types';
+import type { FieldOption, FormMetadata } from '../types';
+
+const PARENT_RELATION: FieldOption[] = [
+  { value: 'S/o', label: 'Son of (S/o)' },
+  { value: 'D/o', label: 'Daughter of (D/o)' },
+  { value: 'W/o', label: 'Wife of (W/o)' },
+];
 
 export const rtiFormMetadata: FormMetadata = {
   place: { label: 'Place', placeholder: 'New Delhi' },
@@ -6,7 +12,11 @@ export const rtiFormMetadata: FormMetadata = {
 
   // Applicant
   'applicant.name': { label: 'Applicant — full name' },
-  'applicant.parentRelation': { label: 'Relation', widget: 'select' },
+  'applicant.parentRelation': {
+    label: 'Relation',
+    widget: 'select',
+    options: PARENT_RELATION,
+  },
   'applicant.parentName': { label: "Father/Husband/Mother's name" },
   'applicant.address': { label: 'Address for reply', widget: 'address' },
   'applicant.phone': { label: 'Phone', widget: 'phone' },
@@ -41,13 +51,23 @@ export const rtiFormMetadata: FormMetadata = {
   },
   'request.questions': {
     label: 'Information sought',
+    widget: 'list',
     helperText:
       'One specific point per line. Ask for information, not opinions.',
     aiPromptKey: 'rti.frame_questions',
   },
   'request.periodFrom': { label: 'Period from', widget: 'date' },
   'request.periodTo': { label: 'Period to', widget: 'date' },
-  'request.preferredFormat': { label: 'Preferred format', widget: 'select' },
+  'request.preferredFormat': {
+    label: 'Preferred format',
+    widget: 'select',
+    options: [
+      { value: 'certified_copies', label: 'Certified copies' },
+      { value: 'inspection', label: 'Inspection of records' },
+      { value: 'soft_copy', label: 'Soft copy (CD / email)' },
+      { value: 'sample', label: 'Samples of material' },
+    ],
+  },
   'request.lifeOrLiberty': {
     label: 'Concerns life or liberty?',
     helperText:
@@ -56,7 +76,17 @@ export const rtiFormMetadata: FormMetadata = {
 
   // Fee
   'fee.amount': { label: 'Application fee (₹)', widget: 'currency' },
-  'fee.mode': { label: 'Fee mode', widget: 'select' },
+  'fee.mode': {
+    label: 'Fee mode',
+    widget: 'select',
+    options: [
+      { value: 'ipo', label: 'Indian Postal Order' },
+      { value: 'dd', label: 'Demand Draft' },
+      { value: 'court_fee_stamp', label: 'Court-fee stamp' },
+      { value: 'cash', label: 'Cash' },
+      { value: 'online', label: 'Online payment' },
+    ],
+  },
   'fee.paid': { label: 'Fee enclosed/paid' },
 };
 

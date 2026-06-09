@@ -1,20 +1,24 @@
 import type {
   DocumentsService,
+  IntelligenceService,
   LegalAiService,
+  LookupsService,
   SharesService,
 } from '@org/api-client';
 import { createContext, type ReactNode, useContext } from 'react';
 
 /**
- * Tiny React context exposing the documents + legal-ai HTTP services to
- * the feature folder. Created once in main.tsx so the same axios instance
- * (with refresh interceptors) is reused.
+ * Tiny React context exposing the documents + legal-ai + intelligence HTTP
+ * services to the feature folders. Created once in main.tsx so the same axios
+ * instance (with refresh interceptors) is reused.
  */
 
 interface Services {
   documents: DocumentsService;
   legalAi: LegalAiService;
   shares: SharesService;
+  lookups: LookupsService;
+  intelligence: IntelligenceService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -27,10 +31,14 @@ export function ServicesProvider({
   documents,
   legalAi,
   shares,
+  lookups,
+  intelligence,
   children,
 }: ProviderProps) {
   return (
-    <ServicesContext.Provider value={{ documents, legalAi, shares }}>
+    <ServicesContext.Provider
+      value={{ documents, legalAi, shares, lookups, intelligence }}
+    >
       {children}
     </ServicesContext.Provider>
   );
@@ -52,4 +60,17 @@ export function useSharesService(): SharesService {
   const ctx = useContext(ServicesContext);
   if (!ctx) throw new Error('useSharesService outside <ServicesProvider>');
   return ctx.shares;
+}
+
+export function useLookupsService(): LookupsService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx) throw new Error('useLookupsService outside <ServicesProvider>');
+  return ctx.lookups;
+}
+
+export function useIntelligenceService(): IntelligenceService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx)
+    throw new Error('useIntelligenceService outside <ServicesProvider>');
+  return ctx.intelligence;
 }

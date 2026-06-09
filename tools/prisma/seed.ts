@@ -249,6 +249,35 @@ async function main() {
     },
   });
 
+  // Document-Intelligence premium (agentic) extraction quota per plan.
+  // Done as an idempotent per-plan upsert so it lands on every re-seed even
+  // though the paid plans above use `update: {}` (immutable post-create).
+  // Free = 0 (gated off); paid tiers get a quota or unlimited (-1).
+  // NOTE: this adds the PLAN feature; existing user wallets only gain the
+  // matching usage row when their wallet is (re)created — checkQuota returns
+  // false without that row, which is the correct safe default for free users.
+  const premiumExtractionQuota: Record<string, number> = {
+    'free-plan': 0,
+    'starter-monthly': 20,
+    'pro-monthly': -1,
+    'pro-yearly': -1,
+    'agency-monthly': -1,
+  };
+  for (const [planId, quantity] of Object.entries(premiumExtractionQuota)) {
+    await prisma.planFeature.upsert({
+      where: {
+        name_planId: { name: Feature.premium_extraction, planId },
+      },
+      update: { quantity, action: FeatureAction.reset },
+      create: {
+        name: Feature.premium_extraction,
+        planId,
+        quantity,
+        action: FeatureAction.reset,
+      },
+    });
+  }
+
   console.log('✅ Plans seeded');
 
   // ─── Lookups ────────────────────────────────────────────────────────────

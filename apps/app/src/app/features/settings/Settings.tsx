@@ -10,6 +10,7 @@ import {
 } from '@org/ui';
 import { toast } from 'sonner';
 import { startRegistration } from '@simplewebauthn/browser';
+import { usePrompt } from '../../components/confirm/PromptProvider';
 import { APP_ENV } from '../../../config';
 
 const API_BASE_URL = APP_ENV.apiUrl;
@@ -30,6 +31,7 @@ interface PasskeyInfo {
 
 export function Settings() {
   const { t } = useTranslation();
+  const prompt = usePrompt();
   const user = useAppSelector(selectUser);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [passkeys, setPasskeys] = useState<PasskeyInfo[]>([]);
@@ -101,9 +103,11 @@ export function Settings() {
 
       // Verify with server
       const label =
-        prompt(
-          t('settings.namePasskeyPrompt', 'Name this passkey (optional):'),
-        ) ?? undefined;
+        (await prompt({
+          title: t('settings.namePasskeyTitle', 'Name this passkey'),
+          label: t('settings.namePasskeyPrompt', 'Name this passkey (optional):'),
+          placeholder: t('settings.namePasskeyPlaceholder', 'e.g. MacBook Touch ID'),
+        })) ?? undefined;
       const verifyRes = await fetch(
         `${API_BASE_URL}/auth/passkey/register/verify`,
         {

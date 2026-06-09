@@ -1,4 +1,16 @@
-import type { FormMetadata } from '../types';
+import type { FieldOption, FormMetadata } from '../types';
+
+const PARENT_RELATION: FieldOption[] = [
+  { value: 'S/o', label: 'Son of (S/o)' },
+  { value: 'D/o', label: 'Daughter of (D/o)' },
+  { value: 'W/o', label: 'Wife of (W/o)' },
+];
+
+const PAID_BY: FieldOption[] = [
+  { value: 'landlord', label: 'Landlord' },
+  { value: 'tenant', label: 'Tenant' },
+  { value: 'shared', label: 'Shared' },
+];
 
 export const rentAgreementFormMetadata: FormMetadata = {
   state: {
@@ -26,7 +38,11 @@ export const rentAgreementFormMetadata: FormMetadata = {
 
   // Parties
   'parties.landlord.name': { label: 'Landlord — full name' },
-  'parties.landlord.parentRelation': { label: 'Relation', widget: 'select' },
+  'parties.landlord.parentRelation': {
+    label: 'Relation',
+    widget: 'select',
+    options: PARENT_RELATION,
+  },
   'parties.landlord.parentName': {
     label: "Father/Husband/Mother's name",
     aiPromptKey: 'parties.parent_format',
@@ -47,7 +63,11 @@ export const rentAgreementFormMetadata: FormMetadata = {
   },
 
   'parties.tenant.name': { label: 'Tenant — full name' },
-  'parties.tenant.parentRelation': { label: 'Relation', widget: 'select' },
+  'parties.tenant.parentRelation': {
+    label: 'Relation',
+    widget: 'select',
+    options: PARENT_RELATION,
+  },
   'parties.tenant.parentName': { label: "Father/Husband/Mother's name" },
   'parties.tenant.age': { label: 'Age', widget: 'number' },
   'parties.tenant.occupation': { label: 'Occupation' },
@@ -68,14 +88,33 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'property.city': { label: 'City' },
   'property.state': { label: 'State' },
   'property.pincode': { label: 'PIN code', widget: 'pincode' },
-  'property.type': { label: 'Property type', widget: 'select' },
+  'property.type': {
+    label: 'Property type',
+    widget: 'select',
+    options: [
+      { value: 'apartment', label: 'Apartment / Flat' },
+      { value: 'independent_house', label: 'Independent house' },
+      { value: 'villa', label: 'Villa' },
+      { value: 'commercial', label: 'Commercial' },
+      { value: 'pg_room', label: 'PG room' },
+    ],
+  },
   'property.builtUpAreaSqft': {
     label: 'Built-up area (sq ft)',
     widget: 'number',
   },
-  'property.furnished': { label: 'Furnishing', widget: 'select' },
+  'property.furnished': {
+    label: 'Furnishing',
+    widget: 'select',
+    options: [
+      { value: 'unfurnished', label: 'Unfurnished' },
+      { value: 'semi_furnished', label: 'Semi-furnished' },
+      { value: 'fully_furnished', label: 'Fully furnished' },
+    ],
+  },
   'property.inventory': {
     label: 'Inventory of fittings/fixtures',
+    widget: 'list',
     helperText: 'One item per line. Important for deposit-deduction disputes.',
   },
 
@@ -130,15 +169,32 @@ export const rentAgreementFormMetadata: FormMetadata = {
   },
 
   // Utilities
-  'utilities.electricityPaidBy': { label: 'Electricity', widget: 'select' },
-  'utilities.waterPaidBy': { label: 'Water', widget: 'select' },
-  'utilities.maintenancePaidBy': { label: 'Maintenance', widget: 'select' },
-  'utilities.internetPaidBy': { label: 'Internet', widget: 'select' },
+  'utilities.electricityPaidBy': {
+    label: 'Electricity',
+    widget: 'select',
+    options: PAID_BY,
+  },
+  'utilities.waterPaidBy': { label: 'Water', widget: 'select', options: PAID_BY },
+  'utilities.maintenancePaidBy': {
+    label: 'Maintenance',
+    widget: 'select',
+    options: PAID_BY,
+  },
+  'utilities.internetPaidBy': {
+    label: 'Internet',
+    widget: 'select',
+    options: PAID_BY,
+  },
   'utilities.societyChargesPaidBy': {
     label: 'Society charges',
     widget: 'select',
+    options: PAID_BY,
   },
-  'utilities.propertyTaxPaidBy': { label: 'Property tax', widget: 'select' },
+  'utilities.propertyTaxPaidBy': {
+    label: 'Property tax',
+    widget: 'select',
+    options: PAID_BY,
+  },
 
   // Rules
   'rules.petsAllowed': { label: 'Pets allowed' },
@@ -152,15 +208,23 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'rules.commercialUseAllowed': { label: 'Commercial use allowed' },
   'rules.customRules': {
     label: 'Additional rules',
+    widget: 'list',
     helperText: 'One rule per line.',
     aiPromptKey: 'rules.suggest',
   },
 
-  // Witnesses
-  'witnesses.0.name': { label: 'Witness 1 — name' },
-  'witnesses.0.address': { label: 'Witness 1 — address' },
-  'witnesses.1.name': { label: 'Witness 2 — name' },
-  'witnesses.1.address': { label: 'Witness 2 — address' },
+  // Witnesses — repeating group (up to 4), add/remove rows in the builder.
+  witnesses: {
+    label: 'Witnesses',
+    widget: 'group',
+    itemLabel: 'Witness',
+    maxItems: 4,
+    helperText: 'Two witnesses are customary; add up to four.',
+    itemFields: {
+      name: { label: 'Name' },
+      address: { label: 'Address', widget: 'textarea' },
+    },
+  },
 };
 
 export const rentAgreementSectionOrder = [

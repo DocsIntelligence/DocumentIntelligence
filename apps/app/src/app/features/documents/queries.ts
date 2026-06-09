@@ -7,9 +7,14 @@ import type {
   RecordSignaturePayload,
   UpdateSignerPayload,
 } from '@org/api-client';
+import type { FieldOption } from '@org/document-schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useDocumentsService, useSharesService } from './services-context';
+import {
+  useDocumentsService,
+  useLookupsService,
+  useSharesService,
+} from './services-context';
 
 export const documentsKeys = {
   all: ['documents'] as const,
@@ -231,4 +236,34 @@ function extractMessage(err: unknown, fallback: string): string {
     if (Array.isArray(msg)) return msg.join(', ');
   }
   return fallback;
+}
+
+// ─── Lookups (for `lookup` form fields) ───────────────────────────────────
+
+export const lookupsKeys = {
+  all: ['lookups'] as const,
+};
+
+/**
+ * Fetches all public lookup groups once and returns a map of
+ * `lookupKey → FieldOption[]` for the builder's `lookup` fields. Each value's
+ * stored `value` (falling back to its label) becomes the option value.
+ */
+export function useLookupOptions() {
+  const svc = useLookupsService();
+  return useQuery({
+    queryKey: lookupsKeys.all,
+    queryFn: async (): Promise<Record<string, FieldOption[]>> => {
+      const groups = await svc.getAll();
+      const map: Record<string, FieldOption[]> = {};
+      for (const g of groups) {
+        map[g.key] = g.values.map((v) => ({
+          value: v.value ?? v.label,
+          label: v.label,
+        }));
+      }
+      return map;
+    },
+    staleTime: 10 * 60_000,
+  });
 }

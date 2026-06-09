@@ -27,6 +27,7 @@
       "@org/store": ["libs/shared/store/src/index.ts"],
       "@org/document-schema": ["libs/document-schema/src/index.ts"],
       "@org/document-templates": ["libs/document-templates/src/index.ts"],
+      "@org/doc-intelligence": ["libs/doc-intelligence/src/index.ts"],
       "@org/transliteration": ["libs/shared/transliteration/src/index.ts"],
       "@org/legal-reference": ["libs/shared/legal-reference/src/index.ts"]
     }

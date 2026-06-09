@@ -24,7 +24,12 @@ import { CommentsDialog } from '../CommentsDialog';
 import { ShareDialog } from '../ShareDialog';
 import { SignaturesDialog } from '../SignaturesDialog';
 import { VersionHistoryDialog } from '../VersionHistoryDialog';
-import { useCreateDocument, useDocument, usePatchDocument } from '../queries';
+import {
+  useCreateDocument,
+  useDocument,
+  useLookupOptions,
+  usePatchDocument,
+} from '../queries';
 import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
@@ -56,6 +61,7 @@ interface Props {
 export function BuilderShell({ documentId }: Props) {
   const { t } = useTranslation();
   const { data: doc, isLoading } = useDocument(documentId);
+  const { data: lookupOptions } = useLookupOptions();
   const patch = usePatchDocument(documentId);
   const { mutate: patchMutate } = patch;
   const legalAi = useLegalAiService();
@@ -338,6 +344,7 @@ export function BuilderShell({ documentId }: Props) {
         data={draft}
         formMetadata={bundle.formMetadata}
         sectionOrder={bundle.sectionOrder}
+        lookupOptions={lookupOptions}
         onChange={setDraft}
         onAiAssist={onAiAssist}
         aiBusyField={aiBusyField}
