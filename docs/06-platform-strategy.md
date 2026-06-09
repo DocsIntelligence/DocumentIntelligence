@@ -102,6 +102,12 @@ one arc. The **corrections** users make (drafting edits, extraction fixes) are t
 **data flywheel** — proprietary, India-legal, improves accuracy, and is the thing a
 generic GPT wrapper or a US template player can't replicate.
 
+The UNDERSTAND→DRAFT seam (where the loop actually closes) is specified in
+**`05` §11**: Document Intelligence and the document generator share one
+`DocumentType` vocabulary, and `convert` prefills a **structured** draft (not just
+freeform HTML) when an upload matches a known type. That shared schema contract is
+what makes the loop a loop rather than two disconnected tools.
+
 ---
 
 ## 5. The cut list — what we deliberately do NOT build (this is half the strategy)

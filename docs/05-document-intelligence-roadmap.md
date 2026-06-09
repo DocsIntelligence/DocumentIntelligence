@@ -53,7 +53,7 @@ machinery the POC leads with.
 
 ## 3. What the industry actually expects in 2026 (research → requirements)
 
-Findings with confidence levels; sources in §11.
+Findings with confidence levels; sources in §12.
 
 - **VLM-native, layout-aware extraction is the new baseline** (confidence: high).
   3rd-gen IDP reads documents like a human — interprets layout, tables, headers,
@@ -98,14 +98,18 @@ Findings with confidence levels; sources in §11.
 ## 4. Target architecture (VLM-native, agentic, schema-driven, pluggable)
 
 ```
-        ┌─────────── ingest ───────────┐   ┌──────── understand ────────┐   ┌─ bridge ─┐
-upload → normalize → classify(doctype) → extract(schema, agentic) → analyse/RAG → convert
-  │         │             │                    │            │              │         │
-StorageSvc  ParserRegistry ClassifierEngine    ExtractionEngine           CitationVerify  → freeform Document
-            (fast text)    (VLM/route)          (VLM multi-pass +          (@org/legal-reference)   (existing editor)
-            OCR/VLM engine                      critic + confidence +
-            (scanned/Hindi)                     provenance)
+        ┌─────────── ingest ───────────┐   ┌──────── understand ────────┐   ┌─ bridge (§11) ─┐
+upload → normalize → classify(doctype) → extract(schema, agentic) → analyse/RAG → convert ─┬─► structured Document
+  │         │             │                    │            │              │         │      │   (known DocumentType →
+StorageSvc  ParserRegistry ClassifierEngine    ExtractionEngine           CitationVerify    │    prefilled builder)
+            (fast text)    (VLM/route,          (VLM multi-pass +          (@org/legal-ref)  └─► freeform Document
+            OCR/VLM engine  emits DocumentType  critic + confidence +                            (fallback: no match /
+            (scanned/Hindi) key when matched)   provenance)                                       low confidence)
 ```
+
+The classifier emits the **generator's `DocumentType` key** (`rent_agreement`, `rti`,
+`legal_notice`, …) when an upload matches a known type — the single shared vocabulary
+that lets `convert` route straight into a structured `DocumentTypeBundle` (§11).
 
 **Engine abstraction (the reusable core).** Every engine here follows
 `docs/ARCHITECTURE_PRINCIPLES.md` — interface → registry → factory → config-driven
@@ -203,20 +207,30 @@ Rough effort (1 eng); measurable exits.
   _recorded character-accuracy number_; go/no-go on engine.
 - **Phase 1 — Extraction MVP + eval harness (~3 wk).** `ExtractionSchema` (no-code
   authoring), agentic multi-pass extraction → JSON with **per-field confidence +
-  provenance**, classification→schema routing, **review UI** (doc + fields +
-  click-to-highlight + accept/correct), the **eval harness (§6)**, `WalletUsage`
-  metering. **Exit:** upload → auto-classify → extract → review/correct →
-  download; precision/recall + STP tracked on the gold set.
+  provenance**, classification→schema routing (the classifier emits the
+  generator's `DocumentType` key when an upload matches a known type — §11),
+  **review UI** (doc + fields + click-to-highlight + accept/correct), the
+  **eval harness (§6)**, `WalletUsage` metering. **Exit:** upload → auto-classify
+  → extract → review/correct → download; precision/recall + STP tracked on the
+  gold set.
 - **Phase 2 — Analysis, citations & Q&A (~2–3 wk).** Summary, timeline,
   obligations/parties, clause/risk flags; **citation extraction + verification via
   `@org/legal-reference`**; RAG "ask this document" with **page-cited** answers.
   **Exit:** case-file summary + cited-law health; answer a question with a correct
   page citation.
-- **Phase 3 — Convert → editable document (the bridge) (~3–4 wk).** Normalized doc
-  → clean `freeform` HTML (tables/lists/headings/Hindi) + optional `{{placeholder}}`
-  injection from Phase-1 fields; "Open in editor" creates a `freeform` `Document`.
-  **Exit:** uploaded contract → editable, paginating doc that round-trips the editor
-  and re-exports (defined fidelity rubric; not pixel-perfect).
+- **Phase 3 — Convert → editable document (the bridge) (~3–4 wk).** Two targets,
+  per §11: (a) **structured prefill** — when the upload classified to a known
+  `DocumentType`, map the reviewed extraction onto that type's `DocumentTypeBundle`
+  schema and create a **structured** `Document` that opens prefilled in the builder
+  (risks re-run, templates/export reused); (b) **freeform fallback** — otherwise,
+  normalized doc → clean `freeform` HTML (tables/lists/headings/Hindi) + optional
+  `{{placeholder}}` injection. Both go through the existing document-create API
+  (no editor edits). Ship field-maps for the three live types (`rent_agreement`,
+  `rti`, `legal_notice`) as the first packs (§5.5).
+  **Exit:** uploaded rent agreement → structured, prefilled, editable `Document`
+  (fields traceable to source); an unrecognized contract → editable freeform doc
+  that round-trips the editor and re-exports (defined fidelity rubric; not
+  pixel-perfect).
 - **Phase 4 — Teams/ops & advanced (later, only if multi-reviewer ICP).** _Now_
   port the POC's process-as-data workflow engine (Postgres-native), assignment
   strategies, queues, exception lifecycle, bulk review. Plus: multi-document
@@ -258,19 +272,104 @@ Rough effort (1 eng); measurable exits.
 New module (`intelligence`), new lib (`@org/doc-intelligence`), new Postgres
 models. **No edits to `Document`/`DocumentVersion`/editor.** Read-only reuse:
 `StorageService`, `AiService` (extended additively), `@org/legal-reference`,
-`@org/ui`, BullMQ, `WalletUsage`. The _only_ write-bridge is Phase 3 `convert`,
-which calls the existing document-create path to spawn a `freeform` `Document`.
+`@org/ui`, BullMQ, `WalletUsage`, and the `@org/document-schema` bundles (read by
+the convert mapper, §11). The _only_ write-bridge is Phase 3 `convert`, which calls
+the existing document-create API to spawn either a **structured** `Document` (known
+type, prefilled — §11.3) or a `freeform` `Document` (fallback) — never editing
+editor/document code itself.
 
 ```
 upload → normalize → [classify → extract | analyse | ask] → (P3) convert ──┐
    SourceDocument / IntelligenceJob / Extraction / AnalysisRun (separate)   │
                                                                             ▼
-                                              creates freeform Document → existing editor
+                          existing create API → structured Document (known type, prefilled)
+                                              └► freeform Document (fallback) → existing editor
 ```
 
 ---
 
-## 11. Sources (industry research, 2025–2026)
+## 11. Integration with the document generator (drafting ⇄ intelligence)
+
+This is the alignment that keeps the two halves of the platform converging instead
+of growing as parallel universes. The drafting side (the **document generator**:
+`@org/document-schema` bundles + `@org/document-templates` + the builder) and the
+intelligence side (this roadmap) are **mirror images of one schema idea** and share
+one vocabulary. Design them to interoperate now, even though only the convert
+direction is built (Phase 3).
+
+### 11.1 The two schema systems are mirrors
+
+| | Document generator (drafting) | Document Intelligence (this doc) |
+| --- | --- | --- |
+| Unit | `DocumentTypeBundle` (`libs/document-schema/src/types.ts`) | `ExtractionSchema` (§5.1) |
+| Purpose | Fill a **blank** doc → structured values | Read a **filled** doc → structured values |
+| Field shape | Zod schema + `FormMetadata` (label, widget, `showIf`) | field defs (name, type, required, format, example) + **confidence + provenance** |
+| Risks | `risks(data) → Warning[]` (deterministic) | calibrated confidence + review routing |
+| Identity | `DocumentType.key` (`rent_agreement`, `rti`, `legal_notice`) | classifier output (**same keys**) |
+
+Because §5.1 already states the `ExtractionSchema` "is the reverse of `DocumentType`,"
+the field defs and the bundle schema should be **co-designed per type**: every live
+`DocumentTypeBundle` is the target shape an extraction can aim at.
+
+### 11.2 One shared doctype vocabulary
+
+The classifier's taxonomy **reuses the generator's `DocumentType` keys** verbatim.
+A classifier that returns `rent_agreement` routes directly to (a) the matching
+`ExtractionSchema` for extraction and (b) the matching `DocumentTypeBundle` for
+convert — no translation layer. This single decision is what makes structured
+convert cheap; it's a Phase-1 classifier requirement, not new Phase-3 work.
+
+### 11.3 The convert bridge — two targets
+
+`convert` is still the **one sanctioned write-bridge** (§10). It chooses a target:
+
+- **Structured prefill (preferred)** — upload classified to a known `DocumentType`,
+  and overall/required-field confidence clears the threshold:
+  1. The **reviewed** extraction (corrected in the Phase-1 review UI) is mapped onto
+     the bundle's Zod schema via a per-type **field-map** (§11.4).
+  2. `convert` calls the **existing document-create API** — the same
+     `POST /documents` that the builder's "generate in language" already uses
+     (`createDoc({ documentTypeKey, templateKey, data })`, with `templateKey` from
+     the bundle's `knownTemplates`) — to create a **structured** `Document`.
+  3. It opens in the **structured builder**, prefilled. `bundle.risks(data)` runs
+     automatically; templates, page sizes, and PDF export are reused for free.
+- **Freeform fallback** — no matching type, low confidence, or a non-standard
+  layout: create a `freeform` `Document` (`data: { html, values }`) exactly as
+  today. Lossy but universal.
+
+Because review/correction happens in the Phase-1 DI review UI **before** convert,
+the structured `Document` created is already human-validated — no confidence
+plumbing needs to leak into the builder for the MVP.
+
+### 11.4 The field-map is config-as-data
+
+The mapping from extraction field keys → bundle field paths (e.g.
+`landlord_name → parties[0].name`) is **data, not code** — a per-`DocumentType`
+field-map, versioned in Postgres, fitting the §5 customization surface and shipping
+as part of the §5.5 org/jurisdiction packs. First three maps to author:
+`rent_agreement`, `rti`, `legal_notice` (the live bundles). New doc types get a
+field-map without touching convert code.
+
+### 11.5 What stays untouched (separation contract holds — §10)
+
+- Convert uses the **public create path**, the same one normal drafting uses — it is
+  *not* an edit to `Document`/`DocumentVersion`/editor. The structured doc it spawns
+  is an ordinary user document thereafter.
+- `AiService` is extended **additively** (vision/extract/embed, §4); the generator's
+  existing `generate`/`clauseRewrite` (`apps/api/src/app/legal-ai/`) are untouched.
+- `@org/document-schema` bundles are **read** by the mapper (to know the target
+  shape); they are not modified by the intelligence side.
+
+### 11.6 Optional later (additive, non-breaking)
+
+Surfacing per-field provenance/low-confidence **inside** the builder (source bbox on
+hover, "needs review" chips) would be an **optional** `Warning[]` input passed
+alongside `bundle.risks` output — an additive prop, opt-in, not an editor rewrite.
+Deferred; the pre-convert review UI covers the MVP.
+
+---
+
+## 12. Sources (industry research, 2025–2026)
 
 - Everest Group, _IDP State of the Market 2025_ — https://www.everestgrp.com/report/egr-2025-38-r-7283/
 - Fortune Business Insights, _IDP Market Size_ — https://www.fortunebusinessinsights.com/intelligent-document-processing-market-108590
