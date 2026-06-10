@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { selectUser, useAppSelector } from '@org/store';
 import { Button, Card } from '@org/ui';
 import { toast } from 'sonner';
@@ -195,6 +196,22 @@ export function AdminDashboard() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      {/* Document Intelligence configuration */}
+      <Card className="rounded-xl p-6 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-foreground">
+            Document Intelligence configuration
+          </h3>
+          <p className="text-foreground/60 text-sm mt-1">
+            Author document types &amp; extraction fields, and design processing
+            pipelines (classify → extract → review → export).
+          </p>
+        </div>
+        <Link to="/admin/intelligence">
+          <Button size="sm">Configure</Button>
+        </Link>
       </Card>
 
       {/* Lookups Management */}

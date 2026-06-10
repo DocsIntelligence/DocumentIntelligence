@@ -10,7 +10,7 @@ import {
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { useBatches, useCreateBatch } from './queries';
+import { useBatches, useCreateBatch, usePipelineOptions } from './queries';
 
 const ACCEPT =
   '.pdf,.docx,.txt,.md,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg';
@@ -31,12 +31,17 @@ export function BatchesPage() {
   const navigate = useNavigate();
   const create = useCreateBatch();
   const { data: batches } = useBatches();
+  const { data: pipelines } = usePipelineOptions();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [pipeline, setPipeline] = useState('default');
 
   const onCreate = async () => {
     if (!files.length) return;
-    const res = await create.mutateAsync({ files });
+    const res = await create.mutateAsync({
+      files,
+      pipeline: pipeline || undefined,
+    });
     navigate(`/batches/${res.batchId}`);
   };
 
@@ -89,6 +94,28 @@ export function BatchesPage() {
               {t('intelligence.upload.clickToBrowse', 'Click to browse')}
             </span>
           </button>
+          <label className="block text-sm">
+            <span className="text-foreground/60">
+              {t('intelligence.batches.pipeline', 'Pipeline')}
+            </span>
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
+              value={pipeline}
+              onChange={(e) => setPipeline(e.target.value)}
+            >
+              {(pipelines ?? [{ key: 'default', name: 'Default' }]).map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.name} ({p.key})
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-foreground/50">
+              {t(
+                'intelligence.batches.pipelineHint',
+                'Which processing flow to run. Manage pipelines in Admin → Document Intelligence.',
+              )}
+            </span>
+          </label>
           <Button
             onClick={onCreate}
             disabled={!files.length || create.isPending}

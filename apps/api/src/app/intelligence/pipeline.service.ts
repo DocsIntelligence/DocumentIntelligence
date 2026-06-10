@@ -344,11 +344,11 @@ export class PipelineService {
    * Surfaces an actionable error for the common misconfig: a scanned PDF with
    * only OpenAI configured (OpenAI chat can't read PDFs).
    */
-  private async classifyByVision(source: SourceInput) {
+  private async classifyByVision(source: SourceInput, candidateKeys?: string[]) {
     this.assertVisionCanRead(source);
     return this.classifier.classify({
       source,
-      candidateKeys: classifierCandidateKeys(),
+      candidateKeys: candidateKeys ?? classifierCandidateKeys(),
     });
   }
 
@@ -395,14 +395,23 @@ export class PipelineService {
     return this.parseText(source);
   }
 
-  /** Classify text-first (over parsed text when available, else vision). */
-  async classifyDoc(parsed: NormalizedDocument | null, source: SourceInput) {
+  /**
+   * Classify text-first (over parsed text when available, else vision).
+   * `candidateKeys` lets the data-driven executor pass an org-resolved /
+   * per-pipeline-narrowed candidate set; defaults to the in-code registry for
+   * the legacy single-doc flow.
+   */
+  async classifyDoc(
+    parsed: NormalizedDocument | null,
+    source: SourceInput,
+    candidateKeys?: string[],
+  ) {
     return parsed
       ? this.classifier.classify({
           document: parsed,
-          candidateKeys: classifierCandidateKeys(),
+          candidateKeys: candidateKeys ?? classifierCandidateKeys(),
         })
-      : this.classifyByVision(source);
+      : this.classifyByVision(source, candidateKeys);
   }
 
   /** Run tiered extraction (native/vlm/agentic) with entitlement gating. */

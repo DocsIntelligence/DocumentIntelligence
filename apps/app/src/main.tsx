@@ -17,6 +17,7 @@ import {
   createDocumentsService,
   createHttpClient,
   createIntelligenceService,
+  createIntelligenceAdminService,
   createLegalAiService,
   createLookupsService,
   createSharesService,
@@ -72,6 +73,7 @@ const legalAi = createLegalAiService(http);
 const shares = createSharesService(http);
 const lookups = createLookupsService(http);
 const intelligence = createIntelligenceService(http);
+const intelligenceAdmin = createIntelligenceAdminService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -100,6 +102,7 @@ root.render(
             shares={shares}
             lookups={lookups}
             intelligence={intelligence}
+            intelligenceAdmin={intelligenceAdmin}
           >
             <BrowserRouter>
               <ConfirmProvider>

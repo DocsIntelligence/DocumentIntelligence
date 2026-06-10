@@ -13,7 +13,6 @@ import {
   DEFAULT_ROUTING,
   decideReview,
   genericExtractionSchema,
-  getExtractionSchema,
   type ExtractionResult,
   type ExtractionSchema,
   type NormalizedDocument,
@@ -23,6 +22,7 @@ import { DatabaseService } from '../database/database.service';
 import { errorMessage } from '../common/error.util';
 import { IntelligenceService } from './intelligence.service';
 import { PipelineService } from './pipeline.service';
+import { SchemaResolverService } from './config/schema-resolver.service';
 
 /** Per-stage config shape (jsonb). All fields optional. */
 interface AutoAdvance {
@@ -34,6 +34,8 @@ interface AutoAdvance {
 interface StageConfig {
   engineMode?: ExtractionEngineMode;
   schemaKey?: string;
+  /** classify: narrow the classifier candidate set (per-pipeline allowlist). */
+  candidateKeys?: string[];
   autoAdvance?: AutoAdvance;
   targets?: string[];
 }
@@ -48,6 +50,7 @@ interface RunContext {
   extractionId: string | null;
   result: ExtractionResult | null;
   ownerUserId: string | null;
+  ownerOrgId: string | null;
 }
 
 export const DEFAULT_PIPELINE_KEY = 'default';
@@ -71,6 +74,7 @@ export class PipelineExecutorService {
     private readonly db: DatabaseService,
     private readonly pipeline: PipelineService,
     private readonly intelligence: IntelligenceService,
+    private readonly resolver: SchemaResolverService,
   ) {}
 
   /** Create a run for a source on a pipeline (default if unspecified) and start it. */
@@ -222,12 +226,15 @@ export class PipelineExecutorService {
       sourceDocumentId: run.sourceDocumentId,
       source: { data: '', contentType: run.sourceDocument.contentType },
       parsed: null,
-      schema:
-        getExtractionSchema(extraction.schemaKey) ?? genericExtractionSchema,
+      schema: await this.resolver.resolveSchema(
+        run.sourceDocument.ownerOrgId,
+        extraction.schemaKey,
+      ),
       documentTypeKey: extraction.documentTypeKey,
       extractionId: extraction.id,
       result: null,
       ownerUserId: run.sourceDocument.ownerUserId,
+      ownerOrgId: run.sourceDocument.ownerOrgId,
     };
 
     for (const stage of remaining) {
@@ -296,6 +303,7 @@ export class PipelineExecutorService {
       extractionId: null,
       result: null,
       ownerUserId: src.ownerUserId,
+      ownerOrgId: src.ownerOrgId,
     };
 
     await this.db.pipelineRun.update({
@@ -382,10 +390,18 @@ export class PipelineExecutorService {
       }
 
       case PipelineStageType.classify: {
-        const c = await this.pipeline.classifyDoc(ctx.parsed, ctx.source);
+        const candidates = await this.resolver.candidateKeys(
+          ctx.ownerOrgId,
+          config.candidateKeys,
+        );
+        const c = await this.pipeline.classifyDoc(
+          ctx.parsed,
+          ctx.source,
+          candidates,
+        );
         ctx.documentTypeKey = c.documentTypeKey;
         ctx.schema = c.documentTypeKey
-          ? (getExtractionSchema(c.documentTypeKey) ?? genericExtractionSchema)
+          ? await this.resolver.resolveSchema(ctx.ownerOrgId, c.documentTypeKey)
           : genericExtractionSchema;
         return {
           score: c.confidence,
@@ -396,7 +412,7 @@ export class PipelineExecutorService {
 
       case PipelineStageType.extract: {
         const schema = config.schemaKey
-          ? (getExtractionSchema(config.schemaKey) ?? ctx.schema)
+          ? await this.resolver.resolveSchema(ctx.ownerOrgId, config.schemaKey)
           : ctx.schema;
         const mode = config.engineMode ?? ExtractionEngineMode.auto;
         const { result } = await this.pipeline.extractOne(
@@ -519,5 +535,23 @@ export class PipelineExecutorService {
       },
       include: { stages: true },
     });
+  }
+
+  /**
+   * Pipelines a user can choose to run (key + name + latest version). Seeds the
+   * built-in default so it always appears, then lists the system-scoped
+   * (`ownerOrgId = null`) active pipelines, newest version per key. (Per-org
+   * pipelines layer on here once clone-on-write lands.)
+   */
+  async listAvailablePipelines() {
+    await this.ensureDefaultPipeline(DEFAULT_PIPELINE_KEY);
+    const rows = await this.db.pipeline.findMany({
+      where: { ownerOrgId: null, active: true },
+      orderBy: [{ key: 'asc' }, { version: 'desc' }],
+      select: { key: true, name: true, version: true },
+    });
+    const latest = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (!latest.has(r.key)) latest.set(r.key, r);
+    return [...latest.values()];
   }
 }

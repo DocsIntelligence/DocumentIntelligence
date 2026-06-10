@@ -841,6 +841,89 @@ model StageExecution {
   @@index([status, heartbeatAt])
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// PIPELINE CONFIG-AS-DATA (docs/07 §3, P4.2) — DB-authored extraction
+// schemas + field-maps, org-scoped + versioned. The in-code
+// @org/doc-intelligence registry seeds `ownerOrgId = null` templates; a
+// SchemaResolverService prefers a DB row (org → template) and falls back to
+// the code registry. Editing mints a NEW version (immutable); in-flight runs
+// keep their pinned version. `ownerOrgId` follows the Pipeline convention:
+// a plain nullable string + index, no FK to Organisation.
+// ═══════════════════════════════════════════════════════════════════
+
+/// A DB-authored ExtractionSchema (mirror of the in-code @org/doc-intelligence
+/// `ExtractionSchema`). Suffixed `Def` to avoid clashing with the TS type.
+model ExtractionSchemaDef {
+  id              String   @id @default(cuid())
+  ownerOrgId      String? // null = system template (seeded from code registry)
+  key             String
+  name            String
+  version         Int      @default(1) // immutable; a new edit = a new version
+  documentTypeKey String? // shared vocab w/ the drafting bundle (docs/05 §11.2)
+  description     String?
+  jurisdiction    String? // variant tag, e.g. "IN-MH"
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fields SchemaField[]
+
+  @@unique([ownerOrgId, key, version])
+  @@index([ownerOrgId, key])
+}
+
+/// One field of an ExtractionSchemaDef (mirror of `ExtractionField`).
+model SchemaField {
+  id              String  @id @default(cuid())
+  schemaId        String
+  key             String
+  label           String
+  type            String  @default("string") // string|number|currency|date|boolean|enum|table
+  required        Boolean @default(false)
+  reviewMandatory Boolean @default(false)
+  fieldThreshold  Float? // per-field auto-advance override
+  description     String? // natural-language guidance fed to the model
+  example         String?
+  format          String? // "DD/MM/YYYY", "INR", "+91 ##########"
+  /// enumValues (enum) / columns (table) jsonb — anything beyond scalar meta.
+  config          Json?
+  order           Int     @default(0)
+
+  schema ExtractionSchemaDef @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+
+  @@unique([schemaId, key])
+  @@index([schemaId])
+}
+
+/// A DB-authored FieldMap (mirror of @org/doc-intelligence `FieldMap`): routes a
+/// known type's extraction keys into its DocumentTypeBundle path on convert.
+model FieldMapDef {
+  id              String   @id @default(cuid())
+  ownerOrgId      String?
+  schemaKey       String
+  documentTypeKey String
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entries FieldMapEntry[]
+
+  @@unique([ownerOrgId, schemaKey, version])
+  @@index([ownerOrgId, schemaKey])
+}
+
+model FieldMapEntry {
+  id            String @id @default(cuid())
+  fieldMapId    String
+  extractionKey String // flat extraction field key (e.g. "landlord_name")
+  bundlePath    String // dot-path into the bundle (e.g. "parties.landlord.name")
+
+  fieldMap FieldMapDef @relation(fields: [fieldMapId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldMapId, extractionKey])
+  @@index([fieldMapId])
+}
+
 /// Phase 2 analysis (docs/05 §7): summary / parties / obligations / key dates /
 /// risk flags, plus cited-law health (repealed-citation findings verified
 /// against @org/legal-reference — the AI never asserts citations itself). All

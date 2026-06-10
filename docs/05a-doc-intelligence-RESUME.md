@@ -1,6 +1,20 @@
 # Document Intelligence — RESUME point (next session)
 
-**Status:** docs/05 **Phases 0–3 CODE-COMPLETE** (Phase 4 = docs/07 design) · **Updated:** 2026-06-09
+**Status:** docs/05 **Phases 0–3 CODE-COMPLETE** · docs/07 **P4.1+P4.2+P4.3+P4.4 CODE-COMPLETE** · **Updated:** 2026-06-10
+
+> **Latest (2026-06-10) — docs/07 P4.2 (config-as-data + admin authoring portal):** new
+> DB models `ExtractionSchemaDef`/`SchemaField`/`FieldMapDef`/`FieldMapEntry` (migration
+> `pipeline_config_as_data`, org-scoped + versioned); `SchemaResolverService` (DB-over-code
+> precedence: org → system-template → code registry → generic) wired into the executor +
+> `PipelineService.classifyDoc`, **decoupling classifier candidacy from `documentTypeKey`** +
+> per-pipeline `candidateKeys` allowlist; seed seeds `ownerOrgId=null` templates from the code
+> registry; admin CRUD API `apps/api/src/app/intelligence-admin/` (`@Roles('admin')`, edit
+> **mints a new immutable version**); admin UI `apps/app/src/app/features/admin/intelligence/`
+> (SchemaManager + PipelineManager, route `/admin/intelligence`). tsc/build/lint green + live-DB
+> runtime smoke (version precedence + candidate decoupling). **NOT browser-verified; admin HTTP/auth
+> path not exercised.** **Next:** per-org clone-on-write (controller uses platform `ownerOrgId=null`
+> today); wire `fieldThreshold` into `decideReview`; runtime per-run type override at review; then the
+> remaining docs/07 (per-stage BullMQ queueing/reconciler, StageTransition branching, export targets).
 
 > **docs/05 §7 phase status:** P0 ✅ (engine spike; **OCR-accuracy # un-run** — needs
 > real Hindi scans + API key), P1 ✅ (extraction + review UI + **agentic critic pass**;

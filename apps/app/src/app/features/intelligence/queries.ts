@@ -18,6 +18,7 @@ export const intelligenceKeys = {
   batches: ['intelligence', 'batches'] as const,
   batch: (id: string) => ['intelligence', 'batch', id] as const,
   reviewQueue: ['intelligence', 'review-queue'] as const,
+  pipelines: ['intelligence', 'pipelines'] as const,
 };
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -107,10 +108,19 @@ export function useCreateBatch() {
   const svc = useIntelligenceService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { files: File[]; name?: string }) =>
-      svc.createBatch(vars.files, { name: vars.name }),
+    mutationFn: (vars: { files: File[]; name?: string; pipeline?: string }) =>
+      svc.createBatch(vars.files, { name: vars.name, pipeline: vars.pipeline }),
     onSuccess: () => qc.invalidateQueries({ queryKey: intelligenceKeys.batches }),
     onError: (err) => toast.error(extractMessage(err, 'Batch upload failed')),
+  });
+}
+
+/** Pipelines the user can choose to run a batch/document through. */
+export function usePipelineOptions() {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: intelligenceKeys.pipelines,
+    queryFn: () => svc.listPipelines(),
   });
 }
 

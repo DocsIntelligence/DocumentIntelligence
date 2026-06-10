@@ -174,6 +174,12 @@ export class IntelligenceController {
     return this.pipelines.startRun(user.id, id, pipelineKey || undefined);
   }
 
+  @Get('pipelines')
+  @ApiOperation({ summary: 'List pipelines available to run (key + name)' })
+  listPipelines() {
+    return this.pipelines.listAvailablePipelines();
+  }
+
   @Get('pipeline-runs/:id')
   @ApiOperation({ summary: 'Poll a pipeline run (per-stage status)' })
   getPipelineRun(@CurrentUser() user: User, @Param('id') id: string) {

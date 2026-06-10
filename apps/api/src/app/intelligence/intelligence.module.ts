@@ -16,6 +16,7 @@ import { ParsingService } from './parsing.service';
 import { PipelineService } from './pipeline.service';
 import { PipelineExecutorService } from './pipeline-executor.service';
 import { ReconcilerService } from './reconciler.service';
+import { SchemaResolverService } from './config/schema-resolver.service';
 
 /**
  * Document Intelligence module (docs/05). A SEPARATE domain — it reuses
@@ -49,6 +50,7 @@ export class IntelligenceModule {
         providers: [
           { provide: INTEL_QUEUE_ENABLED, useValue: false },
           ParsingService,
+          SchemaResolverService,
           PipelineService,
           PipelineExecutorService,
           BatchService,
@@ -56,7 +58,7 @@ export class IntelligenceModule {
           IntelligenceService,
           ReconcilerService,
         ],
-        exports: [IntelligenceService],
+        exports: [IntelligenceService, SchemaResolverService],
       };
     }
 
@@ -73,6 +75,7 @@ export class IntelligenceModule {
       providers: [
         { provide: INTEL_QUEUE_ENABLED, useValue: true },
         ParsingService,
+        SchemaResolverService,
         PipelineService,
         PipelineExecutorService,
         BatchService,
@@ -81,7 +84,7 @@ export class IntelligenceModule {
         IntelligenceProcessor,
         ReconcilerService,
       ],
-      exports: [IntelligenceService],
+      exports: [IntelligenceService, SchemaResolverService],
     };
   }
 }

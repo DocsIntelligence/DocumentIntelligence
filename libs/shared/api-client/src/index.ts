@@ -6,3 +6,4 @@ export * from './lib/legal-ai.service';
 export * from './lib/shares.service';
 export * from './lib/lookups.service';
 export * from './lib/intelligence.service';
+export * from './lib/intelligence-admin.service';

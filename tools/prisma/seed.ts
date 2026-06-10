@@ -7,6 +7,11 @@ import {
   FeatureAction,
 } from '@prisma/client';
 import { documentTypes } from './seed-data/document-types';
+import {
+  listExtractionSchemaKeys,
+  getExtractionSchema,
+  getFieldMap,
+} from '../../libs/doc-intelligence/src';
 
 const prisma = new PrismaClient();
 
@@ -385,6 +390,95 @@ async function main() {
   }
 
   console.log('✅ Document types & templates seeded');
+
+  // ─── Pipeline config-as-data: seed SYSTEM TEMPLATES (ownerOrgId=null) from
+  // the in-code @org/doc-intelligence registry (docs/07 §7). The
+  // SchemaResolverService prefers an org row, then these templates, then the
+  // code registry — so seeding is idempotent and orgs clone-on-write later.
+  for (const key of listExtractionSchemaKeys()) {
+    const schema = getExtractionSchema(key);
+    if (!schema) continue;
+
+    const existing = await prisma.extractionSchemaDef.findFirst({
+      where: { ownerOrgId: null, key, version: 1 },
+    });
+    const schemaData = {
+      name: schema.name,
+      documentTypeKey: schema.documentTypeKey ?? null,
+      description: schema.description ?? null,
+      jurisdiction: schema.jurisdiction ?? null,
+      isActive: true,
+    };
+    let schemaId: string;
+    if (existing) {
+      await prisma.schemaField.deleteMany({ where: { schemaId: existing.id } });
+      await prisma.extractionSchemaDef.update({
+        where: { id: existing.id },
+        data: schemaData,
+      });
+      schemaId = existing.id;
+    } else {
+      const created = await prisma.extractionSchemaDef.create({
+        data: { ownerOrgId: null, key, version: 1, ...schemaData },
+      });
+      schemaId = created.id;
+    }
+    await prisma.schemaField.createMany({
+      data: schema.fields.map((f, i) => ({
+        schemaId,
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        required: Boolean(f.required),
+        reviewMandatory: Boolean(f.reviewMandatory),
+        description: f.description ?? null,
+        example: f.example ?? null,
+        format: f.format ?? null,
+        config:
+          f.enumValues || f.columns
+            ? { enumValues: f.enumValues, columns: f.columns }
+            : undefined,
+        order: i,
+      })),
+    });
+
+    // Field-map template (convert bridge), when the type has one.
+    const fm = getFieldMap(key);
+    if (fm) {
+      const existingFm = await prisma.fieldMapDef.findFirst({
+        where: { ownerOrgId: null, schemaKey: key, version: 1 },
+      });
+      let fieldMapId: string;
+      if (existingFm) {
+        await prisma.fieldMapEntry.deleteMany({
+          where: { fieldMapId: existingFm.id },
+        });
+        await prisma.fieldMapDef.update({
+          where: { id: existingFm.id },
+          data: { documentTypeKey: fm.documentTypeKey },
+        });
+        fieldMapId = existingFm.id;
+      } else {
+        const createdFm = await prisma.fieldMapDef.create({
+          data: {
+            ownerOrgId: null,
+            schemaKey: key,
+            documentTypeKey: fm.documentTypeKey,
+            version: 1,
+          },
+        });
+        fieldMapId = createdFm.id;
+      }
+      await prisma.fieldMapEntry.createMany({
+        data: Object.entries(fm.mapping).map(([extractionKey, bundlePath]) => ({
+          fieldMapId,
+          extractionKey,
+          bundlePath,
+        })),
+      });
+    }
+  }
+  console.log('✅ Extraction-schema + field-map templates seeded');
 }
 
 main()

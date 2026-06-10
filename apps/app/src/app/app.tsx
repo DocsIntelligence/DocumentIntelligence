@@ -8,6 +8,7 @@ import {
 } from '@org/store';
 import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
+import { IntelligenceConfigPage } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
 import { Login } from './features/auth/login/Login';
@@ -77,6 +78,7 @@ export function App() {
         <Route path="/review-queue" element={<ReviewQueuePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/intelligence" element={<IntelligenceConfigPage />} />
       </Route>
 
       {/* Editors run full-bleed (no app shell) for max working area. */}

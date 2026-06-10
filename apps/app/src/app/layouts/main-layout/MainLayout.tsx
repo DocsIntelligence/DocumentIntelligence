@@ -169,6 +169,12 @@ function Sidebar({
             label={t('nav.reviewQueue', 'Review queue')}
             icon={<InboxIcon />}
           />
+          {/* Temporarily visible to all users (no admin gate). */}
+          <NavItem
+            to="/admin/intelligence"
+            label={t('nav.docConfig', 'Doc config')}
+            icon={<ShieldIcon />}
+          />
           <NavItem
             to="/editor"
             label={t('nav.quickEditor', 'Quick editor')}

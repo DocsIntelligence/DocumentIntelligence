@@ -167,6 +167,14 @@ export const createIntelligenceService = (http: HttpClient) => ({
       )
       .then((r) => r.data),
 
+  /** Pipelines the user can pick to run a doc/batch through. */
+  listPipelines: () =>
+    http
+      .get<{ key: string; name: string; version: number }[]>(
+        '/intelligence/pipelines',
+      )
+      .then((r) => r.data),
+
   /** Poll a pipeline run (per-stage status). */
   getPipelineRun: (runId: string) =>
     http

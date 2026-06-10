@@ -1,5 +1,6 @@
 import type {
   DocumentsService,
+  IntelligenceAdminService,
   IntelligenceService,
   LegalAiService,
   LookupsService,
@@ -19,6 +20,7 @@ interface Services {
   shares: SharesService;
   lookups: LookupsService;
   intelligence: IntelligenceService;
+  intelligenceAdmin: IntelligenceAdminService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -33,11 +35,19 @@ export function ServicesProvider({
   shares,
   lookups,
   intelligence,
+  intelligenceAdmin,
   children,
 }: ProviderProps) {
   return (
     <ServicesContext.Provider
-      value={{ documents, legalAi, shares, lookups, intelligence }}
+      value={{
+        documents,
+        legalAi,
+        shares,
+        lookups,
+        intelligence,
+        intelligenceAdmin,
+      }}
     >
       {children}
     </ServicesContext.Provider>
@@ -73,4 +83,11 @@ export function useIntelligenceService(): IntelligenceService {
   if (!ctx)
     throw new Error('useIntelligenceService outside <ServicesProvider>');
   return ctx.intelligence;
+}
+
+export function useIntelligenceAdminService(): IntelligenceAdminService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx)
+    throw new Error('useIntelligenceAdminService outside <ServicesProvider>');
+  return ctx.intelligenceAdmin;
 }
