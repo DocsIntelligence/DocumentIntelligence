@@ -15,6 +15,9 @@ export const intelligenceKeys = {
     ['intelligence', 'extraction', sourceId] as const,
   analysis: (sourceId: string) =>
     ['intelligence', 'analysis', sourceId] as const,
+  batches: ['intelligence', 'batches'] as const,
+  batch: (id: string) => ['intelligence', 'batch', id] as const,
+  reviewQueue: ['intelligence', 'review-queue'] as const,
 };
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -95,6 +98,63 @@ export function useAsk(sourceId: string) {
   return useMutation({
     mutationFn: (question: string) => svc.ask(sourceId, question),
     onError: (err) => toast.error(extractMessage(err, 'Could not answer')),
+  });
+}
+
+// ─── Batches + review queue (docs/07) ──────────────────────────────────────
+
+export function useCreateBatch() {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { files: File[]; name?: string }) =>
+      svc.createBatch(vars.files, { name: vars.name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: intelligenceKeys.batches }),
+    onError: (err) => toast.error(extractMessage(err, 'Batch upload failed')),
+  });
+}
+
+export function useBatches() {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: intelligenceKeys.batches,
+    queryFn: () => svc.listBatches(),
+    refetchInterval: 5000, // batches progress while runs process
+  });
+}
+
+export function useBatch(batchId: string | undefined) {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: batchId ? intelligenceKeys.batch(batchId) : ['intelligence', 'batch', 'none'],
+    queryFn: () => svc.getBatch(batchId as string),
+    enabled: !!batchId,
+    refetchInterval: (q) => {
+      const data = q.state.data as { status?: string } | undefined;
+      return data?.status === 'running' ? 3000 : false;
+    },
+  });
+}
+
+export function useReviewQueue() {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: intelligenceKeys.reviewQueue,
+    queryFn: () => svc.getReviewQueue(),
+  });
+}
+
+export function useApproveRun() {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => svc.approveRun(runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      toast.success('Approved & finalized');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Approval failed')),
   });
 }
 

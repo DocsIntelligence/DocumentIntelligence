@@ -696,14 +696,149 @@ model SourceDocument {
   ownerUser User?         @relation("SourceDocOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
   ownerOrg  Organisation? @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
 
-  jobs        IntelligenceJob[]
-  extractions Extraction[]
-  analyses    AnalysisRun[]
-  chunks      SourceChunk[]
+  jobs         IntelligenceJob[]
+  extractions  Extraction[]
+  analyses     AnalysisRun[]
+  chunks       SourceChunk[]
+  pipelineRuns PipelineRun[]
 
   @@index([ownerUserId, updatedAt])
   @@index([ownerOrgId, updatedAt])
   @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PIPELINE ENGINE (docs/07) — configurable, per-org, process-as-data.
+// A Pipeline is an ordered list of typed Stages; a PipelineRun walks one
+// SourceDocument through them, each entry recorded as a StageExecution.
+// P4.1 = engine core (single-doc; batch/DB-schema-authoring/review-queue
+// are later phases). Additive — the legacy IntelligenceJob flow is untouched.
+// ═══════════════════════════════════════════════════════════════════
+
+enum PipelineStageType {
+  ingest
+  classify
+  extract
+  validate
+  review
+  export
+}
+
+enum PipelineRunStatus {
+  queued
+  running
+  needs_review
+  approved
+  completed
+  failed
+  rejected
+}
+
+enum BatchStatus {
+  running
+  needs_review
+  completed
+  failed
+}
+
+enum BatchSource {
+  multi_file
+  zip
+  s3_prefix
+  api
+}
+
+/// A set of documents run through one pipeline together (docs/07 §5). P4.3 =
+/// multi-file upload; zip/s3/api are deferred behind the same fan-out seam.
+model Batch {
+  id          String      @id @default(cuid())
+  ownerUserId String?
+  ownerOrgId  String?
+  pipelineId  String
+  name        String?
+  source      BatchSource @default(multi_file)
+  status      BatchStatus @default(running)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  runs PipelineRun[]
+
+  @@index([ownerUserId, createdAt])
+  @@index([ownerOrgId, createdAt])
+}
+
+model Pipeline {
+  id         String   @id @default(cuid())
+  ownerOrgId String? // null = system default (template); else org-owned
+  key        String
+  name       String
+  version    Int      @default(1) // immutable versions; new edit = new version
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  stages PipelineStage[]
+  runs   PipelineRun[]
+
+  @@unique([ownerOrgId, key, version])
+  @@index([ownerOrgId])
+}
+
+model PipelineStage {
+  id         String            @id @default(cuid())
+  pipelineId String
+  order      Int
+  type       PipelineStageType
+  name       String
+  /// Stage config jsonb: autoAdvance condition, engineMode, schemaKey, targets…
+  config     Json              @default("{}")
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, order])
+}
+
+model PipelineRun {
+  id               String            @id @default(cuid())
+  pipelineId       String
+  batchId          String?
+  sourceDocumentId String
+  currentStageId   String?
+  status           PipelineRunStatus @default(queued)
+  error            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  pipeline       Pipeline         @relation(fields: [pipelineId], references: [id])
+  batch          Batch?           @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  sourceDocument SourceDocument   @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  executions     StageExecution[]
+
+  @@index([pipelineId, status])
+  @@index([batchId])
+  @@index([sourceDocumentId])
+  @@index([status])
+}
+
+model StageExecution {
+  id            String    @id @default(cuid())
+  pipelineRunId String
+  stageId       String
+  stageType     PipelineStageType
+  status        String    @default("queued") // queued|running|passed|parked|failed
+  score         Float? // the stage's computed score (auto-advance audit)
+  output        Json? // stage result (classification/extraction/etc.)
+  error         String?
+  attempts      Int       @default(0)
+  heartbeatAt   DateTime? // reconciler watches this
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  pipelineRun PipelineRun @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineRunId])
+  @@index([status, heartbeatAt])
 }
 
 /// Phase 2 analysis (docs/05 §7): summary / parties / obligations / key dates /

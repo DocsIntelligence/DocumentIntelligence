@@ -160,6 +160,16 @@ function Sidebar({
             icon={<ScanIcon />}
           />
           <NavItem
+            to="/batches"
+            label={t('nav.batches', 'Batches')}
+            icon={<LayersIcon />}
+          />
+          <NavItem
+            to="/review-queue"
+            label={t('nav.reviewQueue', 'Review queue')}
+            icon={<InboxIcon />}
+          />
+          <NavItem
             to="/editor"
             label={t('nav.quickEditor', 'Quick editor')}
             icon={<PenIcon />}
@@ -300,6 +310,25 @@ function ScanIcon() {
       <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
       <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
       <line x1="7" y1="12" x2="17" y2="12" />
+    </svg>
+  );
+}
+
+function LayersIcon() {
+  return (
+    <svg {...iconProps}>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+
+function InboxIcon() {
+  return (
+    <svg {...iconProps}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>
   );
 }

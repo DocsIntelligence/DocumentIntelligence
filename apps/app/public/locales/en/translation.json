@@ -48,6 +48,8 @@
     "dashboard": "Dashboard",
     "documents": "Documents",
     "analyze": "Analyze",
+    "batches": "Batches",
+    "reviewQueue": "Review queue",
     "quickEditor": "Quick editor",
     "settings": "Settings",
     "admin": "Admin"
@@ -161,6 +163,28 @@
       "placeholder": "e.g. What is the notice period?",
       "ask": "Ask",
       "asking": "Asking…"
+    },
+    "batches": {
+      "title": "Batches",
+      "subtitle": "Upload many documents at once — they’re classified, extracted, and queued for review automatically.",
+      "new": "New batch",
+      "newHint": "Select multiple files (PDF, Word, text, images).",
+      "choose": "Choose files",
+      "selected": "{{n}} files selected",
+      "start": "Upload & run batch",
+      "starting": "Starting…",
+      "counts": "{{c}}/{{t}} done · {{r}} to review · {{f}} failed",
+      "empty": "No batches yet.",
+      "open": "Open",
+      "goReview": "Review queue"
+    },
+    "queue": {
+      "title": "Review queue",
+      "subtitle": "Documents the pipeline flagged for a human check before finalizing.",
+      "review": "Review",
+      "approve": "Approve & finish",
+      "unknownType": "unknown type",
+      "empty": "Nothing to review. 🎉"
     }
   }
 }

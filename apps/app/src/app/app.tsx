@@ -21,7 +21,13 @@ import {
   SharedDocumentView,
 } from './features/documents';
 import { EditorDemo, DraftEditorPage } from './features/editor';
-import { AnalyzePage, IntelligenceUpload } from './features/intelligence';
+import {
+  AnalyzePage,
+  BatchDetailPage,
+  BatchesPage,
+  IntelligenceUpload,
+  ReviewQueuePage,
+} from './features/intelligence';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -66,6 +72,9 @@ export function App() {
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/analyze" element={<IntelligenceUpload />} />
         <Route path="/analyze/:sourceId" element={<AnalyzePage />} />
+        <Route path="/batches" element={<BatchesPage />} />
+        <Route path="/batches/:id" element={<BatchDetailPage />} />
+        <Route path="/review-queue" element={<ReviewQueuePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Route>

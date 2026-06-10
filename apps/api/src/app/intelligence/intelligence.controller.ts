@@ -6,10 +6,11 @@ import {
   Post,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -30,7 +31,9 @@ import {
   SaveReviewDto,
 } from './intelligence.dto';
 import { AnalysisService } from './analysis.service';
+import { BatchService } from './batch.service';
 import { IntelligenceService } from './intelligence.service';
+import { PipelineExecutorService } from './pipeline-executor.service';
 
 /** Coerce a query-string engine value to the enum; unknown/empty → auto. */
 function parseEngineMode(value?: string): ExtractionEngineMode {
@@ -54,6 +57,8 @@ export class IntelligenceController {
   constructor(
     private readonly intelligence: IntelligenceService,
     private readonly analysis: AnalysisService,
+    private readonly pipelines: PipelineExecutorService,
+    private readonly batches: BatchService,
   ) {}
 
   @Post('upload')
@@ -152,5 +157,83 @@ export class IntelligenceController {
     @Body() body: AskDto,
   ) {
     return this.analysis.ask(user.id, id, body.question);
+  }
+
+  // ─── Pipeline engine (docs/07 P4.1) ───────────────────────────────────────
+
+  @Post('sources/:id/run-pipeline')
+  @ApiOperation({
+    summary:
+      'Run a document through a configurable pipeline (classify → extract → validate → export).',
+  })
+  runPipeline(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query('pipeline') pipelineKey?: string,
+  ) {
+    return this.pipelines.startRun(user.id, id, pipelineKey || undefined);
+  }
+
+  @Get('pipeline-runs/:id')
+  @ApiOperation({ summary: 'Poll a pipeline run (per-stage status)' })
+  getPipelineRun(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.pipelines.getRun(user.id, id);
+  }
+
+  // ─── Batches (docs/07 P4.3) ────────────────────────────────────────────────
+
+  @Post('batches')
+  @UseInterceptors(FilesInterceptor('files', 1000))
+  @ApiOperation({ summary: 'Upload many documents as a batch and run a pipeline' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+    },
+  })
+  createBatch(
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: User,
+    @Query('pipeline') pipelineKey?: string,
+    @Query('name') name?: string,
+  ) {
+    return this.batches.createMultiFileBatch(user.id, files, {
+      pipelineKey: pipelineKey || undefined,
+      name: name || undefined,
+    });
+  }
+
+  @Get('batches')
+  @ApiOperation({ summary: 'List my batches with progress counts' })
+  listBatches(@CurrentUser() user: User) {
+    return this.batches.list(user.id);
+  }
+
+  @Get('batches/:id')
+  @ApiOperation({ summary: 'Get a batch with its runs' })
+  getBatch(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.batches.get(user.id, id);
+  }
+
+  // ─── Review queue (docs/07 P4.4) ───────────────────────────────────────────
+
+  @Get('review-queue')
+  @ApiOperation({ summary: 'Pipeline runs awaiting human review' })
+  reviewQueue(@CurrentUser() user: User) {
+    return this.pipelines.reviewQueue(user.id);
+  }
+
+  @Post('pipeline-runs/:id/approve')
+  @ApiOperation({
+    summary: 'Approve a parked run — finalize (export) with the reviewed values',
+  })
+  approveRun(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.pipelines.approveRun(user.id, id);
   }
 }

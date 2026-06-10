@@ -15,10 +15,27 @@
 > migration `di_phase2_analysis_rag`); Phase 2 frontend (`DocumentInsights` on AnalyzePage).
 > All tsc/build/lint green; **NOT browser-verified.**
 >
-> **Next options:** (a) **browser smoke-test** the whole flow (upload→extract→review→convert,
-> analyze, ask) — needs app+API+OPENAI_API_KEY; (b) **build the pipeline engine** (docs/07
-> P4.1 — per-org configurable pipelines + batches); (c) seed a small gold fixture set + run
-> the eval harness to get real precision/recall/STP numbers; (d) the OCR/engine benchmark.
+> **Pipeline engine (docs/07): P4.1 + P4.3 + P4.4 DONE (additive).** Batches
+> (multi-file ingest → N runs, `Batch` model, `BatchService`), review queue +
+> `approveRun` (resume parked run → export via convert bridge), and full UI
+> (BatchesPage / BatchDetailPage / ReviewQueuePage + nav). Product flow end-to-end:
+> upload one or a batch → classify → extract → validate(auto-advance/park) → review
+> queue → approve → editable Document. tsc/build green; NOT runtime-verified.
+> **Next docs/07:** P4.2 (org-scoped DB pipelines/schemas + authoring UI), zip/S3/API
+> batch sources, per-stage BullMQ queueing + StageExecution reconciler, bulk-approve.
+>
+> **P4.1 detail:** engine core (additive) — models
+> Pipeline/PipelineStage/PipelineRun/StageExecution (migration `pipeline_engine_core`),
+> `PipelineExecutorService` (data-driven stage dispatch reusing PipelineService engines +
+> convert bridge), seeded default pipeline, endpoints `POST /intelligence/sources/:id/run-pipeline`
+> + `GET /intelligence/pipeline-runs/:id`. Legacy IntelligenceJob flow untouched. tsc/build green;
+> NOT runtime-verified. **Next docs/07:** P4.2 org-scoped DB pipelines/schemas + authoring UI;
+> P4.3 batch/multi-file fan-out; P4.4 review queue + bulk approve + resume-after-approve;
+> P4.5 CSV/JSON/webhook export; plus per-stage queueing + StageExecution reconciler.
+>
+> **Other next options:** (a) **browser smoke-test** the whole flow (now possible — OPENAI_API_KEY
+> is set; pipeline is text-first so text-layer PDFs work); (b) seed a gold fixture set + run the
+> eval harness for real precision/recall/STP; (c) OCR/engine benchmark.
 
 > **Latest (tasks #15–#16, COMPLETE):** the convert bridge closes the loop.
 > `POST /intelligence/extractions/:id/convert` → structured prefill (field-map →

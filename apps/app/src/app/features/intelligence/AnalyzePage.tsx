@@ -30,13 +30,14 @@ export function AnalyzePage() {
   const isTerminal =
     status === 'completed' || status === 'needs_review' || status === 'failed';
 
-  // Only fetch the extraction once the job has finished successfully.
+  // Fetch the extraction once the job finished — or immediately when opened
+  // directly (no job param, e.g. from a batch or the review queue).
   const extractionQuery = useExtraction(
     sourceId,
-    isTerminal && status !== 'failed',
+    !jobId || (isTerminal && status !== 'failed'),
   );
 
-  if (job.isLoading || (!isTerminal && jobId)) {
+  if (jobId && (job.isLoading || !isTerminal)) {
     const stage = job.data?.stage ?? 'uploaded';
     return (
       <div className="mx-auto max-w-2xl">

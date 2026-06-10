@@ -11,8 +11,10 @@ import {
   IntelligenceService,
 } from './intelligence.service';
 import { AnalysisService } from './analysis.service';
+import { BatchService } from './batch.service';
 import { ParsingService } from './parsing.service';
 import { PipelineService } from './pipeline.service';
+import { PipelineExecutorService } from './pipeline-executor.service';
 import { ReconcilerService } from './reconciler.service';
 
 /**
@@ -48,6 +50,8 @@ export class IntelligenceModule {
           { provide: INTEL_QUEUE_ENABLED, useValue: false },
           ParsingService,
           PipelineService,
+          PipelineExecutorService,
+          BatchService,
           AnalysisService,
           IntelligenceService,
           ReconcilerService,
@@ -70,6 +74,8 @@ export class IntelligenceModule {
         { provide: INTEL_QUEUE_ENABLED, useValue: true },
         ParsingService,
         PipelineService,
+        PipelineExecutorService,
+        BatchService,
         AnalysisService,
         IntelligenceService,
         IntelligenceProcessor,

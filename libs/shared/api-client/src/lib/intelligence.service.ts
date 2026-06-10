@@ -154,6 +154,66 @@ export const createIntelligenceService = (http: HttpClient) => ({
     http
       .post<AskAnswer>(`/intelligence/sources/${sourceId}/ask`, { question })
       .then((r) => r.data),
+
+  // ─── Pipeline engine + batches + review queue ────────────────────────────
+
+  /** Run a single document through a pipeline. */
+  runPipeline: (sourceId: string, pipeline?: string) =>
+    http
+      .post<{ pipelineRunId: string; pipelineId: string }>(
+        `/intelligence/sources/${sourceId}/run-pipeline`,
+        {},
+        { params: pipeline ? { pipeline } : {} },
+      )
+      .then((r) => r.data),
+
+  /** Poll a pipeline run (per-stage status). */
+  getPipelineRun: (runId: string) =>
+    http
+      .get<PipelineRunDetail>(`/intelligence/pipeline-runs/${runId}`)
+      .then((r) => r.data),
+
+  /** Upload many files as a batch and run a pipeline over them. */
+  createBatch: (
+    files: File[],
+    opts?: { pipeline?: string; name?: string },
+  ) => {
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    const params: Record<string, string> = {};
+    if (opts?.pipeline) params['pipeline'] = opts.pipeline;
+    if (opts?.name) params['name'] = opts.name;
+    return http
+      .post<{ batchId: string; runIds: string[] }>(
+        '/intelligence/batches',
+        form,
+        { params },
+      )
+      .then((r) => r.data);
+  },
+
+  listBatches: () =>
+    http.get<BatchSummary[]>('/intelligence/batches').then((r) => r.data),
+
+  getBatch: (batchId: string) =>
+    http
+      .get<BatchDetail>(`/intelligence/batches/${batchId}`)
+      .then((r) => r.data),
+
+  /** Pipeline runs awaiting human review. */
+  getReviewQueue: () =>
+    http
+      .get<ReviewQueueItem[]>('/intelligence/review-queue')
+      .then((r) => r.data),
+
+  /** Approve a parked run — finalize (export) with reviewed values. */
+  approveRun: (runId: string) =>
+    http
+      .post<{ pipelineRunId: string; status: string }>(
+        `/intelligence/pipeline-runs/${runId}/approve`,
+        {},
+      )
+      .then((r) => r.data),
 });
 
 export interface ConvertResult {
@@ -186,6 +246,54 @@ export interface AnalysisRun {
 export interface AskAnswer {
   answer: string;
   citations: { page: number; snippet: string; score: number }[];
+}
+
+// ─── Pipeline engine + batches + review queue (docs/07) ─────────────────────
+
+export interface PipelineRunStageStatus {
+  stageType: string;
+  status: string;
+  score: number | null;
+  error: string | null;
+}
+export interface PipelineRunDetail {
+  id: string;
+  status: string;
+  currentStageId: string | null;
+  error: string | null;
+  sourceDocumentId: string;
+  stages: PipelineRunStageStatus[];
+}
+
+export interface BatchSummary {
+  id: string;
+  name: string | null;
+  status: 'running' | 'needs_review' | 'completed' | 'failed';
+  total: number;
+  completed: number;
+  needsReview: number;
+  failed: number;
+  running: number;
+  createdAt: string;
+}
+export interface BatchRun {
+  id: string;
+  status: string;
+  sourceDocumentId: string;
+  filename: string;
+}
+export interface BatchDetail extends BatchSummary {
+  runs: BatchRun[];
+}
+
+export interface ReviewQueueItem {
+  pipelineRunId: string;
+  sourceDocumentId: string;
+  filename: string;
+  batchId: string | null;
+  extractionId: string | null;
+  documentTypeKey: string | null;
+  overallConfidence: number | null;
 }
 
 export type IntelligenceService = ReturnType<typeof createIntelligenceService>;
