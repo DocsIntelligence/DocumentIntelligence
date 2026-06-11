@@ -1,23 +1,43 @@
 import type {
+  AdminPipelineSummary,
   PipelineStageInput,
   StageConfig,
   StageType,
 } from '@org/api-client';
-import { Badge, Button, Card, Checkbox, Input } from '@org/ui';
-import { useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DataTable,
+  Input,
+  type DataTableColumn,
+} from '@org/ui';
+import { cn } from '@org/utils';
+import {
+  CopyIcon,
+  EditIcon,
+  EyeIcon,
+  EyeOffIcon,
+  IconButton,
+  TrashIcon,
+} from './icons';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import {
-  useDeletePipeline,
   usePipeline,
   usePipelines,
+  usePurgePipeline,
   useSavePipeline,
   useSchemas,
+  useSetPipelineActive,
 } from './queries';
 
 const STAGE_TYPES: StageType[] = [
   'ingest',
   'classify',
+  'filter',
   'extract',
   'validate',
   'review',
@@ -27,6 +47,7 @@ const STAGE_TYPES: StageType[] = [
 const STAGE_HELP: Record<StageType, string> = {
   ingest: 'Parse the file to text (fast path for extraction).',
   classify: 'Identify the document type.',
+  filter: 'Keep only the wanted types; archive the rest (no extraction).',
   extract: 'Pull the schema fields out of the document.',
   validate: 'Auto-advance when confidence clears the thresholds, else park.',
   review: 'Always pause for a human (manual interruption).',
@@ -56,7 +77,9 @@ const defaultStage = (type: StageType): PipelineStageInput => ({
         ? { engineMode: 'auto' }
         : type === 'export'
           ? { targets: ['structured_document'] }
-          : {},
+          : type === 'filter'
+            ? { onUnmatched: 'archive', allowedTypes: [] }
+            : {},
 });
 
 /**
@@ -68,27 +91,46 @@ const defaultStage = (type: StageType): PipelineStageInput => ({
 export function PipelineManager() {
   const { t } = useTranslation();
   const confirm = useConfirm();
-  const { data: pipelines, isLoading } = usePipelines();
+  const [showDisabled, setShowDisabled] = useState(false);
+  const { data: pipelines, isLoading } = usePipelines(showDisabled);
   const { data: schemas } = useSchemas();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<EditorState | null>(null);
+  const [cloning, setCloning] = useState(false);
   const { data: loaded } = usePipeline(editingKey);
   const save = useSavePipeline();
-  const del = useDeletePipeline();
+  const setActive = useSetPipelineActive();
+  const purge = usePurgePipeline();
 
-  if (editingKey && loaded && draft?.key !== loaded.key) {
+  useEffect(() => {
+    if (!editingKey || !loaded) return;
     setDraft({
-      key: loaded.key,
-      name: loaded.name,
+      key: cloning ? `${loaded.key}_copy` : loaded.key,
+      name: cloning ? `${loaded.name} (copy)` : loaded.name,
       stages: loaded.stages.map((s) => ({ ...s, config: { ...s.config } })),
     });
-  }
+    if (cloning) setCreating(true);
+  }, [editingKey, loaded, cloning]);
 
   const close = () => {
     setDraft(null);
     setEditingKey(null);
     setCreating(false);
+    setCloning(false);
+  };
+
+  const startEdit = (key: string) => {
+    setCloning(false);
+    setCreating(false);
+    setDraft(null);
+    setEditingKey(key);
+  };
+
+  const startClone = (key: string) => {
+    setCloning(true);
+    setDraft(null);
+    setEditingKey(key);
   };
 
   const startCreate = () => {
@@ -100,6 +142,7 @@ export function PipelineManager() {
       stages: [
         defaultStage('ingest'),
         defaultStage('classify'),
+        defaultStage('filter'),
         defaultStage('extract'),
         defaultStage('validate'),
         defaultStage('export'),
@@ -149,6 +192,50 @@ export function PipelineManager() {
   };
 
   if (draft) {
+    const valid = Boolean(
+      draft.key.trim() && draft.name.trim() && draft.stages.length,
+    );
+    const types = draft.stages.map((s) => s.type);
+    const warnings: string[] = [];
+    if (!types.includes('extract'))
+      warnings.push(
+        t(
+          'adminIntel.pipeline.warnNoExtract',
+          'No extract stage — nothing will be pulled out of the document.',
+        ),
+      );
+    if (!types.includes('classify') && !draft.stages.some((s) => s.config.schemaKey))
+      warnings.push(
+        t(
+          'adminIntel.pipeline.warnNoType',
+          'No classify stage and no forced type on extract — the generic schema will be used.',
+        ),
+      );
+    if (types.includes('extract') && !types.includes('ingest'))
+      warnings.push(
+        t(
+          'adminIntel.pipeline.warnNoIngest',
+          'No ingest stage — text-layer files skip the fast path and use vision/agentic.',
+        ),
+      );
+    if (
+      draft.stages.some(
+        (s) => s.type === 'filter' && !(s.config.allowedTypes ?? []).length,
+      )
+    )
+      warnings.push(
+        t(
+          'adminIntel.pipeline.warnEmptyFilter',
+          'A filter stage has no types selected — it keeps everything (archives nothing).',
+        ),
+      );
+    if (types.indexOf('filter') >= 0 && types.indexOf('filter') < types.indexOf('classify'))
+      warnings.push(
+        t(
+          'adminIntel.pipeline.warnFilterBeforeClassify',
+          'Filter runs before classify — it has no type to check yet. Put classify first.',
+        ),
+      );
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -161,13 +248,32 @@ export function PipelineManager() {
             <Button variant="ghost" size="sm" onClick={close}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button size="sm" onClick={onSave} disabled={save.isPending}>
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={save.isPending || !valid}
+            >
               {save.isPending
                 ? t('common.saving', 'Saving…')
                 : t('adminIntel.pipeline.saveVersion', 'Save (new version)')}
             </Button>
           </div>
         </div>
+        {!valid && (
+          <p className="text-xs text-warning-foreground">
+            {t(
+              'adminIntel.pipeline.invalid',
+              'A key, a name, and at least one stage are required.',
+            )}
+          </p>
+        )}
+        {warnings.length > 0 && (
+          <ul className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning-foreground space-y-1">
+            {warnings.map((w) => (
+              <li key={w}>⚠ {w}</li>
+            ))}
+          </ul>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-sm">
@@ -279,6 +385,79 @@ export function PipelineManager() {
                         </label>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {s.type === 'filter' && (
+                <div className="space-y-2 text-sm">
+                  <span className="text-foreground/60">
+                    {t(
+                      'adminIntel.pipeline.allowedTypes',
+                      'Keep only these types (archive the rest):',
+                    )}
+                  </span>
+                  <div className="flex flex-wrap gap-3">
+                    {(schemas ?? []).map((sc) => {
+                      const checked = (s.config.allowedTypes ?? []).includes(
+                        sc.key,
+                      );
+                      return (
+                        <label key={sc.key} className="flex items-center gap-1.5">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              const set = new Set(s.config.allowedTypes ?? []);
+                              if (v) set.add(sc.key);
+                              else set.delete(sc.key);
+                              setConfig(i, { allowedTypes: [...set] });
+                            }}
+                          />
+                          {sc.key}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-foreground/60">
+                        {t('adminIntel.pipeline.minConfidence', 'Min confidence')}
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.05"
+                        min="0"
+                        max="1"
+                        className="w-20"
+                        value={s.config.minConfidence ?? 0}
+                        onChange={(e) =>
+                          setConfig(i, {
+                            minConfidence: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-foreground/60">
+                        {t('adminIntel.pipeline.onUnmatched', 'Out-of-scope →')}
+                      </span>
+                      <select
+                        className="border border-border rounded-md px-2 py-1.5 bg-background"
+                        value={s.config.onUnmatched ?? 'archive'}
+                        onChange={(e) =>
+                          setConfig(i, {
+                            onUnmatched: e.target.value as
+                              | 'archive'
+                              | 'reject'
+                              | 'review',
+                          })
+                        }
+                      >
+                        <option value="archive">archive</option>
+                        <option value="reject">reject</option>
+                        <option value="review">review</option>
+                      </select>
+                    </label>
                   </div>
                 </div>
               )}
@@ -438,6 +617,117 @@ export function PipelineManager() {
     );
   }
 
+  const onDelete = async (key: string) => {
+    const ok = await confirm({
+      title: t('adminIntel.pipeline.deleteTitle', 'Delete pipeline permanently?'),
+      description: t(
+        'adminIntel.pipeline.deleteDesc',
+        'Removes the pipeline and all its versions for good. Refused if any run used it — disable instead. Prefer Disable to keep history.',
+      ),
+      confirmLabel: t('common.delete', 'Delete'),
+      variant: 'destructive',
+    });
+    if (ok) purge.mutate(key);
+  };
+
+  const columns: DataTableColumn<AdminPipelineSummary>[] = [
+    {
+      key: 'name',
+      header: t('adminIntel.pipeline.colName', 'Pipeline'),
+      sortValue: (p) => p.name.toLowerCase(),
+      cell: (p) => (
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'font-medium text-foreground',
+              p.isActive === false && 'text-foreground/50',
+            )}
+          >
+            {p.name}
+          </span>
+          {p.isActive === false && (
+            <Badge variant="secondary">
+              {t('adminIntel.pipeline.disabled', 'disabled')}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'key',
+      header: t('adminIntel.pipeline.colKey', 'Key'),
+      sortValue: (p) => p.key,
+      cell: (p) => <span className="text-foreground/55">{p.key}</span>,
+    },
+    {
+      key: 'version',
+      header: t('adminIntel.pipeline.colVersion', 'Ver'),
+      align: 'right',
+      sortValue: (p) => p.version,
+      cell: (p) => <span className="tabular-nums text-foreground/60">v{p.version}</span>,
+    },
+    {
+      key: 'stages',
+      header: t('adminIntel.pipeline.colStages', 'Stages'),
+      align: 'right',
+      sortValue: (p) => p.stageCount,
+      cell: (p) => <span className="tabular-nums">{p.stageCount}</span>,
+    },
+    {
+      key: 'updated',
+      header: t('common.updated', 'Updated'),
+      sortValue: (p) => p.updatedAt,
+      cell: (p) => (
+        <span className="text-foreground/55">
+          {new Date(p.updatedAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (p) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton title={t('common.edit', 'Edit')} onClick={() => startEdit(p.key)}>
+            <EditIcon />
+          </IconButton>
+          <IconButton
+            title={t('common.clone', 'Clone')}
+            onClick={() => startClone(p.key)}
+          >
+            <CopyIcon />
+          </IconButton>
+          {p.isActive === false ? (
+            <IconButton
+              title={t('adminIntel.pipeline.enable', 'Enable')}
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutate({ key: p.key, active: true })}
+            >
+              <EyeOffIcon />
+            </IconButton>
+          ) : (
+            <IconButton
+              title={t('adminIntel.pipeline.disable', 'Disable')}
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutate({ key: p.key, active: false })}
+            >
+              <EyeIcon />
+            </IconButton>
+          )}
+          <IconButton
+            danger
+            title={t('common.delete', 'Delete')}
+            disabled={purge.isPending}
+            onClick={() => onDelete(p.key)}
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -455,58 +745,53 @@ export function PipelineManager() {
       {isLoading ? (
         <p className="text-foreground/60 text-sm">{t('common.loading', 'Loading…')}</p>
       ) : (
-        <div className="space-y-2">
-          {(pipelines ?? []).map((p) => (
-            <Card key={p.key} className="p-3 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{p.name}</span>
-                  <Badge variant="secondary">v{p.version}</Badge>
-                </div>
-                <span className="text-xs text-foreground/50">
-                  {p.key} · {p.stageCount}{' '}
-                  {t('adminIntel.pipeline.stagesLower', 'stages')}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setCreating(false);
-                    setDraft(null);
-                    setEditingKey(p.key);
-                  }}
-                >
-                  {t('common.edit', 'Edit')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-error"
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: t(
-                        'adminIntel.pipeline.deleteTitle',
-                        'Deactivate pipeline?',
-                      ),
-                      description: t(
-                        'adminIntel.pipeline.deleteDesc',
-                        'In-flight runs are unaffected; new runs cannot use it.',
-                      ),
-                      confirmLabel: t('common.delete', 'Delete'),
-                      variant: 'destructive',
-                    });
-                    if (ok) del.mutate(p.key);
-                  }}
-                >
-                  {t('common.delete', 'Delete')}
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <DataTable
+          data={pipelines ?? []}
+          columns={columns}
+          rowKey={(p) => p.key}
+          search={(p) => `${p.name} ${p.key}`}
+          searchPlaceholder={t('adminIntel.pipeline.search', 'Search pipelines…')}
+          initialSort={{ key: 'name', dir: 'asc' }}
+          renderExpanded={(p) => <ExpandedPipeline pipelineKey={p.key} />}
+          toolbar={
+            <label className="flex items-center gap-1.5 text-xs text-foreground/60">
+              <Checkbox
+                checked={showDisabled}
+                onCheckedChange={(v) => setShowDisabled(Boolean(v))}
+              />
+              {t('adminIntel.pipeline.showDisabled', 'Show disabled')}
+            </label>
+          }
+          empty={t(
+            'adminIntel.pipeline.empty',
+            'No pipelines yet. Create one to define a custom flow.',
+          )}
+        />
       )}
+    </div>
+  );
+}
+
+/** Expanded-row preview: the pipeline's ordered stages as a flow of chips. */
+function ExpandedPipeline({ pipelineKey }: { pipelineKey: string }) {
+  const { t } = useTranslation();
+  const { data, isLoading } = usePipeline(pipelineKey);
+  if (isLoading || !data) {
+    return (
+      <p className="text-xs text-foreground/50">{t('common.loading', 'Loading…')}</p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {data.stages.map((s, i) => (
+        <span key={`${s.type}-${i}`} className="flex items-center gap-1.5">
+          {i > 0 && <span className="text-foreground/30">→</span>}
+          <span className="rounded-md border border-border px-2 py-1 text-xs">
+            <span className="font-medium text-foreground">{s.name}</span>
+            <span className="ml-1 text-foreground/40">{s.type}</span>
+          </span>
+        </span>
+      ))}
     </div>
   );
 }

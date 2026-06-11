@@ -25,12 +25,15 @@ const SchemaFieldSchema: z.ZodType<SchemaFieldInput> = z.lazy(() =>
     type: FieldType.default('string'),
     required: z.boolean().optional(),
     reviewMandatory: z.boolean().optional(),
-    fieldThreshold: z.number().min(0).max(1).optional(),
-    description: z.string().max(2000).optional(),
-    example: z.string().max(500).optional(),
-    format: z.string().max(120).optional(),
-    enumValues: z.array(z.string().min(1)).optional(),
-    columns: z.array(SchemaFieldSchema).optional(),
+    /** Soft-disable: inactive fields aren't extracted/reviewed (default true). */
+    isActive: z.boolean().optional(),
+    // nullish (not just optional): getSchema round-trips DB nulls back here.
+    fieldThreshold: z.number().min(0).max(1).nullish(),
+    description: z.string().max(2000).nullish(),
+    example: z.string().max(500).nullish(),
+    format: z.string().max(120).nullish(),
+    enumValues: z.array(z.string().min(1)).nullish(),
+    columns: z.array(SchemaFieldSchema).nullish(),
   }),
 );
 
@@ -40,12 +43,13 @@ export interface SchemaFieldInput {
   type: z.infer<typeof FieldType>;
   required?: boolean;
   reviewMandatory?: boolean;
-  fieldThreshold?: number;
-  description?: string;
-  example?: string;
-  format?: string;
-  enumValues?: string[];
-  columns?: SchemaFieldInput[];
+  isActive?: boolean;
+  fieldThreshold?: number | null;
+  description?: string | null;
+  example?: string | null;
+  format?: string | null;
+  enumValues?: string[] | null;
+  columns?: SchemaFieldInput[] | null;
 }
 
 const ExtractionSchemaSchema = z.object({
@@ -83,6 +87,7 @@ export class UpsertFieldMapDto extends createZodDto(FieldMapSchema) {}
 const StageType = z.enum([
   'ingest',
   'classify',
+  'filter',
   'extract',
   'validate',
   'review',
@@ -103,6 +108,10 @@ const StageConfigSchema = z
       })
       .optional(),
     targets: z.array(z.string().min(1)).optional(),
+    // filter stage
+    allowedTypes: z.array(z.string().min(1)).optional(),
+    minConfidence: z.number().min(0).max(1).optional(),
+    onUnmatched: z.enum(['archive', 'reject', 'review']).optional(),
   })
   .strict();
 

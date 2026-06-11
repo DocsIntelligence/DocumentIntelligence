@@ -212,6 +212,10 @@ export const createDocumentsService = (http: HttpClient) => ({
     http.get<DocumentDetail>(`/documents/${id}`).then((r) => r.data),
   create: (payload: CreateDocumentPayload) =>
     http.post<DocumentDetail>('/documents', payload).then((r) => r.data),
+  duplicate: (id: string) =>
+    http
+      .post<DocumentDetail>(`/documents/${id}/duplicate`, {})
+      .then((r) => r.data),
   patch: (id: string, payload: PatchDocumentPayload) =>
     http.patch<DocumentDetail>(`/documents/${id}`, payload).then((r) => r.data),
   snapshot: (id: string, label?: string) =>

@@ -114,6 +114,50 @@ export class SchemaResolverService {
     return [...keys];
   }
 
+  /**
+   * Active extraction schemas an org may pick from (the manual type-override
+   * picker's source of truth — config-driven, never a hardcoded list). Mirrors
+   * `candidateKeys` precedence (org-scoped over system, latest version) but
+   * returns display names + the drafting type. Excludes the generic fallback.
+   */
+  async listSchemas(
+    orgId: string | null,
+  ): Promise<{ key: string; name: string; documentTypeKey?: string }[]> {
+    const defs = await this.db.extractionSchemaDef.findMany({
+      where: {
+        isActive: true,
+        ...(orgId
+          ? { OR: [{ ownerOrgId: orgId }, { ownerOrgId: null }] }
+          : { ownerOrgId: null }),
+      },
+      orderBy: { version: 'desc' },
+      select: { key: true, name: true, documentTypeKey: true, ownerOrgId: true },
+    });
+    // Org-owned shadows system; within a key the latest version wins (desc).
+    defs.sort((a, b) => (a.ownerOrgId ? 0 : 1) - (b.ownerOrgId ? 0 : 1));
+
+    const byKey = new Map<
+      string,
+      { key: string; name: string; documentTypeKey?: string }
+    >();
+    for (const d of defs) {
+      if (byKey.has(d.key)) continue;
+      byKey.set(d.key, {
+        key: d.key,
+        name: d.name,
+        documentTypeKey: d.documentTypeKey ?? undefined,
+      });
+    }
+    // Code-registry schemas the DB hasn't overridden.
+    for (const k of listExtractionSchemaKeys()) {
+      if (byKey.has(k)) continue;
+      const s = getExtractionSchema(k);
+      if (s) byKey.set(k, { key: s.key, name: s.name, documentTypeKey: s.documentTypeKey });
+    }
+    byKey.delete(GENERIC_KEY); // fallback only — not a pickable target
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   // ─── internals ────────────────────────────────────────────────────────────
 
   private async findSchemaDef(orgId: string | null, key: string) {
@@ -121,14 +165,18 @@ export class SchemaResolverService {
       const org = await this.db.extractionSchemaDef.findFirst({
         where: { ownerOrgId: orgId, key, isActive: true },
         orderBy: { version: 'desc' },
-        include: { fields: { orderBy: { order: 'asc' } } },
+        include: {
+        fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
+      },
       });
       if (org) return org;
     }
     return this.db.extractionSchemaDef.findFirst({
       where: { ownerOrgId: null, key, isActive: true },
       orderBy: { version: 'desc' },
-      include: { fields: { orderBy: { order: 'asc' } } },
+      include: {
+        fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
+      },
     });
   }
 
@@ -154,6 +202,7 @@ export class SchemaResolverService {
     type: string;
     required: boolean;
     reviewMandatory: boolean;
+    fieldThreshold: number | null;
     description: string | null;
     example: string | null;
     format: string | null;
@@ -169,6 +218,7 @@ export class SchemaResolverService {
       type,
       ...(f.required ? { required: true } : {}),
       ...(f.reviewMandatory ? { reviewMandatory: true } : {}),
+      ...(f.fieldThreshold != null ? { fieldThreshold: f.fieldThreshold } : {}),
       ...(f.description ? { description: f.description } : {}),
       ...(f.example ? { example: f.example } : {}),
       ...(f.format ? { format: f.format } : {}),

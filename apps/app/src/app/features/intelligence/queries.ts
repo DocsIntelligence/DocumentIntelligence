@@ -19,6 +19,7 @@ export const intelligenceKeys = {
   batch: (id: string) => ['intelligence', 'batch', id] as const,
   reviewQueue: ['intelligence', 'review-queue'] as const,
   pipelines: ['intelligence', 'pipelines'] as const,
+  schemas: ['intelligence', 'schemas'] as const,
 };
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -146,25 +147,119 @@ export function useBatch(batchId: string | undefined) {
   });
 }
 
-export function useReviewQueue() {
+/** Review queue, optionally scoped to a single batch. */
+export function useReviewQueue(batchId?: string) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: intelligenceKeys.reviewQueue,
-    queryFn: () => svc.getReviewQueue(),
+    queryKey: [...intelligenceKeys.reviewQueue, batchId ?? 'all'],
+    queryFn: () => svc.getReviewQueue(batchId),
   });
 }
 
-export function useApproveRun() {
+export function useApproveRun(batchId?: string) {
   const svc = useIntelligenceService();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (runId: string) => svc.approveRun(runId),
     onSuccess: () => {
+      // Prefix match invalidates every scoped review-queue key too.
       qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
       qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
       toast.success('Approved & finalized');
     },
     onError: (err) => toast.error(extractMessage(err, 'Approval failed')),
+  });
+}
+
+/** Archive (skip) a single run — the per-document skip control. */
+export function useArchiveRun(batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { runId: string; reason?: string }) =>
+      svc.archiveRun(vars.runId, vars.reason),
+    onSuccess: () => {
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      toast.success('Archived (skipped)');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Archive failed')),
+  });
+}
+
+/** Bulk-archive runs (e.g. skip all of a type). */
+export function useBulkArchive(batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { runIds: string[]; reason?: string }) =>
+      svc.bulkArchive(vars.runIds, vars.reason),
+    onSuccess: (res) => {
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      toast.success(`Archived ${res.archived} of ${res.total}`);
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Bulk archive failed')),
+  });
+}
+
+/** Active extraction types the user can pick from (manual type override). */
+export function useSchemaOptions() {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: intelligenceKeys.schemas,
+    queryFn: () => svc.listSchemas(),
+    staleTime: 5 * 60 * 1000, // config-ish; rarely changes mid-session
+  });
+}
+
+/**
+ * Re-extract a source as a chosen type, then refresh the review/batch views.
+ * `sourceId` invalidates the extraction so the corrected type shows immediately.
+ */
+export function useReprocess(sourceId: string, batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (schemaKey: string) => svc.reprocess(sourceId, schemaKey),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: intelligenceKeys.extraction(sourceId) });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      toast.success('Re-processing as the chosen type');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Re-process failed')),
+  });
+}
+
+/**
+ * Reprocess variant for list contexts (batch rows) where the source id is
+ * known only at call time. Same effect as {@link useReprocess}.
+ */
+export function useReprocessRun(batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { sourceDocumentId: string; schemaKey: string }) =>
+      svc.reprocess(vars.sourceDocumentId, vars.schemaKey),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({
+        queryKey: intelligenceKeys.extraction(vars.sourceDocumentId),
+      });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      toast.success('Re-processing as the chosen type');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Re-process failed')),
   });
 }
 

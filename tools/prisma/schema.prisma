@@ -718,6 +718,7 @@ model SourceDocument {
 enum PipelineStageType {
   ingest
   classify
+  filter // classification gate: keep wanted types, archive the rest
   extract
   validate
   review
@@ -732,6 +733,7 @@ enum PipelineRunStatus {
   completed
   failed
   rejected
+  archived // intentionally not extracted (type out of scope, or manually skipped)
 }
 
 enum BatchStatus {
@@ -805,6 +807,8 @@ model PipelineRun {
   sourceDocumentId String
   currentStageId   String?
   status           PipelineRunStatus @default(queued)
+  documentTypeKey  String? // classifier result, denormalized for funnel + filter
+  archivedReason   String? // why this run was archived (type out of scope / manual)
   error            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -881,6 +885,7 @@ model SchemaField {
   type            String  @default("string") // string|number|currency|date|boolean|enum|table
   required        Boolean @default(false)
   reviewMandatory Boolean @default(false)
+  isActive        Boolean @default(true) // soft-disable: inactive fields aren't extracted/reviewed
   fieldThreshold  Float? // per-field auto-advance override
   description     String? // natural-language guidance fed to the model
   example         String?

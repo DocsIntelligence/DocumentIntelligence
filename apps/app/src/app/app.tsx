@@ -8,7 +8,10 @@ import {
 } from '@org/store';
 import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
-import { IntelligenceConfigPage } from './features/admin/intelligence/IntelligenceConfigPage';
+import {
+  DocTypesPage,
+  PipelinesPage,
+} from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
 import { Login } from './features/auth/login/Login';
@@ -27,6 +30,7 @@ import {
   BatchDetailPage,
   BatchesPage,
   IntelligenceUpload,
+  NewBatchPage,
   ReviewQueuePage,
 } from './features/intelligence';
 import { Settings } from './features/settings/Settings';
@@ -74,11 +78,20 @@ export function App() {
         <Route path="/analyze" element={<IntelligenceUpload />} />
         <Route path="/analyze/:sourceId" element={<AnalyzePage />} />
         <Route path="/batches" element={<BatchesPage />} />
+        <Route path="/batches/new" element={<NewBatchPage />} />
         <Route path="/batches/:id" element={<BatchDetailPage />} />
         <Route path="/review-queue" element={<ReviewQueuePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/intelligence" element={<IntelligenceConfigPage />} />
+        <Route
+          path="/admin/intelligence"
+          element={<Navigate to="/admin/intelligence/types" replace />}
+        />
+        <Route path="/admin/intelligence/types" element={<DocTypesPage />} />
+        <Route
+          path="/admin/intelligence/pipelines"
+          element={<PipelinesPage />}
+        />
       </Route>
 
       {/* Editors run full-bleed (no app shell) for max working area. */}

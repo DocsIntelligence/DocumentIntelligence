@@ -7,6 +7,7 @@ import {
   FeatureAction,
 } from '@prisma/client';
 import { documentTypes } from './seed-data/document-types';
+import { extractionTypes } from './seed-data/extraction-types';
 import {
   listExtractionSchemaKeys,
   getExtractionSchema,
@@ -479,6 +480,101 @@ async function main() {
     }
   }
   console.log('✅ Extraction-schema + field-map templates seeded');
+
+  // Commercial-contract extraction catalog → system templates (ownerOrgId=null),
+  // idempotent. Read-only types (no documentTypeKey); editable in the admin portal.
+  for (const tdef of extractionTypes) {
+    const existing = await prisma.extractionSchemaDef.findFirst({
+      where: { ownerOrgId: null, key: tdef.key, version: 1 },
+    });
+    const data = {
+      name: tdef.name,
+      documentTypeKey: null,
+      description: tdef.description,
+      jurisdiction: null,
+      isActive: true,
+    };
+    let schemaId: string;
+    if (existing) {
+      await prisma.schemaField.deleteMany({ where: { schemaId: existing.id } });
+      await prisma.extractionSchemaDef.update({
+        where: { id: existing.id },
+        data,
+      });
+      schemaId = existing.id;
+    } else {
+      const created = await prisma.extractionSchemaDef.create({
+        data: { ownerOrgId: null, key: tdef.key, version: 1, ...data },
+      });
+      schemaId = created.id;
+    }
+    await prisma.schemaField.createMany({
+      data: tdef.fields.map((fld, i) => ({
+        schemaId,
+        key: fld.key,
+        label: fld.label,
+        type: fld.type,
+        required: fld.required ?? false,
+        reviewMandatory: false,
+        format: fld.format ?? null,
+        example: fld.example ?? null,
+        order: i,
+      })),
+    });
+  }
+  console.log(
+    `✅ ${extractionTypes.length} commercial extraction types seeded`,
+  );
+
+  // Default system pipeline (ownerOrgId=null) so it appears in the admin
+  // pipeline list + the batch picker without waiting for an on-demand run.
+  const existingDefault = await prisma.pipeline.findFirst({
+    where: { ownerOrgId: null, key: 'default' },
+  });
+  if (!existingDefault) {
+    await prisma.pipeline.create({
+      data: {
+        ownerOrgId: null,
+        key: 'default',
+        name: 'Default',
+        version: 1,
+        stages: {
+          create: [
+            { order: 1, type: 'ingest', name: 'Ingest', config: {} },
+            { order: 2, type: 'classify', name: 'Classify', config: {} },
+            {
+              order: 3,
+              type: 'extract',
+              name: 'Extract',
+              config: { engineMode: 'auto' },
+            },
+            {
+              order: 4,
+              type: 'validate',
+              name: 'Validate',
+              config: {
+                autoAdvance: {
+                  minOverall: 0.9,
+                  minField: 0.85,
+                  requireAllRequired: true,
+                  onFail: 'review',
+                },
+              },
+            },
+            {
+              order: 5,
+              type: 'export',
+              name: 'Export',
+              config: { targets: ['structured_document'] },
+            },
+          ],
+        },
+      },
+    });
+    console.log('✅ Default pipeline seeded');
+  } else {
+    console.log('  ✓ Default pipeline — up to date');
+  }
 }
 
 main()

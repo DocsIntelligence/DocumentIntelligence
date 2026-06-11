@@ -7,8 +7,11 @@ import {
   useAppSelector,
 } from '@org/store';
 import { Button, FormField, Input, OAuthButtons } from '@org/ui';
-import { startAuthentication } from '@simplewebauthn/browser';
-import { useState } from 'react';
+import {
+  browserSupportsWebAuthnAutofill,
+  startAuthentication,
+} from '@simplewebauthn/browser';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -55,10 +58,14 @@ export function Login() {
     }
   });
 
-  const loginWithPasskey = async () => {
-    setPasskeyLoading(true);
-    try {
-      // Get authentication options
+  /**
+   * One passkey ceremony. `useBrowserAutofill` drives WebAuthn **conditional UI**:
+   * when true, the browser surfaces the saved passkey as a *recommendation* in
+   * the username field's autofill dropdown (the promise stays pending until the
+   * user picks it); when false, it's the explicit button prompt.
+   */
+  const runPasskey = useCallback(
+    async (useBrowserAutofill: boolean) => {
       const optionsRes = await fetch(
         `${API_BASE_URL}/auth/passkey/login/options`,
         {
@@ -70,10 +77,11 @@ export function Login() {
       if (!optionsRes.ok) throw new Error('Failed to get options');
       const { _challengeKey, ...options } = await optionsRes.json();
 
-      // Prompt user for passkey
-      const credential = await startAuthentication({ optionsJSON: options });
+      const credential = await startAuthentication({
+        optionsJSON: options,
+        useBrowserAutofill,
+      });
 
-      // Verify with server
       const verifyRes = await fetch(
         `${API_BASE_URL}/auth/passkey/login/verify`,
         {
@@ -84,21 +92,48 @@ export function Login() {
         },
       );
       if (!verifyRes.ok) throw new Error('Verification failed');
+    },
+    [],
+  );
 
+  const loginWithPasskey = async () => {
+    setPasskeyLoading(true);
+    try {
+      await runPasskey(false);
       toast.success(t('auth.login.passkeySuccess', 'Signed in with passkey!'));
       navigate(nextDestination(), { replace: true });
-    } catch (e: any) {
-      if (e.name === 'NotAllowedError') {
-        // User cancelled
-      } else {
+    } catch (e) {
+      const err = e as { name?: string; message?: string };
+      if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
         toast.error(
-          e.message ?? t('auth.login.passkeyFailed', 'Passkey login failed'),
+          err?.message ?? t('auth.login.passkeyFailed', 'Passkey login failed'),
         );
       }
     } finally {
       setPasskeyLoading(false);
     }
   };
+
+  // Conditional UI: offer the saved passkey as an autofill recommendation in the
+  // username field on load. Silent — typing a password instead just leaves this
+  // pending; it's aborted when the button flow starts or the page unmounts.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!(await browserSupportsWebAuthnAutofill())) return;
+        await runPasskey(true);
+        if (!active) return;
+        toast.success(t('auth.login.passkeySuccess', 'Signed in with passkey!'));
+        navigate(nextDestination(), { replace: true });
+      } catch {
+        // No passkey chosen / aborted — fall through to normal sign-in.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [runPasskey]);
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -121,7 +156,7 @@ export function Login() {
         >
           <Input
             placeholder="you@example.com"
-            autoComplete="username"
+            autoComplete="username webauthn"
             hasError={!!errors.identifier}
             {...register('identifier')}
           />

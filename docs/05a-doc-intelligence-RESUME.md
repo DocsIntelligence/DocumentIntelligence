@@ -1,6 +1,19 @@
 # Document Intelligence — RESUME point (next session)
 
-**Status:** docs/05 **Phases 0–3 CODE-COMPLETE** · docs/07 **P4.1+P4.2+P4.3+P4.4 CODE-COMPLETE** · **Updated:** 2026-06-10
+**Status:** docs/05 **Phases 0–3 CODE-COMPLETE** · docs/07 **P4.1+P4.2+P4.3+P4.4 CODE-COMPLETE** + config-as-data honored end-to-end + batch routing/funnel/skip · **Updated:** 2026-06-11
+
+> **Latest (2026-06-11):** (A) **Resolver wired everywhere** — `SchemaResolverService` now
+> backs review (`getExtraction`), `convert` (DB field-maps honored), and legacy `/analyze`
+> (`PipelineService.run`); per-field `fieldThreshold` honored in `decideReview`. No more
+> code-registry bypass; the 24 DB types render real fields in review + convert. (B) **Batch
+> routing** (migration `batch_filter_archive`): `filter` stage (keep `allowedTypes`, else
+> `archive`/reject/review), `PipelineRunStatus.archived`, `PipelineRun.documentTypeKey`/
+> `archivedReason`; executor `terminal` outcome + `archiveRun`/`bulkArchive`; batch **funnel**
+> + **type histogram** API; pipeline-editor filter stage + **BatchDetailPage** funnel/histogram/
+> per-type-skip/status-chips/per-run-skip. All-user access re-confirmed (JWT-only). tsc/build/
+> lint + live-DB smoke green. **NOT browser-verified; filter/extract not run on a live classified
+> doc.** **Next:** run the funnel on a real batch (needs API key + files); per-type → different
+> extraction schema in one run (currently filter keeps/drops only); per-org clone-on-write.
 
 > **Latest (2026-06-10) — docs/07 P4.2 (config-as-data + admin authoring portal):** new
 > DB models `ExtractionSchemaDef`/`SchemaField`/`FieldMapDef`/`FieldMapEntry` (migration

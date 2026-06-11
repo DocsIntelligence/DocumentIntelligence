@@ -76,9 +76,11 @@ export function decideReview(
   for (const field of schema.fields) {
     const present = field.key in result.fields;
     const score = result.confidence[field.key]?.confidence ?? 0;
+    // A per-field threshold (authored as config-as-data) overrides the global.
+    const threshold = field.fieldThreshold ?? policy.fieldThreshold;
     if (field.reviewMandatory && present) {
       flaggedFields.push(field.key);
-    } else if (present && score < policy.fieldThreshold) {
+    } else if (present && score < threshold) {
       flaggedFields.push(field.key);
     } else if (field.required && !present) {
       flaggedFields.push(field.key);

@@ -7,12 +7,24 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@org/ui';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useConvert, useSaveReview } from './queries';
+import {
+  useConvert,
+  useReprocess,
+  useSaveReview,
+  useSchemaOptions,
+} from './queries';
+
+const GENERIC_SCHEMA_KEY = 'generic_document';
 
 interface Props {
   extraction: ExtractionDetail;
@@ -64,6 +76,9 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
   const navigate = useNavigate();
   const save = useSaveReview(extraction.id, sourceId);
   const convert = useConvert();
+  const reprocess = useReprocess(sourceId);
+  const schemaOptions = useSchemaOptions();
+  const [targetSchema, setTargetSchema] = useState('');
 
   const original = extraction.fields;
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -73,6 +88,20 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
     }
     return init;
   });
+
+  // A reprocess swaps in a new extraction (new id + schema) → re-seed the editor.
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    for (const f of extraction.schema.fields) {
+      init[f.key] = toEditable(extraction.fields[f.key]);
+    }
+    setValues(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraction.id]);
+
+  const isGeneric =
+    !extraction.documentTypeKey ||
+    extraction.schema.key === GENERIC_SCHEMA_KEY;
 
   const flagged = useMemo(
     () => new Set(extraction.review.flaggedFields),
@@ -164,6 +193,64 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
             </div>
           </CardContent>
         )}
+      </Card>
+
+      {/* Manual type override — config-driven from the resolver's schema list. */}
+      <Card className={isGeneric ? 'border-warning/50' : undefined}>
+        <CardContent className="space-y-3 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">
+                {t('intelligence.review.typeTitle', 'Document type')}
+              </p>
+              <p className="mt-0.5 text-xs text-foreground/60">
+                {isGeneric
+                  ? t(
+                      'intelligence.review.typeGeneric',
+                      'Detected as a generic / unknown document. Pick the correct type to re-extract it with that type’s fields.',
+                    )
+                  : t(
+                      'intelligence.review.typeKnown',
+                      'Detected as “{{name}}”. Re-process as a different type if that’s wrong.',
+                      { name: extraction.schema.name },
+                    )}
+              </p>
+            </div>
+            {isGeneric && (
+              <Badge variant="warning" outline>
+                {t('intelligence.review.generic', 'Generic')}
+              </Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={targetSchema} onValueChange={setTargetSchema}>
+              <SelectTrigger className="w-64">
+                <SelectValue
+                  placeholder={t(
+                    'intelligence.review.pickType',
+                    'Choose a type…',
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {(schemaOptions.data ?? []).map((s) => (
+                  <SelectItem key={s.key} value={s.key}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant={isGeneric ? 'default' : 'outline'}
+              disabled={!targetSchema || reprocess.isPending || busy}
+              onClick={() => reprocess.mutate(targetSchema)}
+            >
+              {reprocess.isPending
+                ? t('intelligence.review.reprocessing', 'Re-processing…')
+                : t('intelligence.review.reprocess', 'Re-process as type')}
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
       <Card>

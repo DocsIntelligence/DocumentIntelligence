@@ -154,6 +154,42 @@ export class DocumentsService {
     return doc;
   }
 
+  /**
+   * Clone a document the user can access into a fresh user-owned draft ("Copy
+   * of …"), preserving type/template/data/pageSize/language. Subject to the same
+   * document quota as create. The copy is always user-owned (never inherits a
+   * signed/locked state), so it opens as an editable draft.
+   */
+  async duplicate(userId: string, id: string) {
+    const src = await this.getById(userId, id);
+
+    const ok = await this.walletUsage.checkQuota(userId, Feature.documents);
+    if (!ok) {
+      throw new ForbiddenException(
+        'Document quota exhausted. Upgrade your plan to create more documents.',
+      );
+    }
+
+    const copy = await this.db.document.create({
+      data: {
+        title: `Copy of ${src.title}`,
+        documentTypeId: src.documentTypeId,
+        templateId: src.templateId,
+        ownerType: 'user',
+        ownerUserId: userId,
+        ownerOrgId: null,
+        pageSize: src.pageSize,
+        language: src.language,
+        jurisdiction: src.jurisdiction,
+        data: (src.data ?? {}) as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.walletUsage.trackUsage(userId, Feature.documents, 1);
+    this.logger.log(`Duplicated document ${id} → ${copy.id}`);
+    return copy;
+  }
+
   // ─── Patch (autosave) ──────────────────────────────────────────────────
 
   async patch(userId: string, id: string, dto: PatchDocumentDto) {

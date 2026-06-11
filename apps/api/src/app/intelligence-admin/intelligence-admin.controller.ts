@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -43,8 +44,8 @@ export class IntelligenceAdminController {
 
   @Get('schemas')
   @ApiOperation({ summary: 'List authored extraction schemas (latest version)' })
-  listSchemas() {
-    return this.admin.listSchemas();
+  listSchemas(@Query('includeInactive') includeInactive?: string) {
+    return this.admin.listSchemas(includeInactive === 'true');
   }
 
   @Get('schemas/:key')
@@ -74,6 +75,19 @@ export class IntelligenceAdminController {
     return this.admin.deleteSchema(key);
   }
 
+  @Post('schemas/:key/activate')
+  @ApiOperation({ summary: 'Re-enable a soft-disabled schema' })
+  activateSchema(@Param('key') key: string) {
+    return this.admin.activateSchema(key);
+  }
+
+  @Delete('schemas/:key/purge')
+  @ApiOperation({ summary: 'Permanently delete a schema (all versions)' })
+  purgeSchema(@Param('key') key: string) {
+    return this.admin.purgeSchema(key);
+  }
+
+
   // ─── Field-maps ─────────────────────────────────────────────────────────────
 
   @Get('field-maps/:schemaKey')
@@ -95,8 +109,8 @@ export class IntelligenceAdminController {
 
   @Get('pipelines')
   @ApiOperation({ summary: 'List authored pipelines (latest version)' })
-  listPipelines() {
-    return this.admin.listPipelines();
+  listPipelines(@Query('includeInactive') includeInactive?: string) {
+    return this.admin.listPipelines(includeInactive === 'true');
   }
 
   @Get('pipelines/:key')
@@ -122,4 +136,17 @@ export class IntelligenceAdminController {
   deletePipeline(@Param('key') key: string) {
     return this.admin.deletePipeline(key);
   }
+
+  @Post('pipelines/:key/activate')
+  @ApiOperation({ summary: 'Re-enable a soft-disabled pipeline' })
+  activatePipeline(@Param('key') key: string) {
+    return this.admin.activatePipeline(key);
+  }
+
+  @Delete('pipelines/:key/purge')
+  @ApiOperation({ summary: 'Permanently delete a pipeline (all versions)' })
+  purgePipeline(@Param('key') key: string) {
+    return this.admin.purgePipeline(key);
+  }
+
 }

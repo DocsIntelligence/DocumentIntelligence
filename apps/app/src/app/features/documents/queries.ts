@@ -80,6 +80,34 @@ export function useDeleteDocument() {
   });
 }
 
+export function useDuplicateDocument() {
+  const svc = useDocumentsService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.duplicate(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: documentsKeys.all });
+      toast.success('Document duplicated');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Duplicate failed')),
+  });
+}
+
+/** Rename any document by id (list context) → refresh the list. */
+export function useRenameDocument() {
+  const svc = useDocumentsService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; title: string }) =>
+      svc.patch(vars.id, { title: vars.title }),
+    onSuccess: (doc: DocumentDetail) => {
+      qc.setQueryData(documentsKeys.detail(doc.id), doc);
+      qc.invalidateQueries({ queryKey: documentsKeys.all });
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Rename failed')),
+  });
+}
+
 export function useDocumentVersions(id: string, enabled = true) {
   const svc = useDocumentsService();
   return useQuery({

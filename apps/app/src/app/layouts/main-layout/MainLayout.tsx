@@ -159,22 +159,46 @@ function Sidebar({
             label={t('nav.analyze', 'Analyze')}
             icon={<ScanIcon />}
           />
-          <NavItem
-            to="/batches"
-            label={t('nav.batches', 'Batches')}
+
+          <NavGroup
+            label={t('nav.docIntel', 'Document Intelligence')}
             icon={<LayersIcon />}
-          />
-          <NavItem
-            to="/review-queue"
-            label={t('nav.reviewQueue', 'Review queue')}
-            icon={<InboxIcon />}
-          />
-          {/* Temporarily visible to all users (no admin gate). */}
-          <NavItem
-            to="/admin/intelligence"
-            label={t('nav.docConfig', 'Doc config')}
-            icon={<ShieldIcon />}
-          />
+            storageKey="nav.group.docIntel"
+            childPaths={[
+              '/batches',
+              '/review-queue',
+              '/admin/intelligence',
+            ]}
+          >
+            <NavItem
+              to="/batches"
+              end
+              label={t('nav.batches', 'Batches')}
+              icon={<LayersIcon />}
+            />
+            <NavItem
+              to="/batches/new"
+              label={t('nav.newBatch', 'New batch')}
+              icon={<UploadIcon />}
+            />
+            <NavItem
+              to="/review-queue"
+              label={t('nav.reviewQueue', 'Review queue')}
+              icon={<InboxIcon />}
+            />
+            {/* Temporarily visible to all users (no admin gate). */}
+            <NavItem
+              to="/admin/intelligence/types"
+              label={t('nav.docTypes', 'Document types')}
+              icon={<DocsIcon />}
+            />
+            <NavItem
+              to="/admin/intelligence/pipelines"
+              label={t('nav.pipelines', 'Pipelines')}
+              icon={<FlowIcon />}
+            />
+          </NavGroup>
+
           <NavItem
             to="/editor"
             label={t('nav.quickEditor', 'Quick editor')}
@@ -226,10 +250,12 @@ function NavItem({
   to,
   label,
   icon,
+  end,
 }: {
   to: string;
   label: string;
   icon: ReactNode;
+  end?: boolean;
 }) {
   return (
     <NavLink
@@ -242,11 +268,82 @@ function NavItem({
             : 'text-foreground/70 hover:bg-secondary/60 hover:text-foreground',
         )
       }
-      end={to === '/documents'}
+      end={end ?? to === '/documents'}
     >
       <span className="flex size-5 items-center justify-center">{icon}</span>
       {label}
     </NavLink>
+  );
+}
+
+/**
+ * A collapsible nav section. Open state persists in localStorage; the group
+ * auto-expands (and stays open) whenever the active route is one of its
+ * children, so deep links always reveal their context.
+ */
+function NavGroup({
+  label,
+  icon,
+  storageKey,
+  childPaths,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  storageKey: string;
+  childPaths: string[];
+  children: ReactNode;
+}) {
+  const location = useLocation();
+  const hasActiveChild = childPaths.some((p) =>
+    location.pathname.startsWith(p),
+  );
+  const [open, setOpen] = useState(() => {
+    const stored =
+      typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+    return stored == null ? true : stored === '1';
+  });
+
+  // Force-open while a child route is active (without clobbering the stored
+  // preference for when the user navigates away).
+  const expanded = open || hasActiveChild;
+
+  const toggle = () => {
+    const next = !expanded;
+    setOpen(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, next ? '1' : '0');
+    }
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+          hasActiveChild
+            ? 'text-foreground'
+            : 'text-foreground/70 hover:bg-secondary/60 hover:text-foreground',
+        )}
+      >
+        <span className="flex size-5 items-center justify-center">{icon}</span>
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronIcon
+          className={cn(
+            'size-4 transition-transform',
+            expanded ? 'rotate-90' : 'rotate-0',
+          )}
+        />
+      </button>
+      {expanded && (
+        <div className="mt-0.5 space-y-0.5 border-l border-border/70 pl-3 ml-[1.4rem]">
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -335,6 +432,31 @@ function InboxIcon() {
     <svg {...iconProps}>
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  );
+}
+function UploadIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+function FlowIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="3" width="6" height="6" rx="1" />
+      <rect x="15" y="15" width="6" height="6" rx="1" />
+      <path d="M9 6h6a3 3 0 0 1 3 3v6" />
+    </svg>
+  );
+}
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="m9 6 6 6-6 6" />
     </svg>
   );
 }

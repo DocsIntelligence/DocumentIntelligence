@@ -1,14 +1,181 @@
-import { Button, Card } from '@org/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  DataTable,
+  type DataTableColumn,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Input,
+} from '@org/ui';
 import { cn } from '@org/utils';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useDocumentList } from './queries';
+import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import {
+  useDeleteDocument,
+  useDocumentList,
+  useDuplicateDocument,
+  useRenameDocument,
+} from './queries';
 import { documentHref } from './document-href';
+import { ShareDialog } from './ShareDialog';
+import { VersionHistoryDialog } from './VersionHistoryDialog';
 
 export function DocumentsList() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const confirm = useConfirm();
   const { data, isLoading, error } = useDocumentList();
-  const docs = data ?? [];
+  const docs = useMemo(() => data ?? [], [data]);
+
+  const del = useDeleteDocument();
+  const duplicate = useDuplicateDocument();
+  const rename = useRenameDocument();
+
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  // Dialog targets (keyed by doc id so one dialog instance serves every card).
+  const [shareId, setShareId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [renameDoc, setRenameDoc] = useState<{ id: string; title: string } | null>(
+    null,
+  );
+
+  // Filter facets derived from the loaded list (no hardcoded enums).
+  const statuses = useMemo(
+    () => [...new Set(docs.map((d) => d.status))].sort(),
+    [docs],
+  );
+  const types = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of docs) {
+      if (d.documentType) m.set(d.documentType.key, d.documentType.name);
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [docs]);
+
+  // Status/type facets are pre-filtered here; free-text search, sorting, and
+  // pagination are handled by the DataTable itself.
+  const rows = useMemo(
+    () =>
+      docs.filter((d) => {
+        if (statusFilter && d.status !== statusFilter) return false;
+        if (typeFilter && d.documentType?.key !== typeFilter) return false;
+        return true;
+      }),
+    [docs, statusFilter, typeFilter],
+  );
+
+  const columns: DataTableColumn<(typeof docs)[number]>[] = [
+    {
+      key: 'title',
+      header: t('documents.colTitle', 'Title'),
+      sortValue: (d) => (d.title ?? '').toLowerCase(),
+      cell: (d) => (
+        <Link to={documentHref(d)} className="group block min-w-0">
+          <span className="block truncate font-medium text-foreground group-hover:text-primary">
+            {d.title || t('common.untitled', 'Untitled')}
+          </span>
+          <span className="block truncate text-xs text-foreground/50">
+            {d.template?.name ?? '—'} · {d.pageSize.replace(/_/g, ' ')}
+          </span>
+        </Link>
+      ),
+    },
+    {
+      key: 'type',
+      header: t('documents.colType', 'Type'),
+      sortValue: (d) => d.documentType?.name ?? '',
+      cell: (d) => (
+        <span className="text-foreground/70">
+          {d.documentType?.name ?? t('common.document', 'Document')}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: t('documents.colStatus', 'Status'),
+      sortValue: (d) => d.status,
+      cell: (d) => <StatusPill status={d.status} />,
+    },
+    {
+      key: 'updated',
+      header: t('common.updated', 'Updated'),
+      align: 'right',
+      sortValue: (d) => d.updatedAt,
+      cell: (d) => (
+        <span className="text-foreground/55">
+          {new Date(d.updatedAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (d) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={t('common.actions', 'Actions')}
+              className="rounded p-1 text-foreground/50 hover:bg-secondary hover:text-foreground"
+            >
+              ⋯
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => navigate(documentHref(d))}>
+              {t('common.open', 'Open')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => setRenameDoc({ id: d.id, title: d.title ?? '' })}
+            >
+              {t('common.rename', 'Rename')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => duplicate.mutate(d.id)}>
+              {t('documents.duplicate', 'Duplicate')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setShareId(d.id)}>
+              {t('documents.share', 'Share')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHistoryId(d.id)}>
+              {t('documents.history', 'Version history')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-error"
+              onSelect={async () => {
+                const ok = await confirm({
+                  title: t('documents.deleteTitle', 'Delete document?'),
+                  description: t(
+                    'documents.deleteDesc',
+                    'This permanently deletes the document. This cannot be undone.',
+                  ),
+                  confirmLabel: t('common.delete', 'Delete'),
+                  variant: 'destructive',
+                });
+                if (ok) del.mutate(d.id);
+              }}
+            >
+              {t('common.delete', 'Delete')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -32,11 +199,11 @@ export function DocumentsList() {
       </div>
 
       {isLoading && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-xl bg-secondary/40"
+              className="h-12 animate-pulse rounded-lg bg-secondary/40"
             />
           ))}
         </div>
@@ -72,36 +239,124 @@ export function DocumentsList() {
         </Card>
       )}
 
-      {docs.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {docs.map((d) => (
-            <Link
-              key={d.id}
-              to={documentHref(d)}
-              className="group flex flex-col rounded-xl border border-border bg-background p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-[11px] font-medium uppercase tracking-wide text-foreground/50">
-                  {d.documentType?.name ?? t('common.document', 'Document')}
-                </span>
-                <StatusPill status={d.status} />
-              </div>
-              <p className="mt-2 truncate font-semibold text-foreground group-hover:text-primary">
-                {d.title || t('common.untitled', 'Untitled')}
-              </p>
-              <p className="mt-1 text-xs text-foreground/50">
-                {d.template?.name ?? '—'} · {d.pageSize.replace(/_/g, ' ')}
-              </p>
-              <p className="mt-auto pt-3 text-xs text-foreground/40">
-                {t('dashboard.updated', 'Updated {{date}}', {
-                  date: new Date(d.updatedAt).toLocaleString(),
-                })}
-              </p>
-            </Link>
-          ))}
-        </div>
+      {!isLoading && !error && docs.length > 0 && (
+        <DataTable
+          data={rows}
+          columns={columns}
+          rowKey={(d) => d.id}
+          search={(d) => d.title ?? ''}
+          searchPlaceholder={t('documents.search', 'Search by title…')}
+          initialSort={{ key: 'updated', dir: 'desc' }}
+          toolbar={
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip active={!statusFilter} onClick={() => setStatusFilter(null)}>
+                {t('common.all', 'All')}
+              </Chip>
+              {statuses.map((s) => (
+                <Chip
+                  key={s}
+                  active={statusFilter === s}
+                  onClick={() => setStatusFilter(statusFilter === s ? null : s)}
+                >
+                  {t(`status.${s}`, s.replace(/_/g, ' '))}
+                </Chip>
+              ))}
+              {types.length > 1 && (
+                <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+              )}
+              {types.length > 1 &&
+                types.map(([key, name]) => (
+                  <Chip
+                    key={key}
+                    active={typeFilter === key}
+                    onClick={() =>
+                      setTypeFilter(typeFilter === key ? null : key)
+                    }
+                  >
+                    {name}
+                  </Chip>
+                ))}
+            </div>
+          }
+          empty={t('documents.noMatch', 'No documents match these filters.')}
+        />
       )}
+
+      {shareId && (
+        <ShareDialog
+          documentId={shareId}
+          open={!!shareId}
+          onOpenChange={(v) => !v && setShareId(null)}
+        />
+      )}
+      {historyId && (
+        <VersionHistoryDialog
+          documentId={historyId}
+          open={!!historyId}
+          onOpenChange={(v) => !v && setHistoryId(null)}
+        />
+      )}
+      <RenameDialog
+        target={renameDoc}
+        onClose={() => setRenameDoc(null)}
+        onSave={(title) => {
+          if (renameDoc) rename.mutate({ id: renameDoc.id, title });
+          setRenameDoc(null);
+        }}
+        saving={rename.isPending}
+      />
     </div>
+  );
+}
+
+function RenameDialog({
+  target,
+  onClose,
+  onSave,
+  saving,
+}: {
+  target: { id: string; title: string } | null;
+  onClose: () => void;
+  onSave: (title: string) => void;
+  saving: boolean;
+}) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState('');
+  const open = !!target;
+  // Seed the input whenever a new target opens.
+  useEffect(() => {
+    if (target) setValue(target.title);
+  }, [target]);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('documents.renameTitle', 'Rename document')}</DialogTitle>
+        </DialogHeader>
+        <Input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={t('common.untitled', 'Untitled')}
+        />
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            disabled={!value.trim() || saving}
+            onClick={() => onSave(value.trim())}
+          >
+            {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

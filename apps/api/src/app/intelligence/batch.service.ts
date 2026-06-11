@@ -124,9 +124,43 @@ export class BatchService {
       status: r.status,
       sourceDocumentId: r.sourceDocumentId,
       filename: r.sourceDocument.filename,
+      documentTypeKey: r.documentTypeKey,
+      archivedReason: r.archivedReason,
     }));
+
+    // Status funnel (cheap, derived from run.status — no per-stage queries).
+    const inProgress = batch.runs.filter((r) =>
+      r.status === 'queued' || r.status === 'running',
+    ).length;
+    const funnel = {
+      inProgress,
+      needsReview: batch.runs.filter((r) => r.status === 'needs_review').length,
+      completed: batch.runs.filter(
+        (r) => r.status === 'completed' || r.status === 'approved',
+      ).length,
+      archived: batch.runs.filter((r) => r.status === 'archived').length,
+      failed: batch.runs.filter(
+        (r) => r.status === 'failed' || r.status === 'rejected',
+      ).length,
+    };
+
+    // Classified-type histogram ("of N docs, how many of each type").
+    const histMap = new Map<string, number>();
+    for (const r of batch.runs) {
+      const key = r.documentTypeKey ?? 'unclassified';
+      histMap.set(key, (histMap.get(key) ?? 0) + 1);
+    }
+    const typeHistogram = [...histMap.entries()]
+      .map(([documentTypeKey, count]) => ({ documentTypeKey, count }))
+      .sort((a, b) => b.count - a.count);
+
     return {
-      ...this.withCounts({ ...batch, runs: batch.runs.map((r) => ({ status: r.status })) }),
+      ...this.withCounts({
+        ...batch,
+        runs: batch.runs.map((r) => ({ status: r.status })),
+      }),
+      funnel,
+      typeHistogram,
       runs,
     };
   }
@@ -145,7 +179,8 @@ export class BatchService {
     const completed = count('completed') + count('approved');
     const needsReview = count('needs_review');
     const failed = count('failed') + count('rejected');
-    const running = total - completed - needsReview - failed;
+    const archived = count('archived');
+    const running = total - completed - needsReview - failed - archived;
     const status: BatchStatus =
       running > 0
         ? BatchStatus.running
@@ -162,6 +197,7 @@ export class BatchService {
       completed,
       needsReview,
       failed,
+      archived,
       running,
       createdAt: batch.createdAt,
     };

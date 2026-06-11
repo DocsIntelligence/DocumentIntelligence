@@ -1,13 +1,37 @@
-import type { AdminFieldType, AdminSchemaField } from '@org/api-client';
-import { Badge, Button, Card, Checkbox, Input } from '@org/ui';
-import { useState } from 'react';
+import type {
+  AdminFieldType,
+  AdminSchemaField,
+  AdminSchemaSummary,
+} from '@org/api-client';
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DataTable,
+  Input,
+  type DataTableColumn,
+} from '@org/ui';
+import { cn } from '@org/utils';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
+import { FieldMapEditor } from './FieldMapEditor';
 import {
-  useDeleteSchema,
+  CopyIcon,
+  EditIcon,
+  EyeIcon,
+  EyeOffIcon,
+  IconButton,
+  MapIcon,
+  TrashIcon,
+} from './icons';
+import {
+  usePurgeSchema,
   useSaveSchema,
   useSchema,
   useSchemas,
+  useSetSchemaActive,
 } from './queries';
 
 const FIELD_TYPES: AdminFieldType[] = [
@@ -34,6 +58,7 @@ const blankField = (): AdminSchemaField => ({
   label: '',
   type: 'string',
   required: false,
+  isActive: true,
 });
 
 /**
@@ -44,25 +69,32 @@ const blankField = (): AdminSchemaField => ({
 export function SchemaManager() {
   const { t } = useTranslation();
   const confirm = useConfirm();
-  const { data: schemas, isLoading } = useSchemas();
+  const [showDisabled, setShowDisabled] = useState(false);
+  const { data: schemas, isLoading } = useSchemas(showDisabled);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<EditorState | null>(null);
+  const [mappingKey, setMappingKey] = useState<string | null>(null);
+  const [cloning, setCloning] = useState(false);
   const { data: loaded } = useSchema(editingKey);
   const save = useSaveSchema();
-  const del = useDeleteSchema();
+  const setActive = useSetSchemaActive();
+  const purge = usePurgeSchema();
 
-  // Hydrate the draft when a schema finishes loading for edit.
-  if (editingKey && loaded && draft?.key !== loaded.key) {
+  // Hydrate the draft when the schema being edited/cloned finishes loading.
+  // Cloning seeds a NEW key/name in create mode (mints v1) keeping all fields.
+  useEffect(() => {
+    if (!editingKey || !loaded) return;
     setDraft({
-      key: loaded.key,
-      name: loaded.name,
-      documentTypeKey: loaded.documentTypeKey ?? '',
+      key: cloning ? `${loaded.key}_copy` : loaded.key,
+      name: cloning ? `${loaded.name} (copy)` : loaded.name,
+      documentTypeKey: cloning ? '' : loaded.documentTypeKey ?? '',
       description: loaded.description ?? '',
       jurisdiction: loaded.jurisdiction ?? '',
       fields: loaded.fields.map((f) => ({ ...f })),
     });
-  }
+    if (cloning) setCreating(true);
+  }, [editingKey, loaded, cloning]);
 
   const startCreate = () => {
     setEditingKey(null);
@@ -81,6 +113,22 @@ export function SchemaManager() {
     setDraft(null);
     setEditingKey(null);
     setCreating(false);
+    setCloning(false);
+  };
+
+  const startEdit = (key: string) => {
+    setCloning(false);
+    setCreating(false);
+    setMappingKey(null);
+    setDraft(null);
+    setEditingKey(key);
+  };
+
+  const startClone = (key: string) => {
+    setCloning(true);
+    setMappingKey(null);
+    setDraft(null);
+    setEditingKey(key);
   };
 
   const setField = (i: number, patch: Partial<AdminSchemaField>) => {
@@ -127,7 +175,21 @@ export function SchemaManager() {
     );
   };
 
+  if (mappingKey) {
+    return (
+      <FieldMapEditor
+        schemaKey={mappingKey}
+        onClose={() => setMappingKey(null)}
+      />
+    );
+  }
+
   if (draft) {
+    const valid = Boolean(
+      draft.key.trim() &&
+        draft.name.trim() &&
+        draft.fields.some((f) => f.key.trim() && f.label.trim()),
+    );
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -140,13 +202,25 @@ export function SchemaManager() {
             <Button variant="ghost" size="sm" onClick={close}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button size="sm" onClick={onSave} disabled={save.isPending}>
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={save.isPending || !valid}
+            >
               {save.isPending
                 ? t('common.saving', 'Saving…')
                 : t('adminIntel.schema.saveVersion', 'Save (new version)')}
             </Button>
           </div>
         </div>
+        {!valid && (
+          <p className="text-xs text-warning-foreground">
+            {t(
+              'adminIntel.schema.invalid',
+              'A key, a name, and at least one field (with key + label) are required.',
+            )}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-sm">
@@ -224,7 +298,12 @@ export function SchemaManager() {
 
         <div className="space-y-2">
           {draft.fields.map((f, i) => (
-            <Card key={i} className="p-3 space-y-2">
+            <Card
+              key={i}
+              className={`p-3 space-y-2 ${
+                f.isActive === false ? 'opacity-60' : ''
+              }`}
+            >
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
                   value={f.key}
@@ -284,6 +363,13 @@ export function SchemaManager() {
                   />
                   {t('adminIntel.schema.reviewMandatory', 'Always review')}
                 </label>
+                <label className="flex items-center gap-1.5">
+                  <Checkbox
+                    checked={f.isActive !== false}
+                    onCheckedChange={(v) => setField(i, { isActive: Boolean(v) })}
+                  />
+                  {t('adminIntel.schema.fieldEnabled', 'Enabled')}
+                </label>
                 <Input
                   className="w-32"
                   value={f.format ?? ''}
@@ -327,6 +413,130 @@ export function SchemaManager() {
     );
   }
 
+  const onDelete = async (key: string) => {
+    const ok = await confirm({
+      title: t('adminIntel.schema.deleteTitle', 'Delete type permanently?'),
+      description: t(
+        'adminIntel.schema.deleteDesc',
+        'This removes the type and all its versions for good. Prefer Disable if you might need it again.',
+      ),
+      confirmLabel: t('common.delete', 'Delete'),
+      variant: 'destructive',
+    });
+    if (ok) purge.mutate(key);
+  };
+
+  const columns: DataTableColumn<AdminSchemaSummary>[] = [
+    {
+      key: 'name',
+      header: t('adminIntel.schema.colName', 'Type'),
+      sortValue: (s) => s.name.toLowerCase(),
+      cell: (s) => (
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'font-medium text-foreground',
+              s.isActive === false && 'text-foreground/50',
+            )}
+          >
+            {s.name}
+          </span>
+          {!s.documentTypeKey && (
+            <Badge variant="info">
+              {t('adminIntel.schema.readOnly', 'read-only')}
+            </Badge>
+          )}
+          {s.isActive === false && (
+            <Badge variant="secondary">
+              {t('adminIntel.schema.disabled', 'disabled')}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'key',
+      header: t('adminIntel.schema.colKey', 'Key'),
+      sortValue: (s) => s.key,
+      cell: (s) => <span className="text-foreground/55">{s.key}</span>,
+    },
+    {
+      key: 'version',
+      header: t('adminIntel.schema.colVersion', 'Ver'),
+      align: 'right',
+      sortValue: (s) => s.version,
+      cell: (s) => <span className="tabular-nums text-foreground/60">v{s.version}</span>,
+    },
+    {
+      key: 'fields',
+      header: t('adminIntel.schema.colFields', 'Fields'),
+      align: 'right',
+      sortValue: (s) => s.fieldCount,
+      cell: (s) => <span className="tabular-nums">{s.fieldCount}</span>,
+    },
+    {
+      key: 'updated',
+      header: t('common.updated', 'Updated'),
+      sortValue: (s) => s.updatedAt,
+      cell: (s) => (
+        <span className="text-foreground/55">
+          {new Date(s.updatedAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (s) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton title={t('common.edit', 'Edit')} onClick={() => startEdit(s.key)}>
+            <EditIcon />
+          </IconButton>
+          {s.documentTypeKey && (
+            <IconButton
+              title={t('adminIntel.schema.mapping', 'Field mapping')}
+              onClick={() => setMappingKey(s.key)}
+            >
+              <MapIcon />
+            </IconButton>
+          )}
+          <IconButton
+            title={t('common.clone', 'Clone')}
+            onClick={() => startClone(s.key)}
+          >
+            <CopyIcon />
+          </IconButton>
+          {s.isActive === false ? (
+            <IconButton
+              title={t('adminIntel.schema.enable', 'Enable')}
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutate({ key: s.key, active: true })}
+            >
+              <EyeOffIcon />
+            </IconButton>
+          ) : (
+            <IconButton
+              title={t('adminIntel.schema.disable', 'Disable')}
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutate({ key: s.key, active: false })}
+            >
+              <EyeIcon />
+            </IconButton>
+          )}
+          <IconButton
+            danger
+            title={t('common.delete', 'Delete')}
+            disabled={purge.isPending}
+            onClick={() => onDelete(s.key)}
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -344,63 +554,64 @@ export function SchemaManager() {
       {isLoading ? (
         <p className="text-foreground/60 text-sm">{t('common.loading', 'Loading…')}</p>
       ) : (
-        <div className="space-y-2">
-          {(schemas ?? []).map((s) => (
-            <Card
-              key={s.key}
-              className="p-3 flex items-center justify-between"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{s.name}</span>
-                  <Badge variant="secondary">v{s.version}</Badge>
-                  {!s.documentTypeKey && (
-                    <Badge variant="info">
-                      {t('adminIntel.schema.readOnly', 'read-only')}
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-xs text-foreground/50">
-                  {s.key} · {s.fieldCount}{' '}
-                  {t('adminIntel.schema.fieldsLower', 'fields')}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setCreating(false);
-                    setDraft(null);
-                    setEditingKey(s.key);
-                  }}
-                >
-                  {t('common.edit', 'Edit')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-error"
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: t('adminIntel.schema.deleteTitle', 'Deactivate type?'),
-                      description: t(
-                        'adminIntel.schema.deleteDesc',
-                        'New runs fall back to the built-in default. Existing extractions are unaffected.',
-                      ),
-                      confirmLabel: t('common.delete', 'Delete'),
-                      variant: 'destructive',
-                    });
-                    if (ok) del.mutate(s.key);
-                  }}
-                >
-                  {t('common.delete', 'Delete')}
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <DataTable
+          data={schemas ?? []}
+          columns={columns}
+          rowKey={(s) => s.key}
+          search={(s) => `${s.name} ${s.key}`}
+          searchPlaceholder={t('adminIntel.schema.search', 'Search types…')}
+          initialSort={{ key: 'name', dir: 'asc' }}
+          renderExpanded={(s) => <ExpandedSchema schemaKey={s.key} />}
+          toolbar={
+            <label className="flex items-center gap-1.5 text-xs text-foreground/60">
+              <Checkbox
+                checked={showDisabled}
+                onCheckedChange={(v) => setShowDisabled(Boolean(v))}
+              />
+              {t('adminIntel.schema.showDisabled', 'Show disabled')}
+            </label>
+          }
+          empty={t('adminIntel.schema.empty', 'No document types yet.')}
+        />
       )}
+    </div>
+  );
+}
+
+/** Expanded-row preview: the schema's fields as compact chips (lazy-loaded). */
+function ExpandedSchema({ schemaKey }: { schemaKey: string }) {
+  const { t } = useTranslation();
+  const { data, isLoading } = useSchema(schemaKey);
+  if (isLoading || !data) {
+    return (
+      <p className="text-xs text-foreground/50">{t('common.loading', 'Loading…')}</p>
+    );
+  }
+  if (data.fields.length === 0) {
+    return (
+      <p className="text-xs text-foreground/50">
+        {t('adminIntel.schema.noFields', 'No fields.')}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {data.fields.map((f) => (
+        <span
+          key={f.key}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs',
+            f.isActive === false
+              ? 'border-dashed border-border opacity-50'
+              : 'border-border',
+          )}
+          title={f.key}
+        >
+          <span className="font-medium text-foreground">{f.label}</span>
+          <span className="text-foreground/40">{f.type}</span>
+          {f.required && <span className="text-error">*</span>}
+        </span>
+      ))}
     </div>
   );
 }

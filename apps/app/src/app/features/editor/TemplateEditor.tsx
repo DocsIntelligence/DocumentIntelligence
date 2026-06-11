@@ -69,6 +69,8 @@ export type EditorDraftState = {
   values: Record<string, string>;
   /** Document-level font (any Google Fonts family); persisted in `data`. */
   fontFamily?: string;
+  /** Typed field defs for the doc's tokens; persisted in `data.fields`. */
+  fields?: PlaceholderDef[];
 };
 
 /**
@@ -87,6 +89,8 @@ export type EditorPersistence =
         values: Record<string, string>;
         pageSize?: PageSizeKey;
         fontFamily?: string;
+        /** Typed field defs (e.g. from convert) → render typed inputs, not plain text. */
+        fields?: PlaceholderDef[];
       };
       onSave: (s: EditorDraftState) => void;
       /** Called when the user changes the paper size (bound mode persists it). */
@@ -390,6 +394,7 @@ function TemplateEditorInner({
           html,
           values,
           fontFamily,
+          fields: template.placeholders,
         });
       } else {
         const now = Date.now();
@@ -405,7 +410,15 @@ function TemplateEditorInner({
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [template.id, template.name, html, values, pageSize, fontFamily]);
+  }, [
+    template.id,
+    template.name,
+    template.placeholders,
+    html,
+    values,
+    pageSize,
+    fontFamily,
+  ]);
 
   // Bound mode: reflect the parent-reported save time in the status bar.
   const boundSavedAt =
@@ -1495,6 +1508,7 @@ function synthesizeTemplate(init: {
   templateId?: string;
   title?: string;
   html: string;
+  fields?: PlaceholderDef[];
 }): DocumentTemplate {
   return {
     id: init.templateId ?? 'freeform',
@@ -1503,7 +1517,9 @@ function synthesizeTemplate(init: {
     category: 'Document',
     icon: '📄',
     html: init.html,
-    placeholders: [],
+    // Typed defs (e.g. carried from convert) drive the Fields panel; tokens
+    // without a def still fall through to custom text inputs.
+    placeholders: init.fields ?? [],
   };
 }
 

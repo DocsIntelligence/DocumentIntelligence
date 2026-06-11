@@ -25,9 +25,12 @@ import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
+  ArchiveRunDto,
   AskDto,
+  BulkArchiveDto,
   PresignUploadDto,
   RegisterSourceDto,
+  ReprocessDto,
   SaveReviewDto,
 } from './intelligence.dto';
 import { AnalysisService } from './analysis.service';
@@ -231,8 +234,8 @@ export class IntelligenceController {
 
   @Get('review-queue')
   @ApiOperation({ summary: 'Pipeline runs awaiting human review' })
-  reviewQueue(@CurrentUser() user: User) {
-    return this.pipelines.reviewQueue(user.id);
+  reviewQueue(@CurrentUser() user: User, @Query('batch') batchId?: string) {
+    return this.pipelines.reviewQueue(user.id, batchId);
   }
 
   @Post('pipeline-runs/:id/approve')
@@ -241,5 +244,44 @@ export class IntelligenceController {
   })
   approveRun(@CurrentUser() user: User, @Param('id') id: string) {
     return this.pipelines.approveRun(user.id, id);
+  }
+
+  @Post('pipeline-runs/:id/archive')
+  @ApiOperation({ summary: 'Archive (skip) a run — no extraction' })
+  archiveRun(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: ArchiveRunDto,
+  ) {
+    return this.pipelines.archiveRun(user.id, id, body.reason);
+  }
+
+  @Post('runs/archive')
+  @ApiOperation({ summary: 'Bulk-archive runs (e.g. skip all of a type)' })
+  bulkArchive(@CurrentUser() user: User, @Body() body: BulkArchiveDto) {
+    return this.pipelines.bulkArchive(user.id, body.runIds, body.reason);
+  }
+
+  // ─── Manual type override ──────────────────────────────────────────────────
+
+  @Get('schemas')
+  @ApiOperation({ summary: 'Active extraction types the user can pick from' })
+  listSchemas(
+    @CurrentUser() _user: User,
+    @Query('ownerOrgId') ownerOrgId?: string,
+  ) {
+    return this.intelligence.listSchemas(ownerOrgId || null);
+  }
+
+  @Post('sources/:id/reprocess')
+  @ApiOperation({
+    summary: 'Re-extract a source as a chosen type (manual override)',
+  })
+  reprocess(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: ReprocessDto,
+  ) {
+    return this.pipelines.reprocess(user.id, id, body.schemaKey);
   }
 }

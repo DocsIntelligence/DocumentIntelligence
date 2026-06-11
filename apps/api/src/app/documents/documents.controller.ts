@@ -80,6 +80,12 @@ export class DocumentsController {
     return this.documents.create(user.id, body);
   }
 
+  @Post(':id/duplicate')
+  @ApiOperation({ summary: 'Duplicate a document into a new user-owned draft' })
+  duplicate(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.documents.duplicate(user.id, id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Patch a document (autosave)' })
   patch(

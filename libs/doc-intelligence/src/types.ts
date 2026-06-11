@@ -41,6 +41,8 @@ export interface ExtractionField {
   columns?: ExtractionField[];
   /** Force human review regardless of confidence (e.g. legally load-bearing). */
   reviewMandatory?: boolean;
+  /** Per-field review threshold; overrides the routing policy's global one. */
+  fieldThreshold?: number;
 }
 
 export interface ExtractionSchema {

@@ -9,14 +9,13 @@ import {
 } from '@nestjs/common';
 import { ExtractionEngineMode, Feature, Prisma } from '@prisma/client';
 import { Queue } from 'bullmq';
+import * as mammoth from 'mammoth';
 import { randomUUID } from 'node:crypto';
 import {
   applyFieldMap,
   decideReview,
-  genericExtractionSchema,
-  getExtractionSchema,
-  getFieldMap,
   type ConfidenceMap,
+  type ExtractionField,
   type ExtractionResult,
   type ExtractionSchema,
   type FieldEdit,
@@ -28,6 +27,7 @@ import { StorageService } from '../storage/storage.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import { errorMessage } from '../common/error.util';
 import { INTEL_QUEUE } from './intelligence.processor';
+import { SchemaResolverService } from './config/schema-resolver.service';
 import {
   PipelineService,
   type IntelligenceJobPayload,
@@ -41,6 +41,20 @@ import type {
 export const INTEL_QUEUE_ENABLED = 'INTEL_QUEUE_ENABLED';
 
 const STORAGE_FOLDER = 'intelligence';
+
+/**
+ * Typed field def embedded in a converted freeform doc's `data.fields`. Mirrors
+ * the editor's `PlaceholderDef` / the freeform lib's `FreeformFieldDef` (kept
+ * local so the API doesn't import the React template lib). Lets the editor
+ * render date/number/select inputs for tokens instead of plain text.
+ */
+interface FreeformFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'email';
+  hint?: string;
+  options?: { value: string; label: string }[];
+}
 
 /**
  * Document-Intelligence orchestration: create a SourceDocument from an upload
@@ -63,6 +77,7 @@ export class IntelligenceService {
     private readonly storage: StorageService,
     private readonly walletUsage: WalletUsageService,
     private readonly documents: DocumentsService,
+    private readonly resolver: SchemaResolverService,
   ) {}
 
   // ─── Ingest ────────────────────────────────────────────────────────────
@@ -220,8 +235,10 @@ export class IntelligenceService {
     const extraction = source.extractions[0];
     if (!extraction) return { sourceDocumentId: sourceId, extraction: null };
 
-    const schema =
-      getExtractionSchema(extraction.schemaKey) ?? genericExtractionSchema;
+    const schema = await this.resolver.resolveSchema(
+      source.ownerOrgId,
+      extraction.schemaKey,
+    );
     const result: ExtractionResult = {
       schemaKey: extraction.schemaKey,
       documentTypeKey: extraction.documentTypeKey ?? undefined,
@@ -279,6 +296,14 @@ export class IntelligenceService {
     return { id: updated.id, reviewed: updated.reviewed };
   }
 
+  /**
+   * Active extraction schemas the caller may pick from (the manual type-override
+   * picker source). Config-driven via the resolver — never a hardcoded list.
+   */
+  listSchemas(orgId: string | null) {
+    return this.resolver.listSchemas(orgId);
+  }
+
   // ─── Convert bridge (Phase 3, docs/05 §11) ─────────────────────────────────
 
   /**
@@ -299,16 +324,19 @@ export class IntelligenceService {
     if (!extraction) throw new NotFoundException('Extraction not found');
     await this.assertCanAccess(userId, extraction.sourceDocument);
 
+    const orgId = extraction.sourceDocument.ownerOrgId;
     const fields = (extraction.fields ?? {}) as unknown as FieldValues;
-    const schema =
-      getExtractionSchema(extraction.schemaKey) ?? genericExtractionSchema;
+    const schema = await this.resolver.resolveSchema(
+      orgId,
+      extraction.schemaKey,
+    );
     const title = this.deriveTitle(
       extraction.sourceDocument.filename,
       schema.name,
     );
 
     const fieldMap = extraction.documentTypeKey
-      ? getFieldMap(extraction.schemaKey)
+      ? await this.resolver.resolveFieldMap(orgId, extraction.schemaKey)
       : undefined;
 
     // Structured prefill when we know the type AND have a field-map for it.
@@ -331,13 +359,20 @@ export class IntelligenceService {
       }
     }
 
-    // Freeform fallback — clean HTML from the extracted fields.
-    const html = this.buildFreeformHtml(schema, fields);
+    // Freeform fallback — reproduce the ORIGINAL document's formatting when we
+    // can (DOCX → rich HTML; PDF/text/scan → paragraphs + page breaks), so the
+    // editable doc looks like the upload. Falls back to a field summary.
+    // Either way the extracted values become `{{token}}` placeholders backed by
+    // a values map, so the doc opens as editable fields rather than baked text.
+    const sourceHtml = await this.buildSourceHtml(extraction.sourceDocument);
+    const { html, values, fields: fieldDefs } = sourceHtml
+      ? this.tokenizeFields(sourceHtml, schema, fields)
+      : this.buildFreeformHtml(schema, fields);
     const doc = await this.documents.create(userId, {
       title,
       documentTypeKey: 'freeform',
       templateKey: 'freeform',
-      data: { html, values: {}, templateId: 'freeform' },
+      data: { html, values, fields: fieldDefs, templateId: 'freeform' },
     } as Parameters<DocumentsService['create']>[1]);
     this.logger.log(
       `Converted extraction ${extractionId} → freeform doc ${doc.id}`,
@@ -387,16 +422,87 @@ export class IntelligenceService {
     return out;
   }
 
-  /** Build a clean, editor-friendly HTML body from extracted field values. */
+  /**
+   * Reproduce the uploaded document's formatting for the freeform editor:
+   *   DOCX  → mammoth rich HTML (headings/bold/lists/tables preserved).
+   *   else  → paragraphs from the stored per-page text, with page breaks
+   *           (PDFs carry no rich layout, so this is text structure only).
+   * Returns null when nothing usable is recoverable (caller → field summary).
+   */
+  private async buildSourceHtml(src: {
+    s3Key: string;
+    contentType: string;
+    filename: string;
+    language: string | null;
+    normalizedText: Prisma.JsonValue | null;
+  }): Promise<string | null> {
+    const isDocx =
+      src.contentType.includes('wordprocessingml') ||
+      /\.docx$/i.test(src.filename);
+
+    if (isDocx) {
+      try {
+        const input = await this.pipeline.buildSourceInput(src);
+        const buffer = Buffer.from(input.data, 'base64');
+        const { value } = await mammoth.convertToHtml({ buffer });
+        const clean = this.sanitizeHtml(value);
+        if (clean.trim()) return clean;
+      } catch (e) {
+        this.logger.warn(`DOCX→HTML failed, falling back: ${errorMessage(e)}`);
+      }
+    }
+
+    const pages = src.normalizedText as
+      | { page: number; text: string }[]
+      | null;
+    if (Array.isArray(pages) && pages.length) {
+      const html = pages
+        .map((p) => this.textToParagraphs(p.text ?? ''))
+        .filter((h) => h.trim())
+        .join('\n<div data-page-break></div>\n');
+      if (html.trim()) return html;
+    }
+    return null;
+  }
+
+  /** Plain text → escaped <p> paragraphs (blank line = new para, \n = <br>). */
+  private textToParagraphs(text: string): string {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text
+      .replace(/\r\n/g, '\n')
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${esc(block).replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+  }
+
+  /** Strip script/style/event-handlers/images from third-party (DOCX) HTML. */
+  private sanitizeHtml(html: string): string {
+    return html
+      .replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/<\s*img\b[^>]*>/gi, '')
+      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  }
+
+  /**
+   * Build a clean, editor-friendly HTML body from extracted field values.
+   * Scalars become `{{field_key}}` placeholders backed by the returned values
+   * map (so they open as editable fields); arrays stay as literal lists since
+   * they don't map onto a single freeform token.
+   */
   private buildFreeformHtml(
     schema: ExtractionSchema,
     fields: FieldValues,
-  ): string {
-    const esc = (s: unknown) =>
-      String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+  ): {
+    html: string;
+    values: Record<string, string>;
+    fields: FreeformFieldDef[];
+  } {
+    const esc = (s: unknown) => this.escapeHtml(s);
+    const values: Record<string, string> = {};
+    const defs: FreeformFieldDef[] = [];
     const rows: string[] = [];
     for (const field of schema.fields) {
       const value = fields[field.key];
@@ -412,12 +518,131 @@ export class IntelligenceService {
           .join('');
         rows.push(`<p><strong>${esc(field.label)}:</strong></p><ul>${items}</ul>`);
       } else {
-        rows.push(
-          `<p><strong>${esc(field.label)}:</strong> ${esc(value)}</p>`,
-        );
+        const key = this.tokenKey(field.key);
+        values[key] = String(value).trim();
+        defs.push(this.fieldDef(field, value));
+        rows.push(`<p><strong>${esc(field.label)}:</strong> {{${key}}}</p>`);
       }
     }
-    return `<h1>${esc(schema.name)}</h1>\n${rows.join('\n')}`;
+    return {
+      html: `<h1>${esc(schema.name)}</h1>\n${rows.join('\n')}`,
+      values,
+      fields: defs,
+    };
+  }
+
+  /**
+   * Turn the literal occurrences of extracted scalar values inside reproduced
+   * source HTML into `{{field_key}}` placeholders, returning the rewritten HTML
+   * plus a values map of the originals. Conservative by design:
+   *   - tag-aware: only the text between tags is rewritten, never markup/attrs;
+   *   - exact, escaped-string matches only (no regex/fuzzy);
+   *   - scalars only — arrays/tables don't map onto a single token;
+   *   - longest values first, so a short value can't clobber inside a longer one;
+   *   - values under 2 chars skipped (too ambiguous to match safely).
+   * A value that never appears in the source is simply left untokenized.
+   */
+  private tokenizeFields(
+    html: string,
+    schema: ExtractionSchema,
+    fields: FieldValues,
+  ): {
+    html: string;
+    values: Record<string, string>;
+    fields: FreeformFieldDef[];
+  } {
+    const candidates = schema.fields
+      .map((field) => ({ field, value: fields[field.key] }))
+      .filter(
+        (c) =>
+          c.value !== undefined &&
+          c.value !== null &&
+          typeof c.value !== 'object',
+      )
+      .map((c) => ({
+        field: c.field,
+        key: this.tokenKey(c.field.key),
+        value: String(c.value).trim(),
+      }))
+      .filter((c) => c.value.length >= 2)
+      .sort((a, b) => b.value.length - a.value.length);
+
+    if (!candidates.length) return { html, values: {}, fields: [] };
+
+    const values: Record<string, string> = {};
+    // Split on tags so replacements only ever land in text nodes.
+    const parts = html.split(/(<[^>]+>)/);
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i].startsWith('<')) continue;
+      let segment = parts[i];
+      for (const c of candidates) {
+        const needle = this.escapeHtml(c.value);
+        if (!needle || !segment.includes(needle)) continue;
+        segment = segment.split(needle).join(`{{${c.key}}}`);
+        values[c.key] = c.value;
+      }
+      parts[i] = segment;
+    }
+    // Type defs only for tokens that actually landed in the body.
+    const defs = candidates
+      .filter((c) => values[c.key] !== undefined)
+      .map((c) => this.fieldDef(c.field, c.value));
+    return { html: parts.join(''), values, fields: defs };
+  }
+
+  /**
+   * Map an extraction field + its value onto a typed freeform placeholder def:
+   *   date→date, number→number, boolean/enum→select, currency→text(+hint),
+   *   long/multiline string→textarea, *email* key→email, else text.
+   * `table` fields never reach here (they render as literal lists).
+   */
+  private fieldDef(field: ExtractionField, value: unknown): FreeformFieldDef {
+    const base = { key: this.tokenKey(field.key), label: field.label };
+    switch (field.type) {
+      case 'date':
+        return { ...base, type: 'date' };
+      case 'number':
+        return { ...base, type: 'number' };
+      case 'boolean':
+        return {
+          ...base,
+          type: 'select',
+          options: [
+            { value: 'Yes', label: 'Yes' },
+            { value: 'No', label: 'No' },
+          ],
+        };
+      case 'enum':
+        return field.enumValues?.length
+          ? {
+              ...base,
+              type: 'select',
+              options: field.enumValues.map((v) => ({ value: v, label: v })),
+            }
+          : { ...base, type: 'text' };
+      case 'currency':
+        return { ...base, type: 'text', ...(field.format ? { hint: field.format } : {}) };
+      case 'string':
+      default: {
+        if (/email/i.test(field.key)) return { ...base, type: 'email' };
+        const s = String(value ?? '');
+        if (s.length > 80 || s.includes('\n')) return { ...base, type: 'textarea' };
+        return { ...base, type: 'text' };
+      }
+    }
+  }
+
+  /** Escape text for safe insertion into HTML. */
+  private escapeHtml(s: unknown): string {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  /** Field key → a token-safe `{{key}}` identifier (placeholder regex charset). */
+  private tokenKey(key: string): string {
+    return key.replace(/[^a-zA-Z0-9_]/g, '_');
   }
 
   /** Title from the source filename (sans extension), else the schema name. */

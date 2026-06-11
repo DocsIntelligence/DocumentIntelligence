@@ -30,10 +30,14 @@ export class IntelligenceAdminService {
 
   // ─── Extraction schemas ─────────────────────────────────────────────────────
 
-  /** Latest active version of every authored schema (one row per key). */
-  async listSchemas() {
+  /**
+   * Latest version of every authored schema (one row per key). Active-only by
+   * default; `includeInactive` also returns soft-disabled ones (so the admin UI
+   * can show + reactivate them) — each row carries its `isActive` flag.
+   */
+  async listSchemas(includeInactive = false) {
     const rows = await this.db.extractionSchemaDef.findMany({
-      where: { ownerOrgId: null, isActive: true },
+      where: { ownerOrgId: null, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: [{ key: 'asc' }, { version: 'desc' }],
       include: { _count: { select: { fields: true } } },
     });
@@ -45,6 +49,7 @@ export class IntelligenceAdminService {
       description: r.description,
       jurisdiction: r.jurisdiction,
       fieldCount: r._count.fields,
+      isActive: r.isActive,
       updatedAt: r.updatedAt,
     }));
   }
@@ -96,6 +101,34 @@ export class IntelligenceAdminService {
     });
     if (res.count === 0) throw new NotFoundException(`Schema "${key}" not found`);
     return { key, deactivated: res.count };
+  }
+
+  /** Re-enable a soft-disabled schema (all versions). */
+  async activateSchema(key: string) {
+    const res = await this.db.extractionSchemaDef.updateMany({
+      where: { ownerOrgId: null, key },
+      data: { isActive: true },
+    });
+    if (res.count === 0) throw new NotFoundException(`Schema "${key}" not found`);
+    return { key, activated: res.count };
+  }
+
+  /** Toggle helper: activate or deactivate by flag. */
+  async setSchemaActive(key: string, active: boolean) {
+    return active ? this.activateSchema(key) : this.deleteSchema(key);
+  }
+
+  /**
+   * Hard-delete a schema (ALL versions) — distinct from soft-disable. FK-safe:
+   * extractions reference `schemaKey` by string (not a relation) and fields
+   * cascade. Use when you want it gone for good; prefer disable to keep history.
+   */
+  async purgeSchema(key: string) {
+    const res = await this.db.extractionSchemaDef.deleteMany({
+      where: { ownerOrgId: null, key },
+    });
+    if (res.count === 0) throw new NotFoundException(`Schema "${key}" not found`);
+    return { key, deleted: res.count };
   }
 
   private async writeSchemaVersion(
@@ -166,9 +199,9 @@ export class IntelligenceAdminService {
 
   // ─── Pipelines ──────────────────────────────────────────────────────────────
 
-  async listPipelines() {
+  async listPipelines(includeInactive = false) {
     const rows = await this.db.pipeline.findMany({
-      where: { ownerOrgId: null, active: true },
+      where: { ownerOrgId: null, ...(includeInactive ? {} : { active: true }) },
       orderBy: [{ key: 'asc' }, { version: 'desc' }],
       include: { _count: { select: { stages: true } } },
     });
@@ -177,6 +210,7 @@ export class IntelligenceAdminService {
       name: r.name,
       version: r.version,
       stageCount: r._count.stages,
+      isActive: r.active,
       updatedAt: r.updatedAt,
     }));
   }
@@ -227,6 +261,47 @@ export class IntelligenceAdminService {
     if (res.count === 0)
       throw new NotFoundException(`Pipeline "${key}" not found`);
     return { key, deactivated: res.count };
+  }
+
+  /** Re-enable a soft-disabled pipeline (all versions). */
+  async activatePipeline(key: string) {
+    const res = await this.db.pipeline.updateMany({
+      where: { ownerOrgId: null, key },
+      data: { active: true },
+    });
+    if (res.count === 0)
+      throw new NotFoundException(`Pipeline "${key}" not found`);
+    return { key, activated: res.count };
+  }
+
+  async setPipelineActive(key: string, active: boolean) {
+    return active ? this.activatePipeline(key) : this.deletePipeline(key);
+  }
+
+  /**
+   * Hard-delete a pipeline (ALL versions). Refused when any run references a
+   * version (PipelineRun.pipelineId is Restrict) — disable it instead so the
+   * run history stays intact.
+   */
+  async purgePipeline(key: string) {
+    const versions = await this.db.pipeline.findMany({
+      where: { ownerOrgId: null, key },
+      select: { id: true },
+    });
+    if (versions.length === 0)
+      throw new NotFoundException(`Pipeline "${key}" not found`);
+    const runCount = await this.db.pipelineRun.count({
+      where: { pipelineId: { in: versions.map((v) => v.id) } },
+    });
+    if (runCount > 0) {
+      throw new ConflictException(
+        `Pipeline "${key}" has ${runCount} run(s) — disable it instead of deleting.`,
+      );
+    }
+    const res = await this.db.pipeline.deleteMany({
+      where: { ownerOrgId: null, key },
+    });
+    return { key, deleted: res.count };
   }
 
   private async writePipelineVersion(
@@ -308,6 +383,7 @@ export class IntelligenceAdminService {
       type: f.type,
       required: Boolean(f.required),
       reviewMandatory: Boolean(f.reviewMandatory),
+      isActive: f.isActive ?? true,
       fieldThreshold: f.fieldThreshold ?? null,
       description: f.description ?? null,
       example: f.example ?? null,
@@ -323,6 +399,7 @@ export class IntelligenceAdminService {
     type: string;
     required: boolean;
     reviewMandatory: boolean;
+    isActive: boolean;
     fieldThreshold: number | null;
     description: string | null;
     example: string | null;
@@ -339,6 +416,7 @@ export class IntelligenceAdminService {
       type: f.type,
       required: f.required,
       reviewMandatory: f.reviewMandatory,
+      isActive: f.isActive,
       fieldThreshold: f.fieldThreshold,
       description: f.description,
       example: f.example,

@@ -208,10 +208,12 @@ export const createIntelligenceService = (http: HttpClient) => ({
       .get<BatchDetail>(`/intelligence/batches/${batchId}`)
       .then((r) => r.data),
 
-  /** Pipeline runs awaiting human review. */
-  getReviewQueue: () =>
+  /** Pipeline runs awaiting human review. Scope to one batch when given. */
+  getReviewQueue: (batchId?: string) =>
     http
-      .get<ReviewQueueItem[]>('/intelligence/review-queue')
+      .get<ReviewQueueItem[]>('/intelligence/review-queue', {
+        params: batchId ? { batch: batchId } : undefined,
+      })
       .then((r) => r.data),
 
   /** Approve a parked run — finalize (export) with reviewed values. */
@@ -222,7 +224,56 @@ export const createIntelligenceService = (http: HttpClient) => ({
         {},
       )
       .then((r) => r.data),
+
+  /** Archive (skip) a single run — no extraction. */
+  archiveRun: (runId: string, reason?: string) =>
+    http
+      .post<{ pipelineRunId: string; status: string }>(
+        `/intelligence/pipeline-runs/${runId}/archive`,
+        { reason },
+      )
+      .then((r) => r.data),
+
+  /** Bulk-archive runs (e.g. skip all of a type). */
+  bulkArchive: (runIds: string[], reason?: string) =>
+    http
+      .post<{ archived: number; total: number }>('/intelligence/runs/archive', {
+        runIds,
+        reason,
+      })
+      .then((r) => r.data),
+
+  /** Active extraction types the user can pick from (manual override). */
+  listSchemas: (ownerOrgId?: string) =>
+    http
+      .get<SchemaOption[]>('/intelligence/schemas', {
+        params: ownerOrgId ? { ownerOrgId } : undefined,
+      })
+      .then((r) => r.data),
+
+  /** Re-extract a source document as a reviewer-chosen type. */
+  reprocess: (sourceDocumentId: string, schemaKey: string) =>
+    http
+      .post<ReprocessResult>(
+        `/intelligence/sources/${sourceDocumentId}/reprocess`,
+        { schemaKey },
+      )
+      .then((r) => r.data),
 });
+
+export interface SchemaOption {
+  key: string;
+  name: string;
+  documentTypeKey?: string;
+}
+
+export interface ReprocessResult {
+  extractionId: string;
+  schemaKey: string;
+  documentTypeKey: string | null;
+  pipelineRunId: string | null;
+  status: 'needs_review';
+}
 
 export interface ConvertResult {
   documentId: string;
@@ -281,6 +332,7 @@ export interface BatchSummary {
   completed: number;
   needsReview: number;
   failed: number;
+  archived: number;
   running: number;
   createdAt: string;
 }
@@ -289,8 +341,23 @@ export interface BatchRun {
   status: string;
   sourceDocumentId: string;
   filename: string;
+  documentTypeKey: string | null;
+  archivedReason: string | null;
+}
+export interface BatchFunnel {
+  inProgress: number;
+  needsReview: number;
+  completed: number;
+  archived: number;
+  failed: number;
+}
+export interface BatchTypeCount {
+  documentTypeKey: string;
+  count: number;
 }
 export interface BatchDetail extends BatchSummary {
+  funnel: BatchFunnel;
+  typeHistogram: BatchTypeCount[];
   runs: BatchRun[];
 }
 

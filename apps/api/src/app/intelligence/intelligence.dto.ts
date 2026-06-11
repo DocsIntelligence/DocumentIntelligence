@@ -51,3 +51,22 @@ const AskSchema = z.object({
 });
 
 export class AskDto extends createZodDto(AskSchema) {}
+
+/** Manually archive (skip) a single run. */
+const ArchiveRunSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+export class ArchiveRunDto extends createZodDto(ArchiveRunSchema) {}
+
+/** Archive many runs at once (e.g. "skip all of type X"). */
+const BulkArchiveSchema = z.object({
+  runIds: z.array(z.string().min(1)).min(1).max(5000),
+  reason: z.string().max(500).optional(),
+});
+export class BulkArchiveDto extends createZodDto(BulkArchiveSchema) {}
+
+/** Re-extract a source as a reviewer-chosen type (manual override). */
+const ReprocessSchema = z.object({
+  schemaKey: z.string().min(1).max(120),
+});
+export class ReprocessDto extends createZodDto(ReprocessSchema) {}

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -6,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   ExtractionEngineMode,
+  PipelineRunStatus,
   PipelineStageType,
   Prisma,
 } from '@prisma/client';
@@ -38,6 +40,12 @@ interface StageConfig {
   candidateKeys?: string[];
   autoAdvance?: AutoAdvance;
   targets?: string[];
+  /** filter stage: keep only these classified types; archive the rest. */
+  allowedTypes?: string[];
+  /** filter stage: minimum classify confidence to be in-scope. */
+  minConfidence?: number;
+  /** filter stage: what to do with out-of-scope docs (default archive). */
+  onUnmatched?: 'archive' | 'reject' | 'review';
 }
 
 /** Context threaded between stages within a single run. */
@@ -47,6 +55,7 @@ interface RunContext {
   parsed: NormalizedDocument | null;
   schema: ExtractionSchema;
   documentTypeKey: string | null;
+  classifyConfidence: number;
   extractionId: string | null;
   result: ExtractionResult | null;
   ownerUserId: string | null;
@@ -152,12 +161,17 @@ export class PipelineExecutorService {
     };
   }
 
-  /** Runs parked for human review (the review queue). */
-  async reviewQueue(userId: string) {
+  /**
+   * Runs parked for human review (the review queue). Scoped to a single batch
+   * when `batchId` is given, so one batch's documents aren't mixed with another's
+   * (or with standalone, batch-less runs).
+   */
+  async reviewQueue(userId: string, batchId?: string) {
     const runs = await this.db.pipelineRun.findMany({
       where: {
         status: 'needs_review',
         sourceDocument: { ownerUserId: userId },
+        ...(batchId ? { batchId } : {}),
       },
       orderBy: { updatedAt: 'desc' },
       take: 100,
@@ -231,6 +245,7 @@ export class PipelineExecutorService {
         extraction.schemaKey,
       ),
       documentTypeKey: extraction.documentTypeKey,
+      classifyConfidence: 1,
       extractionId: extraction.id,
       result: null,
       ownerUserId: run.sourceDocument.ownerUserId,
@@ -281,6 +296,162 @@ export class PipelineExecutorService {
     return { pipelineRunId: runId, status: 'completed' as const };
   }
 
+  /**
+   * Manually archive a run (skip extraction) — the per-document "skip" control.
+   * Allowed while not already in a terminal state.
+   */
+  async archiveRun(userId: string, runId: string, reason?: string) {
+    const run = await this.db.pipelineRun.findUnique({
+      where: { id: runId },
+      include: { sourceDocument: true },
+    });
+    if (!run) throw new NotFoundException('Run not found');
+    if (run.sourceDocument.ownerUserId !== userId) {
+      if (run.sourceDocument.ownerOrgId) {
+        const m = await this.db.orgMember.findUnique({
+          where: {
+            orgId_userId: { orgId: run.sourceDocument.ownerOrgId, userId },
+          },
+        });
+        if (!m) throw new ForbiddenException('Not allowed');
+      } else {
+        throw new ForbiddenException('Not allowed');
+      }
+    }
+    const done: PipelineRunStatus[] = [
+      PipelineRunStatus.completed,
+      PipelineRunStatus.approved,
+      PipelineRunStatus.archived,
+      PipelineRunStatus.rejected,
+    ];
+    if (done.includes(run.status)) {
+      throw new ForbiddenException(`Run already ${run.status}`);
+    }
+    await this.db.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: PipelineRunStatus.archived,
+        archivedReason: reason ?? 'Manually skipped',
+      },
+    });
+    return { pipelineRunId: runId, status: 'archived' as const };
+  }
+
+  /** Archive many runs at once (e.g. "skip all of type X"). Best-effort. */
+  async bulkArchive(userId: string, runIds: string[], reason?: string) {
+    const results = await Promise.allSettled(
+      runIds.map((id) => this.archiveRun(userId, id, reason)),
+    );
+    const archived = results.filter((r) => r.status === 'fulfilled').length;
+    return { archived, total: runIds.length };
+  }
+
+  /**
+   * Manual type override: re-extract a source document as a reviewer-chosen
+   * schema (forced type, NO classification — the same forced-type path the
+   * extract stage's `config.schemaKey` uses), then re-park its latest run for
+   * review. The fix for 'Other/Generic', failed, or misclassified docs: a human
+   * says "this is actually an NDA" and it's processed as one. `schemaKey` must
+   * be an active schema for the org (validated against the resolver — never a
+   * hardcoded list); the generic fallback is not a valid override target.
+   */
+  async reprocess(userId: string, sourceDocumentId: string, schemaKey: string) {
+    const source = await this.db.sourceDocument.findUnique({
+      where: { id: sourceDocumentId },
+    });
+    if (!source) throw new NotFoundException('Source document not found');
+    await this.assertSourceAccess(userId, source);
+
+    // Validate against the resolver so an unknown/inactive key can't silently
+    // fall through to the generic schema.
+    const allowed = await this.resolver.listSchemas(source.ownerOrgId);
+    if (!allowed.some((s) => s.key === schemaKey)) {
+      throw new BadRequestException(
+        `"${schemaKey}" is not an active extraction type`,
+      );
+    }
+    const schema = await this.resolver.resolveSchema(
+      source.ownerOrgId,
+      schemaKey,
+    );
+
+    // Re-extract with the forced schema (reuse parsed text when we stored it).
+    const input = await this.pipeline.buildSourceInput(source);
+    const parsed =
+      (source.normalizedText as unknown as NormalizedDocument | null) ??
+      (await this.pipeline.parseSource(input));
+    const { result } = await this.pipeline.extractOne(
+      ExtractionEngineMode.auto,
+      schema,
+      input,
+      parsed,
+      source.ownerUserId,
+    );
+    const extraction = await this.db.extraction.create({
+      data: {
+        sourceDocumentId,
+        schemaKey: schema.key,
+        documentTypeKey: schema.documentTypeKey ?? null,
+        fields: result.fields as unknown as Prisma.InputJsonValue,
+        confidence: result.confidence as unknown as Prisma.InputJsonValue,
+        overallConfidence: result.overallConfidence,
+      },
+    });
+
+    // Re-park the latest run (if any) at the pre-export stage so approve →
+    // export uses this new (now-latest) extraction. Clears prior archive/error.
+    const run = await this.db.pipelineRun.findFirst({
+      where: { sourceDocumentId },
+      orderBy: { createdAt: 'desc' },
+      include: { pipeline: { include: { stages: { orderBy: { order: 'asc' } } } } },
+    });
+    if (run) {
+      const stages = run.pipeline.stages;
+      const exportStage = stages.find(
+        (s) => s.type === PipelineStageType.export,
+      );
+      const parkStage = exportStage
+        ? stages.filter((s) => s.order < exportStage.order).pop() ?? stages[0]
+        : stages[stages.length - 1];
+      await this.db.pipelineRun.update({
+        where: { id: run.id },
+        data: {
+          status: PipelineRunStatus.needs_review,
+          documentTypeKey: schema.documentTypeKey ?? null,
+          currentStageId: parkStage?.id ?? run.currentStageId,
+          archivedReason: null,
+          error: null,
+        },
+      });
+    }
+
+    this.logger.log(
+      `Reprocessed source ${sourceDocumentId} as ${schema.key} → extraction ${extraction.id}`,
+    );
+    return {
+      extractionId: extraction.id,
+      schemaKey: schema.key,
+      documentTypeKey: schema.documentTypeKey ?? null,
+      pipelineRunId: run?.id ?? null,
+      status: 'needs_review' as const,
+    };
+  }
+
+  /** Owner or org-member may act on a source document (mirrors archiveRun). */
+  private async assertSourceAccess(
+    userId: string,
+    source: { ownerUserId: string | null; ownerOrgId: string | null },
+  ) {
+    if (source.ownerUserId === userId) return;
+    if (source.ownerOrgId) {
+      const m = await this.db.orgMember.findUnique({
+        where: { orgId_userId: { orgId: source.ownerOrgId, userId } },
+      });
+      if (m) return;
+    }
+    throw new ForbiddenException('Not allowed');
+  }
+
   // ─── Execution ────────────────────────────────────────────────────────────
 
   async run(runId: string): Promise<void> {
@@ -300,6 +471,7 @@ export class PipelineExecutorService {
       parsed: null,
       schema: genericExtractionSchema,
       documentTypeKey: null,
+      classifyConfidence: 0,
       extractionId: null,
       result: null,
       ownerUserId: src.ownerUserId,
@@ -328,7 +500,8 @@ export class PipelineExecutorService {
       });
 
       try {
-        const { score, output, park } = await this.runStage(stage, ctx);
+        const { score, output, park, terminal, archivedReason } =
+          await this.runStage(stage, ctx);
         await this.db.stageExecution.update({
           where: { id: exec.id },
           data: {
@@ -338,6 +511,26 @@ export class PipelineExecutorService {
             finishedAt: new Date(),
           },
         });
+
+        // Persist the classified type on the run (funnel + filter grouping).
+        if (stage.type === PipelineStageType.classify) {
+          await this.db.pipelineRun.update({
+            where: { id: runId },
+            data: { documentTypeKey: ctx.documentTypeKey },
+          });
+        }
+
+        // A filter stage can end the run early (archived / rejected).
+        if (terminal) {
+          await this.db.pipelineRun.update({
+            where: { id: runId },
+            data: { status: terminal, archivedReason: archivedReason ?? null },
+          });
+          this.logger.log(
+            `Run ${runId} ${terminal} at ${stage.type}: ${archivedReason ?? ''}`,
+          );
+          return;
+        }
 
         if (park) {
           await this.db.pipelineRun.update({
@@ -376,7 +569,14 @@ export class PipelineExecutorService {
   private async runStage(
     stage: { type: PipelineStageType; config: Prisma.JsonValue },
     ctx: RunContext,
-  ): Promise<{ score: number; output: unknown; park: boolean }> {
+  ): Promise<{
+    score: number;
+    output: unknown;
+    park: boolean;
+    /** Set by the filter stage to end the run early (archived / rejected). */
+    terminal?: PipelineRunStatus;
+    archivedReason?: string;
+  }> {
     const config = (stage.config ?? {}) as StageConfig;
 
     switch (stage.type) {
@@ -400,6 +600,7 @@ export class PipelineExecutorService {
           candidates,
         );
         ctx.documentTypeKey = c.documentTypeKey;
+        ctx.classifyConfidence = c.confidence;
         ctx.schema = c.documentTypeKey
           ? await this.resolver.resolveSchema(ctx.ownerOrgId, c.documentTypeKey)
           : genericExtractionSchema;
@@ -407,6 +608,40 @@ export class PipelineExecutorService {
           score: c.confidence,
           output: { documentTypeKey: c.documentTypeKey, confidence: c.confidence },
           park: false,
+        };
+      }
+
+      case PipelineStageType.filter: {
+        // Keep only in-scope types; archive (or reject / review) the rest.
+        const allowed = config.allowedTypes ?? [];
+        const minConf = config.minConfidence ?? 0;
+        const typeOk =
+          ctx.documentTypeKey != null &&
+          (allowed.length === 0 || allowed.includes(ctx.documentTypeKey));
+        const confOk = ctx.classifyConfidence >= minConf;
+        if (typeOk && confOk) {
+          return {
+            score: 1,
+            output: { matched: true, documentTypeKey: ctx.documentTypeKey },
+            park: false,
+          };
+        }
+        const reason = !typeOk
+          ? `Type "${ctx.documentTypeKey ?? 'unknown'}" not in scope`
+          : `Classify confidence ${ctx.classifyConfidence.toFixed(2)} < ${minConf}`;
+        const onUnmatched = config.onUnmatched ?? 'archive';
+        if (onUnmatched === 'review') {
+          return { score: 0, output: { matched: false, reason }, park: true };
+        }
+        return {
+          score: 0,
+          output: { matched: false, reason },
+          park: false,
+          terminal:
+            onUnmatched === 'reject'
+              ? PipelineRunStatus.rejected
+              : PipelineRunStatus.archived,
+          archivedReason: reason,
         };
       }
 

@@ -10,6 +10,7 @@ import { useIntelligenceAdminService } from '../../documents/services-context';
 export const adminIntelKeys = {
   schemas: ['admin-intel', 'schemas'] as const,
   schema: (key: string) => ['admin-intel', 'schema', key] as const,
+  fieldMap: (key: string) => ['admin-intel', 'field-map', key] as const,
   pipelines: ['admin-intel', 'pipelines'] as const,
   pipeline: (key: string) => ['admin-intel', 'pipeline', key] as const,
 };
@@ -26,11 +27,11 @@ function msg(err: unknown, fallback: string): string {
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-export function useSchemas() {
+export function useSchemas(includeInactive = false) {
   const svc = useIntelligenceAdminService();
   return useQuery({
-    queryKey: adminIntelKeys.schemas,
-    queryFn: () => svc.listSchemas(),
+    queryKey: [...adminIntelKeys.schemas, { includeInactive }] as const,
+    queryFn: () => svc.listSchemas(includeInactive),
   });
 }
 
@@ -60,26 +61,75 @@ export function useSaveSchema() {
   });
 }
 
-export function useDeleteSchema() {
+/** Permanently delete a schema (all versions). */
+export function usePurgeSchema() {
   const svc = useIntelligenceAdminService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (key: string) => svc.deleteSchema(key),
+    mutationFn: (key: string) => svc.purgeSchema(key),
     onSuccess: () => {
-      toast.success('Schema deactivated');
+      toast.success('Type deleted');
       qc.invalidateQueries({ queryKey: adminIntelKeys.schemas });
     },
-    onError: (err) => toast.error(msg(err, 'Failed to delete schema')),
+    onError: (err) => toast.error(msg(err, 'Failed to delete type')),
+  });
+}
+
+/** Enable/disable a schema (soft-disable toggle). */
+export function useSetSchemaActive() {
+  const svc = useIntelligenceAdminService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { key: string; active: boolean }) =>
+      vars.active ? svc.activateSchema(vars.key) : svc.deleteSchema(vars.key),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.active ? 'Type enabled' : 'Type disabled');
+      qc.invalidateQueries({ queryKey: adminIntelKeys.schemas });
+    },
+    onError: (err) => toast.error(msg(err, 'Failed to update type')),
+  });
+}
+
+// ─── Field-maps ───────────────────────────────────────────────────────────────
+
+export function useFieldMap(schemaKey: string | null) {
+  const svc = useIntelligenceAdminService();
+  return useQuery({
+    queryKey: adminIntelKeys.fieldMap(schemaKey ?? ''),
+    queryFn: () => svc.getFieldMap(schemaKey as string),
+    enabled: Boolean(schemaKey),
+    retry: false, // a 404 (no map yet) is an expected, non-retryable state
+  });
+}
+
+export function useSaveFieldMap() {
+  const svc = useIntelligenceAdminService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      schemaKey: string;
+      documentTypeKey: string;
+      mapping: Record<string, string>;
+    }) =>
+      svc.upsertFieldMap(vars.schemaKey, {
+        documentTypeKey: vars.documentTypeKey,
+        mapping: vars.mapping,
+      }),
+    onSuccess: (_d, vars) => {
+      toast.success('Field mapping saved');
+      qc.invalidateQueries({ queryKey: adminIntelKeys.fieldMap(vars.schemaKey) });
+    },
+    onError: (err) => toast.error(msg(err, 'Failed to save mapping')),
   });
 }
 
 // ─── Pipelines ──────────────────────────────────────────────────────────────
 
-export function usePipelines() {
+export function usePipelines(includeInactive = false) {
   const svc = useIntelligenceAdminService();
   return useQuery({
-    queryKey: adminIntelKeys.pipelines,
-    queryFn: () => svc.listPipelines(),
+    queryKey: [...adminIntelKeys.pipelines, { includeInactive }] as const,
+    queryFn: () => svc.listPipelines(includeInactive),
   });
 }
 
@@ -109,15 +159,33 @@ export function useSavePipeline() {
   });
 }
 
-export function useDeletePipeline() {
+/** Permanently delete a pipeline (all versions; refused if runs exist). */
+export function usePurgePipeline() {
   const svc = useIntelligenceAdminService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (key: string) => svc.deletePipeline(key),
+    mutationFn: (key: string) => svc.purgePipeline(key),
     onSuccess: () => {
-      toast.success('Pipeline deactivated');
+      toast.success('Pipeline deleted');
       qc.invalidateQueries({ queryKey: adminIntelKeys.pipelines });
     },
     onError: (err) => toast.error(msg(err, 'Failed to delete pipeline')),
+  });
+}
+
+/** Enable/disable a pipeline (soft-disable toggle). */
+export function useSetPipelineActive() {
+  const svc = useIntelligenceAdminService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { key: string; active: boolean }) =>
+      vars.active
+        ? svc.activatePipeline(vars.key)
+        : svc.deletePipeline(vars.key),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.active ? 'Pipeline enabled' : 'Pipeline disabled');
+      qc.invalidateQueries({ queryKey: adminIntelKeys.pipelines });
+    },
+    onError: (err) => toast.error(msg(err, 'Failed to update pipeline')),
   });
 }

@@ -31,12 +31,31 @@ import type { TemplateProps } from '../_registry';
  * blank if the measuring pass is somehow skipped; a layout-effect then
  * re-paginates by measured height before the renderer signals readiness.
  */
+/**
+ * Per-field type metadata for a freeform doc's `{{tokens}}`, mirroring the
+ * editor's `PlaceholderDef` (kept structurally identical here so the lib stays
+ * app-independent). Lets a converted doc render typed inputs (date/number/
+ * select/…) instead of generic text fields. Optional — absent ⇒ all text.
+ */
+export interface FreeformFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'email';
+  hint?: string;
+  placeholder?: string;
+  default?: string;
+  options?: { value: string; label: string }[];
+  wide?: boolean;
+}
+
 export interface FreeformData {
   html?: string;
   values?: Record<string, string>;
   /** Document-level font: any Google Fonts family name. Loaded on demand and
    *  applied via the `--doc-font` CSS var; falls back to bundled Inter. */
   fontFamily?: string;
+  /** Typed field definitions for the doc's tokens (see {@link FreeformFieldDef}). */
+  fields?: FreeformFieldDef[];
 }
 
 const useIsomorphicLayoutEffect =

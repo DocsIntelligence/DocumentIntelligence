@@ -9,7 +9,6 @@ import {
   DEFAULT_ROUTING,
   decideReview,
   genericExtractionSchema,
-  getExtractionSchema,
   classifierCandidateKeys,
   type ExtractionResult,
   type ExtractionSchema,
@@ -21,6 +20,7 @@ import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import { errorMessage } from '../common/error.util';
+import { SchemaResolverService } from './config/schema-resolver.service';
 import { AgenticExtractionEngine } from './engines/agentic-extraction.engine';
 import { ClassifierEngine } from './engines/classifier.engine';
 import { VlmExtractionEngine } from './engines/vlm-extraction.engine';
@@ -61,6 +61,7 @@ export class PipelineService {
     private readonly storage: StorageService,
     private readonly walletUsage: WalletUsageService,
     private readonly parsing: ParsingService,
+    private readonly resolver: SchemaResolverService,
     config: ConfigService,
   ) {
     this.classifier = new ClassifierEngine(ai);
@@ -139,12 +140,12 @@ export class PipelineService {
       // the parsed text when we have it; only fall back to vision bytes when we
       // don't (and a PDF with no text needs a PDF-capable vision provider).
       const tClassify = Date.now();
+      // Candidate types resolved from config-as-data (org DB → templates → code),
+      // so the single-doc flow sees the same authored catalog as pipelines.
+      const candidateKeys = await this.resolver.candidateKeys(src.ownerOrgId);
       const classification = parsed
-        ? await this.classifier.classify({
-            document: parsed,
-            candidateKeys: classifierCandidateKeys(),
-          })
-        : await this.classifyByVision(source);
+        ? await this.classifier.classify({ document: parsed, candidateKeys })
+        : await this.classifyByVision(source, candidateKeys);
       telemetry['classifyMs'] = Date.now() - tClassify;
       telemetry['documentTypeKey'] = classification.documentTypeKey;
       telemetry['classifyConfidence'] = classification.confidence;
@@ -158,10 +159,13 @@ export class PipelineService {
         },
       });
 
-      // ── resolve schema: known type → its pack; else generic → freeform later
+      // ── resolve schema from config-as-data (org DB → template → code); else
+      // generic → freeform later
       const schema: ExtractionSchema = classification.documentTypeKey
-        ? (getExtractionSchema(classification.documentTypeKey) ??
-          genericExtractionSchema)
+        ? await this.resolver.resolveSchema(
+            src.ownerOrgId,
+            classification.documentTypeKey,
+          )
         : genericExtractionSchema;
 
       // ── tiered extraction (native / vlm / agentic) with entitlement gating

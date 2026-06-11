@@ -8,6 +8,7 @@ import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageLoader } from '@org/ui';
 import { TemplateEditor, type EditorDraftState } from './TemplateEditor';
+import type { PlaceholderDef } from './templates/types';
 import {
   useDocument,
   usePatchDocument,
@@ -120,6 +121,7 @@ export function DraftEditorPage() {
             values: s.values,
             templateId: s.templateId,
             fontFamily: s.fontFamily,
+            fields: s.fields,
           },
         },
         { onSuccess: () => setSavedAt(Date.now()) },
@@ -149,6 +151,7 @@ export function DraftEditorPage() {
     values?: Record<string, string>;
     templateId?: string;
     fontFamily?: string;
+    fields?: PlaceholderDef[];
   };
 
   return (
@@ -194,6 +197,7 @@ export function DraftEditorPage() {
             values: data.values ?? {},
             pageSize: doc.pageSize,
             fontFamily: data.fontFamily,
+            fields: data.fields,
           },
           onSave: handleSave,
           onPageSizeChange: (size) => patch.mutate({ pageSize: size }),

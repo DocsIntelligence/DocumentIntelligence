@@ -22,6 +22,8 @@ export interface AdminSchemaField {
   type: AdminFieldType;
   required?: boolean;
   reviewMandatory?: boolean;
+  /** Soft-disable: inactive fields aren't extracted/reviewed (default true). */
+  isActive?: boolean;
   fieldThreshold?: number | null;
   description?: string | null;
   example?: string | null;
@@ -38,6 +40,8 @@ export interface AdminSchemaSummary {
   description: string | null;
   jurisdiction: string | null;
   fieldCount: number;
+  /** Present when listed with includeInactive — false ⇒ soft-disabled. */
+  isActive?: boolean;
   updatedAt: string;
 }
 
@@ -63,6 +67,7 @@ export interface UpsertSchemaPayload {
 export type StageType =
   | 'ingest'
   | 'classify'
+  | 'filter'
   | 'extract'
   | 'validate'
   | 'review'
@@ -79,6 +84,12 @@ export interface StageConfig {
     onFail?: 'review' | 'reject';
   };
   targets?: string[];
+  /** filter stage: keep only these classified types; archive the rest. */
+  allowedTypes?: string[];
+  /** filter stage: minimum classify confidence to be in-scope. */
+  minConfidence?: number;
+  /** filter stage: what to do with out-of-scope docs (default archive). */
+  onUnmatched?: 'archive' | 'reject' | 'review';
 }
 
 export interface PipelineStageInput {
@@ -92,6 +103,7 @@ export interface AdminPipelineSummary {
   name: string;
   version: number;
   stageCount: number;
+  isActive?: boolean;
   updatedAt: string;
 }
 
@@ -117,8 +129,12 @@ export interface AdminFieldMap {
 
 export const createIntelligenceAdminService = (http: HttpClient) => ({
   // Schemas
-  async listSchemas(): Promise<AdminSchemaSummary[]> {
-    return (await http.get('/admin/intelligence/schemas')).data;
+  async listSchemas(includeInactive = false): Promise<AdminSchemaSummary[]> {
+    return (
+      await http.get('/admin/intelligence/schemas', {
+        params: includeInactive ? { includeInactive: 'true' } : undefined,
+      })
+    ).data;
   },
   async getSchema(key: string): Promise<AdminSchemaDetail> {
     return (await http.get(`/admin/intelligence/schemas/${key}`)).data;
@@ -131,6 +147,13 @@ export const createIntelligenceAdminService = (http: HttpClient) => ({
   },
   async deleteSchema(key: string) {
     return (await http.delete(`/admin/intelligence/schemas/${key}`)).data;
+  },
+  async activateSchema(key: string) {
+    return (await http.post(`/admin/intelligence/schemas/${key}/activate`, {}))
+      .data;
+  },
+  async purgeSchema(key: string) {
+    return (await http.delete(`/admin/intelligence/schemas/${key}/purge`)).data;
   },
 
   // Field-maps
@@ -146,8 +169,12 @@ export const createIntelligenceAdminService = (http: HttpClient) => ({
   },
 
   // Pipelines
-  async listPipelines(): Promise<AdminPipelineSummary[]> {
-    return (await http.get('/admin/intelligence/pipelines')).data;
+  async listPipelines(includeInactive = false): Promise<AdminPipelineSummary[]> {
+    return (
+      await http.get('/admin/intelligence/pipelines', {
+        params: includeInactive ? { includeInactive: 'true' } : undefined,
+      })
+    ).data;
   },
   async getPipeline(key: string): Promise<AdminPipelineDetail> {
     return (await http.get(`/admin/intelligence/pipelines/${key}`)).data;
@@ -160,6 +187,14 @@ export const createIntelligenceAdminService = (http: HttpClient) => ({
   },
   async deletePipeline(key: string) {
     return (await http.delete(`/admin/intelligence/pipelines/${key}`)).data;
+  },
+  async activatePipeline(key: string) {
+    return (await http.post(`/admin/intelligence/pipelines/${key}/activate`, {}))
+      .data;
+  },
+  async purgePipeline(key: string) {
+    return (await http.delete(`/admin/intelligence/pipelines/${key}/purge`))
+      .data;
   },
 });
 
