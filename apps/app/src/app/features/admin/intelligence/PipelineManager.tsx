@@ -10,7 +10,16 @@ import {
   Card,
   Checkbox,
   DataTable,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   type DataTableColumn,
 } from '@org/ui';
 import { cn } from '@org/utils';
@@ -43,6 +52,10 @@ const STAGE_TYPES: StageType[] = [
   'review',
   'export',
 ];
+
+// Sentinel for the "force type" Select — Radix forbids an empty-string item
+// value, so this stands in for "use the classified type" (→ schemaKey undefined).
+const CLASSIFIED = '__classified__';
 
 const STAGE_HELP: Record<StageType, string> = {
   ingest: 'Parse the file to text (fast path for extraction).',
@@ -310,22 +323,26 @@ export function PipelineManager() {
             <Card key={i} className="p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-foreground/40 w-5">{i + 1}</span>
-                <select
-                  className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
+                <Select
                   value={s.type}
-                  onChange={(e) =>
+                  onValueChange={(v) =>
                     setStage(i, {
-                      ...defaultStage(e.target.value as StageType),
+                      ...defaultStage(v as StageType),
                       name: s.name,
                     })
                   }
                 >
-                  {STAGE_TYPES.map((ty) => (
-                    <option key={ty} value={ty}>
-                      {ty}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-auto text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAGE_TYPES.map((ty) => (
+                      <SelectItem key={ty} value={ty}>
+                        {ty}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   className="flex-1"
                   value={s.name}
@@ -441,22 +458,23 @@ export function PipelineManager() {
                       <span className="text-foreground/60">
                         {t('adminIntel.pipeline.onUnmatched', 'Out-of-scope →')}
                       </span>
-                      <select
-                        className="border border-border rounded-md px-2 py-1.5 bg-background"
+                      <Select
                         value={s.config.onUnmatched ?? 'archive'}
-                        onChange={(e) =>
+                        onValueChange={(v) =>
                           setConfig(i, {
-                            onUnmatched: e.target.value as
-                              | 'archive'
-                              | 'reject'
-                              | 'review',
+                            onUnmatched: v as 'archive' | 'reject' | 'review',
                           })
                         }
                       >
-                        <option value="archive">archive</option>
-                        <option value="reject">reject</option>
-                        <option value="review">review</option>
-                      </select>
+                        <SelectTrigger className="w-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="archive">archive</SelectItem>
+                          <SelectItem value="reject">reject</SelectItem>
+                          <SelectItem value="review">review</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </label>
                   </div>
                 </div>
@@ -468,43 +486,52 @@ export function PipelineManager() {
                     <span className="text-foreground/60">
                       {t('adminIntel.pipeline.engineMode', 'Engine')}
                     </span>
-                    <select
-                      className="border border-border rounded-md px-2 py-1.5 bg-background"
+                    <Select
                       value={s.config.engineMode ?? 'auto'}
-                      onChange={(e) =>
+                      onValueChange={(v) =>
                         setConfig(i, {
-                          engineMode: e.target
-                            .value as StageConfig['engineMode'],
+                          engineMode: v as StageConfig['engineMode'],
                         })
                       }
                     >
-                      {['auto', 'native', 'vlm', 'agentic'].map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-auto">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['auto', 'native', 'vlm', 'agentic'].map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                   <label className="flex items-center gap-1.5">
                     <span className="text-foreground/60">
                       {t('adminIntel.pipeline.pinSchema', 'Force type')}
                     </span>
-                    <select
-                      className="border border-border rounded-md px-2 py-1.5 bg-background"
-                      value={s.config.schemaKey ?? ''}
-                      onChange={(e) =>
-                        setConfig(i, { schemaKey: e.target.value || undefined })
+                    <Select
+                      value={s.config.schemaKey ?? CLASSIFIED}
+                      onValueChange={(v) =>
+                        setConfig(i, {
+                          schemaKey: v === CLASSIFIED ? undefined : v,
+                        })
                       }
                     >
-                      <option value="">
-                        {t('adminIntel.pipeline.useClassified', '(use classified)')}
-                      </option>
-                      {(schemas ?? []).map((sc) => (
-                        <option key={sc.key} value={sc.key}>
-                          {sc.key}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-auto">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={CLASSIFIED}>
+                          {t('adminIntel.pipeline.useClassified', '(use classified)')}
+                        </SelectItem>
+                        {(schemas ?? []).map((sc) => (
+                          <SelectItem key={sc.key} value={sc.key}>
+                            {sc.key}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                 </div>
               )}
@@ -573,21 +600,25 @@ export function PipelineManager() {
                     <span className="text-foreground/60">
                       {t('adminIntel.pipeline.onFail', 'On fail')}
                     </span>
-                    <select
-                      className="border border-border rounded-md px-2 py-1.5 bg-background"
+                    <Select
                       value={s.config.autoAdvance?.onFail ?? 'review'}
-                      onChange={(e) =>
+                      onValueChange={(v) =>
                         setConfig(i, {
                           autoAdvance: {
                             ...s.config.autoAdvance,
-                            onFail: e.target.value as 'review' | 'reject',
+                            onFail: v as 'review' | 'reject',
                           },
                         })
                       }
                     >
-                      <option value="review">review</option>
-                      <option value="reject">reject</option>
-                    </select>
+                      <SelectTrigger className="w-auto">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="review">review</SelectItem>
+                        <SelectItem value="reject">reject</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
                 </div>
               )}
@@ -595,24 +626,28 @@ export function PipelineManager() {
           ))}
         </div>
 
-        <select
-          className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-          value=""
-          onChange={(e) => {
-            if (!e.target.value) return;
-            setDraft({
-              ...draft,
-              stages: [...draft.stages, defaultStage(e.target.value as StageType)],
-            });
-          }}
-        >
-          <option value="">{t('adminIntel.pipeline.addStage', '+ Add stage…')}</option>
-          {STAGE_TYPES.map((ty) => (
-            <option key={ty} value={ty}>
-              {ty}
-            </option>
-          ))}
-        </select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              {t('adminIntel.pipeline.addStage', '+ Add stage…')}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {STAGE_TYPES.map((ty) => (
+              <DropdownMenuItem
+                key={ty}
+                onSelect={() =>
+                  setDraft({
+                    ...draft,
+                    stages: [...draft.stages, defaultStage(ty as StageType)],
+                  })
+                }
+              >
+                {ty}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   }

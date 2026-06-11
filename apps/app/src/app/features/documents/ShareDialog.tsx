@@ -8,6 +8,11 @@ import {
   DialogTitle,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@org/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -106,18 +111,21 @@ export function ShareDialog({
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">
               <Label htmlFor="share-mode">{t('share.access', 'Access')}</Label>
-              <select
-                id="share-mode"
+              <Select
                 value={mode}
-                onChange={(e) => setMode(e.target.value as ShareMode)}
-                className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                onValueChange={(v) => setMode(v as ShareMode)}
               >
-                {MODES.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {t(`share.mode.${m.value}`, m.label)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="share-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODES.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {t(`share.mode.${m.value}`, m.label)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-foreground/50">
                 {t(
                   `share.modeHint.${mode}`,
@@ -144,18 +152,18 @@ export function ShareDialog({
               <Label htmlFor="share-expiry">
                 {t('share.expires', 'Expires')}
               </Label>
-              <select
-                id="share-expiry"
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(e.target.value)}
-                className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                {EXPIRY.map((e) => (
-                  <option key={e.value} value={e.value}>
-                    {t(`share.expiry.${e.value}`, e.label)}
-                  </option>
-                ))}
-              </select>
+              <Select value={expiryDays} onValueChange={setExpiryDays}>
+                <SelectTrigger id="share-expiry">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPIRY.map((e) => (
+                    <SelectItem key={e.value} value={e.value}>
+                      {t(`share.expiry.${e.value}`, e.label)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         ) : (

@@ -149,11 +149,37 @@ function Sidebar({
             label={t('nav.dashboard', 'Dashboard')}
             icon={<GridIcon />}
           />
-          <NavItem
-            to="/documents"
-            label={t('nav.documents', 'Documents')}
-            icon={<DocsIcon />}
-          />
+
+          <NavGroup
+            label={t('nav.create', 'Create')}
+            icon={<PlusSquareIcon />}
+            storageKey="nav.group.create"
+            childPaths={['/documents']}
+          >
+            <NavItem
+              to="/documents/new"
+              end
+              label={t('nav.newDocument', 'New document')}
+              icon={<PlusIcon />}
+            />
+            <NavItem
+              to="/documents/draft-ai"
+              label={t('dashboard.draftAiTitle', 'Draft with AI')}
+              icon={<SparklesIcon />}
+            />
+            <NavItem
+              to="/documents/templates"
+              label={t('nav.templates', 'Templates')}
+              icon={<TemplateIcon />}
+            />
+            <NavItem
+              to="/documents"
+              end
+              label={t('nav.myDocuments', 'My documents')}
+              icon={<DocsIcon />}
+            />
+          </NavGroup>
+
           <NavItem
             to="/analyze"
             label={t('nav.analyze', 'Analyze')}
@@ -457,6 +483,32 @@ function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg {...iconProps} className={className}>
       <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+function PlusSquareIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="12" y1="8" x2="12" y2="16" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
+  );
+}
+function SparklesIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+      <path d="M19 14l.9 2.7 2.7.9-2.7.9-.9 2.7-.9-2.7-2.7-.9 2.7-.9.9-2.7z" />
+    </svg>
+  );
+}
+function TemplateIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="9" y1="21" x2="9" y2="9" />
     </svg>
   );
 }

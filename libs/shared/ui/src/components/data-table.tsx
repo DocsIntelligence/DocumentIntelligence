@@ -1,5 +1,6 @@
 import { cn } from '@org/utils';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Input } from './input';
 
 export interface DataTableColumn<T> {
   /** Stable id; also the sort key. */
@@ -102,14 +103,14 @@ export function DataTable<T>({
       {(search || toolbar) && (
         <div className="flex flex-wrap items-center gap-2">
           {search && (
-            <input
+            <Input
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
                 setPage(0);
               }}
               placeholder={searchPlaceholder}
-              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm sm:w-64"
+              className="h-9 w-full sm:w-64"
             />
           )}
           {toolbar}

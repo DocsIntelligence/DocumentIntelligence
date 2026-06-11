@@ -4,7 +4,14 @@ import type {
   FormMetadata,
   ShowIfClause,
 } from '@org/document-schema';
-import { Button } from '@org/ui';
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@org/ui';
 import {
   forwardRef,
   useImperativeHandle,
@@ -254,19 +261,21 @@ function renderInput(
   if (widget === 'select' || widget === 'lookup') {
     if (meta.options && meta.options.length > 0) {
       return (
-        <select
-          id={id}
-          className={BASE_INPUT_CLS}
-          value={asString(value)}
-          onChange={(e) => onChange(e.target.value || undefined)}
+        <Select
+          value={asString(value) || undefined}
+          onValueChange={(v) => onChange(v || undefined)}
         >
-          <option value="">{meta.placeholder ?? 'Select…'}</option>
-          {meta.options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id={id}>
+            <SelectValue placeholder={meta.placeholder ?? 'Select…'} />
+          </SelectTrigger>
+          <SelectContent>
+            {meta.options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       );
     }
   }

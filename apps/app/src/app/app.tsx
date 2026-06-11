@@ -21,8 +21,10 @@ import { Dashboard } from './features/dashboard/Dashboard';
 import {
   BuilderPage,
   DocumentsList,
+  DraftWithAIPage,
   NewDocumentPicker,
   SharedDocumentView,
+  TemplatesPage,
 } from './features/documents';
 import { EditorDemo, DraftEditorPage } from './features/editor';
 import {
@@ -75,6 +77,8 @@ export function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
+        <Route path="/documents/templates" element={<TemplatesPage />} />
+        <Route path="/documents/draft-ai" element={<DraftWithAIPage />} />
         <Route path="/analyze" element={<IntelligenceUpload />} />
         <Route path="/analyze/:sourceId" element={<AnalyzePage />} />
         <Route path="/batches" element={<BatchesPage />} />

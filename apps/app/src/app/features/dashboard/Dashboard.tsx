@@ -12,7 +12,14 @@ export function Dashboard() {
   const user = useAppSelector(selectUser);
   const { t } = useTranslation();
   const { data: docs, isLoading } = useDocumentList();
-  const recent = (docs ?? []).slice(0, 5);
+  // Most-recently-updated first, so "Recent" actually reflects recency
+  // regardless of the list endpoint's default ordering.
+  const recent = [...(docs ?? [])]
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -31,15 +38,24 @@ export function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <ActionCard
-          to="/documents/new"
+          to="/documents/draft-ai"
           accent
           icon={<SparklesIcon />}
           title={t('dashboard.draftAiTitle', 'Draft with AI')}
           desc={t(
             'dashboard.draftAiDesc',
             'Describe what you need in plain English and get a full draft.',
+          )}
+        />
+        <ActionCard
+          to="/documents/templates"
+          icon={<TemplateIcon />}
+          title={t('templates.title', 'Templates')}
+          desc={t(
+            'dashboard.templatesDesc',
+            'Start from a structured document type with guided fields.',
           )}
         />
         <ActionCard
@@ -61,6 +77,42 @@ export function Dashboard() {
           )}
         />
       </div>
+
+      {/* Document Intelligence */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">
+          {t('nav.docIntel', 'Document Intelligence')}
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <ActionCard
+            to="/analyze"
+            icon={<ScanIcon />}
+            title={t('dashboard.analyzeTitle', 'Analyze a document')}
+            desc={t(
+              'dashboard.analyzeDesc',
+              'Upload a file to classify and extract its fields.',
+            )}
+          />
+          <ActionCard
+            to="/batches"
+            icon={<LayersIcon />}
+            title={t('nav.batches', 'Batches')}
+            desc={t(
+              'dashboard.batchesDesc',
+              'Process many documents at once and track progress.',
+            )}
+          />
+          <ActionCard
+            to="/review-queue"
+            icon={<InboxIcon />}
+            title={t('nav.reviewQueue', 'Review queue')}
+            desc={t(
+              'dashboard.reviewDesc',
+              'Check and approve documents the pipeline flagged.',
+            )}
+          />
+        </div>
+      </section>
 
       {/* Recent documents */}
       <section className="space-y-3">
@@ -252,6 +304,75 @@ function DocsIcon() {
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+function TemplateIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="9" y1="21" x2="9" y2="9" />
+    </svg>
+  );
+}
+function ScanIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+    </svg>
+  );
+}
+function LayersIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+function InboxIcon() {
+  return (
+    <svg
+      className="size-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>
   );
 }

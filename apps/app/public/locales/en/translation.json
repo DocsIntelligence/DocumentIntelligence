@@ -49,6 +49,10 @@
   "nav": {
     "dashboard": "Dashboard",
     "documents": "Documents",
+    "create": "Create",
+    "newDocument": "New document",
+    "templates": "Templates",
+    "myDocuments": "My documents",
     "analyze": "Analyze",
     "docIntel": "Document Intelligence",
     "batches": "Batches",

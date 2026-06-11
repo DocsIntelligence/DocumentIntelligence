@@ -10,6 +10,11 @@ import {
   Checkbox,
   DataTable,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   type DataTableColumn,
 } from '@org/ui';
 import { cn } from '@org/utils';
@@ -315,19 +320,23 @@ export function SchemaManager() {
                   placeholder={t('adminIntel.schema.fieldLabel', 'Label')}
                   onChange={(e) => setField(i, { label: e.target.value })}
                 />
-                <select
-                  className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
+                <Select
                   value={f.type}
-                  onChange={(e) =>
-                    setField(i, { type: e.target.value as AdminFieldType })
+                  onValueChange={(v) =>
+                    setField(i, { type: v as AdminFieldType })
                   }
                 >
-                  {FIELD_TYPES.map((ty) => (
-                    <option key={ty} value={ty}>
-                      {ty}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIELD_TYPES.map((ty) => (
+                      <SelectItem key={ty} value={ty}>
+                        {ty}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {f.type === 'enum' && (
                 <Input
