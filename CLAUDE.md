@@ -37,6 +37,9 @@ This is an India-first legal-document drafting platform. Before editing, read:
 - **[`docs/`](docs/)** — market analysis, product roadmap, technical design, progress tracker.
 
 Non-negotiables: one `DocumentTypeBundle` per doc type is the source of truth; the AI never authors
-statute citations (use `@org/legal-reference` + `{{applicable_law}}`); verify changes with
+statute citations (use `@org/legal-reference` + `{{applicable_law}}`); **every form uses
+react-hook-form + a shared `@org/dto` Zod schema (the same one the server validates via
+`createZodDto`), with field-level inline errors and `applyServerFieldErrors` for server 400s — never
+hand-rolled `useState` validation** (see `docs/CODING_STANDARDS.md` §4 "Forms"); verify changes with
 typecheck + eslint (+ build) and report honestly what you did/didn't run; every app needs a
 solution-style `tsconfig.json`. After a unit of work, append to `docs/BUILD_LOG.md`.
