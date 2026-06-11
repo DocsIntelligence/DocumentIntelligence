@@ -705,3 +705,28 @@ Feedback was the batch/review UI felt rough. Rebuilt both to the app's existing 
 - **ReviewQueuePage**: icon-chip header with a live count + batch context, skeleton loading, item rows as `rounded-xl` cards (FileText chip, filename, type, confidence badge, Review→ link with arrow, Approve), and a friendly "All caught up" empty state.
 - **BatchDetailPage**: Review-queue button gains the Inbox icon + count.
 - Tones use proven semantic utilities (`bg-info/15 text-info`, `bg-success/15 text-success`, `bg-warning/15`, `bg-error/15`, `bg-foreground/10`). `@org/app` build green; lint 0 errors (only pre-existing warnings). **NOT browser-verified — needs an eyeball.**
+
+---
+
+## 2026-06-12 — Strategic roadmap & market review (docs/08)
+
+- Wrote [`docs/08-strategic-roadmap.md`](08-strategic-roadmap.md): market analysis (independently
+  re-verified via web), honest code-vs-docs audit, and an **inverted roadmap** keyed to the one
+  hard fact — ~95% code-complete, **runtime-unverified**, zero users.
+- **Market verification (2026-06-12):** India legal-AI $29.5M→$106.3M / 23% CAGR confirmed (2.0%
+  of global). Ecosystem grew **662→960 companies**, +781% YoY funding 2025. **SpotDraft now
+  >$113M raised** ($54M Series B + $8M Qualcomm ext.), **FY25 rev ₹121 Cr vs loss ₹121 Cr** (1:1
+  burn = monetization is brutal). Vakilsearch → **Zolvit**. **BharatLaw.ai** is an adjacent AI-
+  drafting entrant. Honest 3-yr ceiling (₹15–80 Cr) stands / optimistic.
+- **Code audit correction:** there are now **4 real `DocumentTypeBundle`s**, not 1 —
+  `rent-agreement` (711 LOC), `legal-notice` (472), `rti` (373), `affidavit` (330), each with
+  full schema/form-metadata/prompts/risks + a registered template. The bundle abstraction is
+  **validated at code level**. (Docs/memory previously said "one doc type end-to-end.")
+- **Roadmap thesis:** Phase 0 VERIFY (browser-walk rent + doc-intelligence flows, log bugs) →
+  Phase 1 rent wedge + **server-side citation validator (the real moat; currently asserted, not
+  enforced)** + Schedule-1 hard-gate + DOCX → Phase 2 **10 paying users** → Phase 3 notice/§138 →
+  Phase 4 doc-intelligence monetized. All 3 wedges in scope but **sequenced, not parallel**
+  (documented why parallel fails for a tiny team given SpotDraft's 1:1 burn).
+- Frozen until paying users: marketplace, white-label, PWA/offline, configurable pipelines
+  (docs/07 P4.2+), OCR benchmarking, 5th+ doc type.
+- No code changed this session — analysis + docs only.
