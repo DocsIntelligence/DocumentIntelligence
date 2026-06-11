@@ -1,4 +1,6 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import type { DocumentSigner, SignerRole } from '@org/api-client';
+import { addSignerFormSchema, type AddSignerFormValues } from '@org/dto';
 import { SCHEDULE_1_NOTE, isESignExcluded } from '@org/legal-reference';
 import {
   Badge,
@@ -18,6 +20,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useRef, useState } from 'react';
+import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import {
   useAddSigner,
@@ -68,24 +71,30 @@ export function SignaturesDialog({
   const remove = useRemoveSigner(documentId);
   const sign = useSignSigner(documentId);
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<SignerRole>('party_a');
   const [signingId, setSigningId] = useState<string | null>(null);
 
   const items = signers.data ?? [];
 
-  async function addSigner() {
-    if (!name.trim()) return;
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<AddSignerFormValues>({
+    resolver: zodResolver(addSignerFormSchema) as Resolver<AddSignerFormValues>,
+    defaultValues: { name: '', email: '', role: 'party_a' },
+    mode: 'onBlur',
+  });
+
+  const addSigner = handleSubmit(async (v) => {
     await add.mutateAsync({
-      name: name.trim(),
-      email: email.trim() || undefined,
-      role,
+      name: v.name.trim(),
+      email: v.email.trim() || undefined,
+      role: v.role,
     });
-    setName('');
-    setEmail('');
-    setRole('party_a');
-  }
+    reset({ name: '', email: '', role: 'party_a' });
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -135,50 +144,57 @@ export function SignaturesDialog({
           ))}
         </div>
 
-        <div className="space-y-2 border-t border-border pt-3">
+        <form onSubmit={addSigner} className="space-y-2 border-t border-border pt-3">
           <Label className="text-xs text-foreground/60">
             {t('signatures.addSigner', 'Add a signer')}
           </Label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              placeholder={t('signatures.fullName', 'Full name')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="sm:flex-1"
+            <div className="sm:flex-1">
+              <Input
+                placeholder={t('signatures.fullName', 'Full name')}
+                hasError={!!errors.name}
+                {...register('name')}
+              />
+              {errors.name?.message && (
+                <span className="text-xs text-error">{errors.name.message}</span>
+              )}
+            </div>
+            <Controller
+              control={control}
+              name="role"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="sm:w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(ROLE_LABELS) as SignerRole[]).map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {t(`signerRole.${r}`, ROLE_LABELS[r])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             />
-            <Select
-              value={role}
-              onValueChange={(v) => setRole(v as SignerRole)}
-            >
-              <SelectTrigger className="sm:w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(ROLE_LABELS) as SignerRole[]).map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {t(`signerRole.${r}`, ROLE_LABELS[r])}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
-          <Input
-            placeholder={t('signatures.emailOptional', 'Email (optional)')}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <div>
+            <Input
+              placeholder={t('signatures.emailOptional', 'Email (optional)')}
+              type="email"
+              hasError={!!errors.email}
+              {...register('email')}
+            />
+            {errors.email?.message && (
+              <span className="text-xs text-error">{errors.email.message}</span>
+            )}
+          </div>
           <div className="flex justify-end">
-            <Button
-              size="sm"
-              isLoading={add.isPending}
-              disabled={!name.trim()}
-              onClick={addSigner}
-            >
+            <Button type="submit" size="sm" isLoading={add.isPending}>
               {t('signatures.addSignerBtn', 'Add signer')}
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

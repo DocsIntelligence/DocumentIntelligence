@@ -1,3 +1,4 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import type { ExtractionDetail } from '@org/api-client';
 import {
   Badge,
@@ -14,9 +15,12 @@ import {
   SelectValue,
   Textarea,
 } from '@org/ui';
-import { useEffect, useMemo, useState } from 'react';
+import type { TFunction } from 'i18next';
+import { useMemo, useState } from 'react';
+import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
 import {
   useConvert,
   useReprocess,
@@ -29,6 +33,10 @@ const GENERIC_SCHEMA_KEY = 'generic_document';
 interface Props {
   extraction: ExtractionDetail;
   sourceId: string;
+}
+
+interface ReviewValues {
+  fields: Record<string, string>;
 }
 
 /** Confidence → badge variant + label band. */
@@ -66,10 +74,58 @@ function fromEditable(raw: string, original: unknown): unknown {
 }
 
 /**
+ * Build a per-field validation schema from the extraction's own fields, so the
+ * review form rejects bad edits BEFORE save (a malformed JSON / non-numeric
+ * value used to be silently saved as a raw string — data corruption). Required
+ * fields must be non-empty; complex fields must be valid JSON; number/currency
+ * fields must parse as numbers.
+ */
+function buildReviewSchema(
+  t: TFunction,
+  fields: ExtractionDetail['schema']['fields'],
+  original: Record<string, unknown>,
+) {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const f of fields) {
+    const isComplex =
+      original[f.key] !== null && typeof original[f.key] === 'object';
+    const isNumeric = f.type === 'number' || f.type === 'currency';
+    shape[f.key] = z.string().superRefine((val, ctx) => {
+      const v = (val ?? '').trim();
+      if (!v) {
+        if (f.required)
+          ctx.addIssue({
+            code: 'custom',
+            message: t('intelligence.review.errRequired', 'This field is required'),
+          });
+        return;
+      }
+      if (isComplex) {
+        try {
+          JSON.parse(val);
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            message: t('intelligence.review.errJson', 'Enter valid JSON'),
+          });
+        }
+      } else if (isNumeric && Number.isNaN(Number(v))) {
+        ctx.addIssue({
+          code: 'custom',
+          message: t('intelligence.review.errNumber', 'Enter a number'),
+        });
+      }
+    });
+  }
+  return z.object({ fields: z.object(shape) });
+}
+
+/**
  * The Phase-1 review UI (docs/05 §6, HITL). Shows every extracted field with
  * its calibrated confidence, flags low-confidence / required-missing fields for
  * review, and lets the user correct values before the extraction is marked
- * human-validated (which feeds the audit trail + active-learning signal).
+ * human-validated. Field edits are validated (required / JSON / numeric) with
+ * inline errors. Mount keyed by `extraction.id` so a reprocess re-seeds cleanly.
  */
 export function ReviewExtraction({ extraction, sourceId }: Props) {
   const { t } = useTranslation();
@@ -81,38 +137,41 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
   const [targetSchema, setTargetSchema] = useState('');
 
   const original = extraction.fields;
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const f of extraction.schema.fields) {
-      init[f.key] = toEditable(original[f.key]);
-    }
-    return init;
+
+  const schema = useMemo(
+    () => buildReviewSchema(t, extraction.schema.fields, original),
+    // Rebuilt per extraction; t is stable enough for messages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [extraction.id],
+  );
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ReviewValues>({
+    resolver: zodResolver(schema) as unknown as Resolver<ReviewValues>,
+    mode: 'onBlur',
+    defaultValues: {
+      fields: Object.fromEntries(
+        extraction.schema.fields.map((f) => [f.key, toEditable(original[f.key])]),
+      ),
+    },
   });
 
-  // A reprocess swaps in a new extraction (new id + schema) → re-seed the editor.
-  useEffect(() => {
-    const init: Record<string, string> = {};
-    for (const f of extraction.schema.fields) {
-      init[f.key] = toEditable(extraction.fields[f.key]);
-    }
-    setValues(init);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extraction.id]);
-
   const isGeneric =
-    !extraction.documentTypeKey ||
-    extraction.schema.key === GENERIC_SCHEMA_KEY;
+    !extraction.documentTypeKey || extraction.schema.key === GENERIC_SCHEMA_KEY;
 
   const flagged = useMemo(
     () => new Set(extraction.review.flaggedFields),
     [extraction.review.flaggedFields],
   );
 
-  const collectPayload = () => {
+  const collectPayload = (values: ReviewValues) => {
     const fields: Record<string, unknown> = {};
     const edits: { fieldPath: string; newValue: unknown }[] = [];
     for (const f of extraction.schema.fields) {
-      const editedRaw = values[f.key] ?? '';
+      const editedRaw = values.fields[f.key] ?? '';
       const coerced = fromEditable(editedRaw, original[f.key]);
       fields[f.key] = coerced;
       if (toEditable(original[f.key]) !== editedRaw) {
@@ -122,24 +181,23 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
     return { fields, edits, markReviewed: true };
   };
 
-  const onSave = async () => {
-    await save.mutateAsync(collectPayload());
-  };
+  const onSave = handleSubmit(async (values) => {
+    await save.mutateAsync(collectPayload(values));
+  });
 
   // Save the corrected values first (so the document is built from them), then
   // convert to an editable Document and open it in the right editor.
-  const onCreateDocument = async () => {
-    await save.mutateAsync(collectPayload());
+  const onCreateDocument = handleSubmit(async (values) => {
+    await save.mutateAsync(collectPayload(values));
     const res = await convert.mutateAsync(extraction.id);
     navigate(
       res.mode === 'structured'
         ? `/documents/${res.documentId}/edit`
         : `/documents/${res.documentId}/draft`,
     );
-  };
+  });
 
   const busy = save.isPending || convert.isPending;
-
   const overallPct = Math.round(extraction.overallConfidence * 100);
 
   return (
@@ -226,10 +284,7 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
             <Select value={targetSchema} onValueChange={setTargetSchema}>
               <SelectTrigger className="w-64">
                 <SelectValue
-                  placeholder={t(
-                    'intelligence.review.pickType',
-                    'Choose a type…',
-                  )}
+                  placeholder={t('intelligence.review.pickType', 'Choose a type…')}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -241,7 +296,7 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
               </SelectContent>
             </Select>
             <Button
-              variant={isGeneric ? 'default' : 'outline'}
+              variant={isGeneric ? 'primary' : 'outline'}
               disabled={!targetSchema || reprocess.isPending || busy}
               onClick={() => reprocess.mutate(targetSchema)}
             >
@@ -264,6 +319,7 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
             const isComplex =
               original[field.key] !== null &&
               typeof original[field.key] === 'object';
+            const fieldError = errors.fields?.[field.key]?.message;
 
             return (
               <div
@@ -275,39 +331,46 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
                 <div className="space-y-0.5">
                   <label className="text-sm font-medium">
                     {field.label}
-                    {field.required && (
-                      <span className="ml-0.5 text-error">*</span>
-                    )}
+                    {field.required && <span className="ml-0.5 text-error">*</span>}
                   </label>
                   {field.description && (
-                    <p className="text-xs text-foreground/50">
-                      {field.description}
-                    </p>
+                    <p className="text-xs text-foreground/50">{field.description}</p>
                   )}
                 </div>
 
-                <div>
-                  {isComplex ? (
-                    <Textarea
-                      value={values[field.key] ?? ''}
-                      rows={3}
-                      className="font-mono text-xs"
-                      onChange={(e) =>
-                        setValues((v) => ({ ...v, [field.key]: e.target.value }))
-                      }
-                    />
-                  ) : (
-                    <Input
-                      value={values[field.key] ?? ''}
-                      placeholder={
-                        present
-                          ? undefined
-                          : t('intelligence.review.notFound', 'Not found')
-                      }
-                      onChange={(e) =>
-                        setValues((v) => ({ ...v, [field.key]: e.target.value }))
-                      }
-                    />
+                <div className="space-y-1">
+                  <Controller
+                    control={control}
+                    name={`fields.${field.key}`}
+                    render={({ field: ctl }) =>
+                      isComplex ? (
+                        <Textarea
+                          value={ctl.value ?? ''}
+                          onChange={ctl.onChange}
+                          onBlur={ctl.onBlur}
+                          rows={3}
+                          className="font-mono text-xs"
+                          aria-invalid={!!fieldError}
+                        />
+                      ) : (
+                        <Input
+                          value={ctl.value ?? ''}
+                          onChange={ctl.onChange}
+                          onBlur={ctl.onBlur}
+                          hasError={!!fieldError}
+                          placeholder={
+                            present
+                              ? undefined
+                              : t('intelligence.review.notFound', 'Not found')
+                          }
+                        />
+                      )
+                    }
+                  />
+                  {fieldError && (
+                    <span role="alert" className="text-xs text-error">
+                      {fieldError}
+                    </span>
                   )}
                 </div>
 

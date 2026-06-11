@@ -1,6 +1,9 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { draftAiFormSchema, type DraftAiFormValues } from '@org/dto';
 import { Button, Card, Label, Textarea } from '@org/ui';
 import { cn } from '@org/utils';
 import { useState } from 'react';
+import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -33,23 +36,34 @@ export function DraftWithAIPage() {
   const navigate = useNavigate();
   const create = useCreateDocument();
   const legalAi = useLegalAiService();
-  const [brief, setBrief] = useState('');
-  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const [preset, setPreset] = useState<DocumentPreset | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const {
+    control,
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<DraftAiFormValues>({
+    resolver: zodResolver(draftAiFormSchema) as Resolver<DraftAiFormValues>,
+    defaultValues: { brief: '', language: DEFAULT_LANGUAGE },
+    mode: 'onBlur',
+  });
+  const brief = watch('brief');
+
   function choosePreset(p: DocumentPreset) {
     setPreset(p);
-    setBrief(p.sampleBrief ?? '');
+    setValue('brief', p.sampleBrief ?? '', { shouldValidate: true });
   }
 
-  async function draft() {
-    if (!brief.trim()) return;
+  const draft = handleSubmit(async (values) => {
     setBusy(true);
     try {
       const gen = await legalAi.generate({
-        brief: brief.trim(),
-        language,
+        brief: values.brief,
+        language: values.language,
         documentTypeKey: 'freeform',
         presetKey: preset?.key,
       });
@@ -74,7 +88,7 @@ export function DraftWithAIPage() {
     } finally {
       setBusy(false);
     }
-  }
+  });
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -91,7 +105,7 @@ export function DraftWithAIPage() {
       </div>
 
       <Card className="rounded-xl">
-        <div className="grid gap-2">
+        <form onSubmit={draft} className="grid gap-2">
           <Label htmlFor="draft-ai-brief">
             {t('newDoc.briefLabel', 'Document description')}
           </Label>
@@ -101,22 +115,33 @@ export function DraftWithAIPage() {
               'newDoc.briefPlaceholder',
               'e.g. "Legal notice to a tenant for unpaid rent of ₹60,000 over 3 months"',
             )}
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
+            aria-invalid={!!errors.brief}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) draft();
             }}
             rows={5}
+            {...register('brief')}
           />
+          {errors.brief?.message && (
+            <p role="alert" className="text-xs text-error">
+              {errors.brief.message}
+            </p>
+          )}
           <Label htmlFor="draft-ai-language" className="mt-1">
             {t('settings.language', 'Language')}
           </Label>
-          <LanguageSelect
-            id="draft-ai-language"
-            value={language}
-            onChange={setLanguage}
+          <Controller
+            control={control}
+            name="language"
+            render={({ field }) => (
+              <LanguageSelect
+                id="draft-ai-language"
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
           />
-        </div>
+        </form>
         <div className="flex items-center justify-between gap-3">
           {preset ? (
             <span className="text-xs text-foreground/55">

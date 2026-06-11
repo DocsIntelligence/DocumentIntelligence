@@ -110,7 +110,11 @@ export function AnalyzePage() {
           </Link>
         </Button>
       </div>
-      <ReviewExtraction extraction={extraction} sourceId={sourceId as string} />
+      <ReviewExtraction
+        key={extraction.id}
+        extraction={extraction}
+        sourceId={sourceId as string}
+      />
       <DocumentInsights sourceId={sourceId as string} />
     </div>
   );

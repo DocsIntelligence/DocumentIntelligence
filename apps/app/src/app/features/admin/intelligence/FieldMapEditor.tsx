@@ -1,6 +1,8 @@
+import type { AdminFieldMap, AdminSchemaDetail } from '@org/api-client';
 import { Button, Card, Input } from '@org/ui';
-import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { applyServerFieldErrors } from '../../../lib/server-errors';
 import { useFieldMap, useSaveFieldMap, useSchema } from './queries';
 
 interface Props {
@@ -18,18 +20,8 @@ export function FieldMapEditor({ schemaKey, onClose }: Props) {
   const { t } = useTranslation();
   const { data: schema } = useSchema(schemaKey);
   const { data: fieldMap, isLoading } = useFieldMap(schemaKey);
-  const save = useSaveFieldMap();
 
-  const [mapping, setMapping] = useState<Record<string, string>>({});
-
-  // Seed paths from the saved map once both schema + map have resolved.
-  useEffect(() => {
-    if (!schema) return;
-    const next: Record<string, string> = {};
-    for (const f of schema.fields) next[f.key] = fieldMap?.mapping?.[f.key] ?? '';
-    setMapping(next);
-  }, [schema, fieldMap]);
-
+  // Wait for the schema (the field-map 404s when none exists yet — expected).
   if (isLoading && !schema) {
     return (
       <p className="text-foreground/60 text-sm">
@@ -39,21 +31,60 @@ export function FieldMapEditor({ schemaKey, onClose }: Props) {
   }
   if (!schema) return null;
 
+  return (
+    <MapForm
+      key={schemaKey}
+      schemaKey={schemaKey}
+      schema={schema}
+      fieldMap={fieldMap}
+      onClose={onClose}
+    />
+  );
+}
+
+interface MapFormValues {
+  mapping: Record<string, string>;
+}
+
+function MapForm({
+  schemaKey,
+  schema,
+  fieldMap,
+  onClose,
+}: {
+  schemaKey: string;
+  schema: AdminSchemaDetail;
+  fieldMap?: AdminFieldMap;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const save = useSaveFieldMap();
   const docTypeKey = schema.documentTypeKey;
 
-  const onSave = () => {
+  const { register, handleSubmit, setError } = useForm<MapFormValues>({
+    defaultValues: {
+      mapping: Object.fromEntries(
+        schema.fields.map((f) => [f.key, fieldMap?.mapping?.[f.key] ?? '']),
+      ),
+    },
+  });
+
+  const onSubmit = handleSubmit((values) => {
     if (!docTypeKey) return;
     const cleaned = Object.fromEntries(
-      Object.entries(mapping).filter(([, v]) => v.trim()),
+      Object.entries(values.mapping).filter(([, v]) => v.trim()),
     );
     save.mutate(
       { schemaKey, documentTypeKey: docTypeKey, mapping: cleaned },
-      { onSuccess: onClose },
+      {
+        onSuccess: onClose,
+        onError: (err) => applyServerFieldErrors(err, setError),
+      },
     );
-  };
+  });
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium text-foreground">
@@ -67,14 +98,10 @@ export function FieldMapEditor({ schemaKey, onClose }: Props) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button
-            size="sm"
-            onClick={onSave}
-            disabled={!docTypeKey || save.isPending}
-          >
+          <Button type="submit" size="sm" disabled={!docTypeKey || save.isPending}>
             {save.isPending
               ? t('common.saving', 'Saving…')
               : t('adminIntel.map.save', 'Save mapping')}
@@ -100,16 +127,13 @@ export function FieldMapEditor({ schemaKey, onClose }: Props) {
               <span className="text-foreground/30">→</span>
               <Input
                 className="flex-1"
-                value={mapping[f.key] ?? ''}
                 placeholder={t('adminIntel.map.path', 'document.path')}
-                onChange={(e) =>
-                  setMapping((m) => ({ ...m, [f.key]: e.target.value }))
-                }
+                {...register(`mapping.${f.key}`)}
               />
             </Card>
           ))}
         </div>
       )}
-    </div>
+    </form>
   );
 }

@@ -2,6 +2,47 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+### 2026-06-12 — Platform-wide form validation: shared Zod (@org/dto) + react-hook-form, client+server field-level
+
+Standardised every hand-rolled `useState` form onto the platform's existing-but-underused stack (the
+auth forms already exemplified it): **shared Zod schema in `@org/dto` → `react-hook-form` + `zodResolver`
+on the client + `nestjs-zod` `createZodDto` on the server**, so a client-valid form is server-valid by
+construction (kills the schema-save-400 class of bug). Field-level inline errors throughout, not page-level.
+Verified: **`@org/api` tsc 0 · lint 0 err · build ✓** · **`@org/app` typecheck 0 · lint 0 err (10 pre-existing
+warnings, baseline) · build ✓**. NOT browser-verified.
+
+- **New shared schemas (`libs/shared/dto/src/lib/`):** `intelligence/` (`extraction-schema`, `field-map`,
+  `pipeline`) and `documents/` (`comment`, `share`, `signer`, `legal-ai`). Each exports the pure Zod schema +
+  `z.infer` types with explicit field-level messages. Barrel updated. **Server re-wired to consume them:**
+  `intelligence-admin.dto.ts` (relocated verbatim → byte-identical validation), `comments.dto.ts`
+  (`createCommentSchema`), `legal-ai.dto.ts` (`generateDocumentSchema`) now `createZodDto(<shared>)`.
+  Shares/signers servers left as-is (prisma `nativeEnum` / `.email()`-empty nuance); their client form
+  schemas live in `@org/dto` and map to the existing wire payloads on submit.
+- **Server-error mapping** (`apps/app/.../lib/server-errors.ts`): `applyServerFieldErrors(err, setError)` reads
+  the `nestjs-zod` 400 `errors[]`/`issues[]` (with `path`) and `setError`s the matching RHF field — so a
+  server rejection surfaces inline at the field, not just a toast. Wired into the admin save flows.
+- **Cluster A — admin intelligence (the 400 source):** `SchemaManager` + `PipelineManager` rebuilt on
+  `useForm`/`useFieldArray` (`SchemaEditor`/`FieldRow`, `PipelineEditor`/`StageCard`; per-stage config edited
+  as a unit via `setValue` to preserve the rich conditional UI verbatim); `FieldMapEditor` on RHF
+  (`mapping.${fieldKey}` paths). `zodResolver(...) as Resolver<Dto>` cast where Zod input≠output (`.default()` +
+  recursive `z.lazy`) — runtime validation unaffected.
+- **Cluster B — intelligence product:** `ReviewExtraction` now builds a **type-aware** Zod schema from the
+  extraction's own fields (required / valid-JSON / numeric) → closes a real data-corruption bug (malformed
+  JSON/number edits used to save silently as raw strings); inline per-field errors; mount keyed by
+  `extraction.id` (AnalyzePage) so reprocess re-seeds; **fixed pre-existing `variant="default"` tsc error**
+  (→ `primary`). `NewBatchPage` + `IntelligenceUpload` gained shared **file validation** (type + 25 MB cap,
+  `lib/file-validation.ts`) with inline rejection messages (the `accept` attr can't enforce either) + batch-name
+  length cap.
+- **Cluster C — document dialogs:** `CommentsDialog` (body required/max 4000), `ShareDialog` (password 4–64
+  validated client-side; mode/expiry via `Controller`), `SignaturesDialog` add-signer (**real email-format
+  validation** — `type="email"` never enforced it), `DraftWithAIPage` (brief required/max 6000; preset fills via
+  `setValue`) — all RHF + shared schema, inline field errors.
+- **Dead dep noted:** `class-validator`/`class-transformer` are unused in `apps/api/src` (the global pipe is
+  `ZodValidationPipe`) — left in place; safe to remove later.
+- **i18n:** new validation strings use the `t('key','English default')` fallback pattern (per house rule);
+  `en/translation.json` was **not** exhaustively updated with the new keys — defaults render correctly, but a
+  translation pass is a follow-up.
+
 ### 2026-06-12 — Batch naming + multi-file add, UI-component sweep, doc-creation restructure, dashboard
 
 - **Batch name + multi-shot file add** (`NewBatchPage.tsx`). Added an optional "Batch name" input — the plumbing already existed end-to-end (`createBatch(files,{name})`→`?name=`; backend defaults `Batch of N`), only the field was missing. Files now **accumulate** across multiple picks (dedupe by `name:size:lastModified`) with a removable selected-files list. **Bug fixed (regression):** the first version read `Array.from(picked)` lazily inside the `setFiles` updater *after* resetting `input.value=''` — but `FileList` is live and tied to the input, so the reset emptied it before the updater ran → zero files added. Fix: snapshot to a real array *before* the reset.

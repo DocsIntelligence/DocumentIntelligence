@@ -1,12 +1,9 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import { createCommentSchema } from '@org/dto';
 
-const CreateCommentSchema = z.object({
-  body: z.string().min(1).max(4000),
-  /** Optional anchor (section/field path); document-level if omitted. */
-  anchor: z.record(z.string(), z.unknown()).optional(),
-});
-export class CreateCommentDto extends createZodDto(CreateCommentSchema) {}
+// Validation shared with the client via `@org/dto` (single source of truth).
+export class CreateCommentDto extends createZodDto(createCommentSchema) {}
 
 const ResolveCommentSchema = z.object({
   resolved: z.boolean().default(true),

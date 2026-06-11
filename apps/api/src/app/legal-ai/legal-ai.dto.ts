@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import { generateDocumentSchema } from '@org/dto';
 
 const ClauseRewriteSchema = z.object({
   documentTypeKey: z.string().min(1),
@@ -34,18 +35,8 @@ const RuleSuggestSchema = z.object({
 export class RuleSuggestDto extends createZodDto(RuleSuggestSchema) {}
 
 // Draft a whole document as editor-ready HTML from a natural-language brief.
-const GenerateDocumentSchema = z.object({
-  brief: z.string().min(1).max(6000),
-  /** Optional — grounds the draft in a known document type's sections. */
-  documentTypeKey: z.string().min(1).optional(),
-  title: z.string().max(200).optional(),
-  /** Human language name to write the document in (e.g. "English", "Hindi", "Tamil"). */
-  language: z.string().min(2).max(40).default('English'),
-  /** Optional court/legal preset key (see @org/legal-reference DOCUMENT_PRESETS) — selects a structural scaffold. */
-  presetKey: z.string().min(1).max(64).optional(),
-});
-
-export class GenerateDocumentDto extends createZodDto(GenerateDocumentSchema) {}
+// Validation shared with the client via `@org/dto` (single source of truth).
+export class GenerateDocumentDto extends createZodDto(generateDocumentSchema) {}
 
 // Apply a natural-language instruction to an existing document's HTML.
 const ReviseDocumentSchema = z.object({

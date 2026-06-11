@@ -11,11 +11,15 @@ import {
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  DOC_ACCEPT,
+  MAX_FILE_SIZE_MB,
+  partitionDocumentFiles,
+} from '../../lib/file-validation';
 import { useCreateBatch, usePipelineOptions } from './queries';
 import { ArrowRightIcon, UploadIcon } from './icons';
 
-const ACCEPT =
-  '.pdf,.docx,.txt,.md,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg';
+const MAX_BATCH_NAME = 120;
 
 /**
  * Dedicated "New batch" page (split out of BatchesPage): pick many files, choose
@@ -28,24 +32,45 @@ export function NewBatchPage() {
   const { data: pipelines } = usePipelineOptions();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [rejected, setRejected] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [pipeline, setPipeline] = useState('default');
 
+  const nameTooLong = name.trim().length > MAX_BATCH_NAME;
+
   // Accumulate across multiple picks (dedupe by name+size+lastModified) so the
   // user can build a batch in several shots; reset the input value each time so
-  // re-selecting the same file still fires onChange.
+  // re-selecting the same file still fires onChange. Reject unsupported/oversized
+  // files with an inline message instead of silently dropping them.
   const addFiles = (picked: FileList | null) => {
     if (!picked?.length) return;
     // Snapshot NOW: FileList is live and tied to the input element, so the
     // value reset below would empty it before React runs the state updater.
     const incoming = Array.from(picked);
     if (inputRef.current) inputRef.current.value = '';
+    const { accepted, rejected: bad } = partitionDocumentFiles(incoming);
+    setRejected(
+      bad.map((r) =>
+        r.reason === 'size'
+          ? t('intelligence.batches.errSize', '{{name}} — too large (max {{mb}} MB)', {
+              name: r.file.name,
+              mb: MAX_FILE_SIZE_MB,
+            })
+          : r.reason === 'empty'
+            ? t('intelligence.batches.errEmpty', '{{name}} — empty file', {
+                name: r.file.name,
+              })
+            : t('intelligence.batches.errType', '{{name}} — unsupported type', {
+                name: r.file.name,
+              }),
+      ),
+    );
     setFiles((prev) => {
       const seen = new Set(
         prev.map((f) => `${f.name}:${f.size}:${f.lastModified}`),
       );
       const next = [...prev];
-      for (const f of incoming) {
+      for (const f of accepted) {
         const k = `${f.name}:${f.size}:${f.lastModified}`;
         if (!seen.has(k)) {
           seen.add(k);
@@ -59,7 +84,7 @@ export function NewBatchPage() {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const onCreate = async () => {
-    if (!files.length) return;
+    if (!files.length || nameTooLong) return;
     const res = await create.mutateAsync({
       files,
       name: name.trim() || undefined,
@@ -122,15 +147,24 @@ export function NewBatchPage() {
               'intelligence.batches.namePlaceholder',
               'e.g. April vendor invoices',
             )}
+            hasError={nameTooLong}
+            maxLength={MAX_BATCH_NAME + 20}
             className="mt-1"
           />
+          {nameTooLong && (
+            <span role="alert" className="text-xs text-error">
+              {t('intelligence.batches.nameTooLong', 'Keep the name under {{n}} characters.', {
+                n: MAX_BATCH_NAME,
+              })}
+            </span>
+          )}
         </label>
 
         <input
           ref={inputRef}
           type="file"
           multiple
-          accept={ACCEPT}
+          accept={DOC_ACCEPT}
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />
@@ -152,6 +186,17 @@ export function NewBatchPage() {
               : t('intelligence.upload.clickToBrowse', 'Click to browse')}
           </span>
         </button>
+
+        {rejected.length > 0 && (
+          <ul
+            role="alert"
+            className="rounded-lg border border-error/40 bg-error/5 px-3 py-2 text-xs text-error space-y-0.5"
+          >
+            {rejected.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        )}
 
         {files.length > 0 && (
           <ul className="divide-y divide-border/60 rounded-lg border border-border">
@@ -201,7 +246,7 @@ export function NewBatchPage() {
           </label>
           <Button
             onClick={onCreate}
-            disabled={!files.length || create.isPending}
+            disabled={!files.length || nameTooLong || create.isPending}
             className="sm:w-48"
           >
             {create.isPending

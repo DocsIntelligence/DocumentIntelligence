@@ -1,3 +1,5 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { createCommentSchema } from '@org/dto';
 import {
   Button,
   Dialog,
@@ -8,9 +10,11 @@ import {
   Textarea,
 } from '@org/ui';
 import { cn } from '@org/utils';
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useAddComment, useComments, useResolveComment } from './queries';
+
+const commentBodySchema = createCommentSchema.pick({ body: true });
 
 /**
  * Document-level comment thread (owner side). Guests comment via a
@@ -29,14 +33,22 @@ export function CommentsDialog({
   const comments = useComments(documentId, open);
   const add = useAddComment(documentId);
   const resolve = useResolveComment(documentId);
-  const [body, setBody] = useState('');
   const items = comments.data ?? [];
 
-  async function submit() {
-    if (!body.trim()) return;
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<{ body: string }>({
+    resolver: zodResolver(commentBodySchema),
+    defaultValues: { body: '' },
+  });
+
+  const submit = handleSubmit(async ({ body }) => {
     await add.mutateAsync(body.trim());
-    setBody('');
-  }
+    reset({ body: '' });
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -96,24 +108,24 @@ export function CommentsDialog({
           ))}
         </div>
 
-        <div className="space-y-2 border-t border-border pt-3">
+        <form onSubmit={submit} className="space-y-2 border-t border-border pt-3">
           <Textarea
             placeholder={t('comments.placeholder', 'Write a comment…')}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
             rows={3}
+            aria-invalid={!!errors.body}
+            {...register('body')}
           />
+          {errors.body?.message && (
+            <p role="alert" className="text-xs text-error">
+              {errors.body.message}
+            </p>
+          )}
           <div className="flex justify-end">
-            <Button
-              size="sm"
-              isLoading={add.isPending}
-              disabled={!body.trim()}
-              onClick={submit}
-            >
+            <Button type="submit" size="sm" isLoading={add.isPending}>
               {t('comments.submit', 'Comment')}
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
