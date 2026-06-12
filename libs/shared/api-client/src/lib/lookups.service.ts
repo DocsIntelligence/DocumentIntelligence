@@ -19,7 +19,31 @@ export interface LookupGroup {
   key: string;
   name: string;
   description: string | null;
+  isPublic?: boolean;
   values: LookupValue[];
+}
+
+export interface CreateLookupGroupPayload {
+  key: string;
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+}
+export interface UpdateLookupGroupPayload {
+  name?: string;
+  description?: string;
+  isPublic?: boolean;
+}
+export interface AddLookupValuePayload {
+  label: string;
+  value: string;
+  order?: number;
+}
+export interface UpdateLookupValuePayload {
+  label?: string;
+  value?: string;
+  order?: number;
+  isActive?: boolean;
 }
 
 export const createLookupsService = (http: HttpClient) => ({
@@ -28,6 +52,29 @@ export const createLookupsService = (http: HttpClient) => ({
   /** A single group by key (e.g. "in_states"). */
   getByKey: (key: string) =>
     http.get<LookupGroup>(`/lookups/${encodeURIComponent(key)}`).then((r) => r.data),
+
+  // ─── Admin (role: admin) ───────────────────────────────────────────────
+  /** ALL groups incl. non-public + inactive values. */
+  getAllAdmin: () =>
+    http.get<LookupGroup[]>('/lookups/admin').then((r) => r.data),
+  createGroup: (payload: CreateLookupGroupPayload) =>
+    http.post<LookupGroup>('/lookups', payload).then((r) => r.data),
+  updateGroup: (groupId: string, payload: UpdateLookupGroupPayload) =>
+    http.patch<LookupGroup>(`/lookups/${groupId}`, payload).then((r) => r.data),
+  deleteGroup: (groupId: string) =>
+    http.delete<{ message: string }>(`/lookups/${groupId}`).then((r) => r.data),
+  addValue: (groupId: string, payload: AddLookupValuePayload) =>
+    http
+      .post<LookupValue>(`/lookups/${groupId}/values`, payload)
+      .then((r) => r.data),
+  updateValue: (valueId: string, payload: UpdateLookupValuePayload) =>
+    http
+      .patch<LookupValue>(`/lookups/values/${valueId}`, payload)
+      .then((r) => r.data),
+  deleteValue: (valueId: string) =>
+    http
+      .delete<{ message: string }>(`/lookups/values/${valueId}`)
+      .then((r) => r.data),
 });
 
 export type LookupsService = ReturnType<typeof createLookupsService>;

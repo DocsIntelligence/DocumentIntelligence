@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { isESignExcluded, SCHEDULE_1_NOTE } from '@org/legal-reference';
 import { DatabaseService } from '../database/database.service';
 import type {
   AddSignerDto,
@@ -29,6 +30,7 @@ export class SignersService {
   private async assertAccess(userId: string, documentId: string) {
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
+      include: { documentType: true },
     });
     if (!doc) throw new NotFoundException('Document not found');
     if (doc.ownerUserId === userId) return doc;
@@ -41,6 +43,18 @@ export class SignersService {
     throw new ForbiddenException('Not allowed');
   }
 
+  /**
+   * Schedule-1 hard-gate: documents like wills, powers of attorney, trusts,
+   * promissory notes and conveyances of immovable property CANNOT be validly
+   * executed by electronic signature (IT Act, 2000, Schedule 1). Block adding
+   * signers and signing for those types — they must be signed on paper.
+   */
+  private assertESignAllowed(doc: { documentType: { key: string } | null }) {
+    if (isESignExcluded(doc.documentType?.key)) {
+      throw new ForbiddenException(SCHEDULE_1_NOTE);
+    }
+  }
+
   async list(userId: string, documentId: string) {
     await this.assertAccess(userId, documentId);
     return this.db.documentSigner.findMany({
@@ -50,7 +64,8 @@ export class SignersService {
   }
 
   async add(userId: string, documentId: string, dto: AddSignerDto) {
-    await this.assertAccess(userId, documentId);
+    const doc = await this.assertAccess(userId, documentId);
+    this.assertESignAllowed(doc);
     // Append at the end of the signing order when none supplied.
     const order =
       dto.order ??
@@ -99,7 +114,8 @@ export class SignersService {
     dto: RecordSignatureDto,
     meta: { ip?: string; userAgent?: string },
   ) {
-    await this.assertAccess(userId, documentId);
+    const doc = await this.assertAccess(userId, documentId);
+    this.assertESignAllowed(doc);
     await this.getOwned(documentId, signerId);
 
     const evidence: DrawnTypedEvidence = {

@@ -1,12 +1,5 @@
 import type { FormMetadata } from '../types';
 
-const RELATION_OPTIONS = [
-  { value: 'S/o', label: 'S/o (son of)' },
-  { value: 'D/o', label: 'D/o (daughter of)' },
-  { value: 'W/o', label: 'W/o (wife of)' },
-  { value: 'C/o', label: 'C/o (care of)' },
-];
-
 const personFields = (
   prefix: 'principal' | 'attorney',
   who: string,
@@ -14,8 +7,8 @@ const personFields = (
   [`${prefix}.name`]: { label: `${who} — name` },
   [`${prefix}.parentRelation`]: {
     label: `${who} — relation`,
-    widget: 'select',
-    options: RELATION_OPTIONS,
+    widget: 'lookup',
+    lookupKey: 'party_relation',
   },
   [`${prefix}.parentName`]: { label: `${who} — father/husband's name` },
   [`${prefix}.address`]: { label: `${who} — address`, widget: 'textarea' },
@@ -26,11 +19,8 @@ export const powerOfAttorneyFormMetadata: FormMetadata = {
   // Meta
   'poa.type': {
     label: 'Type',
-    widget: 'select',
-    options: [
-      { value: 'special', label: 'Special (specific acts)' },
-      { value: 'general', label: 'General (broad powers)' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'poa_type',
     helperText: 'A Special PoA is limited to the listed acts; a General PoA is broad.',
   },
   'poa.executionDate': { label: 'Date of execution', widget: 'date' },
@@ -63,11 +53,8 @@ export const powerOfAttorneyFormMetadata: FormMetadata = {
   },
   'terms.durationType': {
     label: 'Duration',
-    widget: 'select',
-    options: [
-      { value: 'until_revoked', label: 'Until revoked' },
-      { value: 'fixed', label: 'Until a fixed date' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'duration_type',
   },
   'terms.expiryDate': {
     label: 'Valid until',

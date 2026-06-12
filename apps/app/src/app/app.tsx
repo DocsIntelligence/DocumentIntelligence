@@ -10,6 +10,7 @@ import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
 import {
   DocTypesPage,
+  LookupsPage,
   PipelinesPage,
 } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
@@ -95,6 +96,10 @@ export function App() {
         <Route
           path="/admin/intelligence/pipelines"
           element={<PipelinesPage />}
+        />
+        <Route
+          path="/admin/intelligence/lookups"
+          element={<LookupsPage />}
         />
       </Route>
 

@@ -16,6 +16,7 @@ import './nda';
 import './promissory-note';
 import './employment-offer';
 import './power-of-attorney';
+import './invoice';
 
 export { rentAgreementBundle } from './rent-agreement';
 export type { RentAgreementData, Party } from './rent-agreement/schema';
@@ -43,3 +44,6 @@ export type { EmploymentOfferData } from './employment-offer/schema';
 
 export { powerOfAttorneyBundle } from './power-of-attorney';
 export type { PowerOfAttorneyData } from './power-of-attorney/schema';
+
+export { invoiceBundle } from './invoice';
+export type { InvoiceData, InvoiceItem } from './invoice/schema';

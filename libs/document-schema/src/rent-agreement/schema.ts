@@ -23,7 +23,7 @@ import { z } from 'zod';
 export const PartySchema = z.object({
   name: z.string().min(1).max(200),
   parentName: z.string().max(200).optional(), // "S/o", "D/o", "W/o"
-  parentRelation: z.enum(['S/o', 'D/o', 'W/o']).optional(),
+  parentRelation: z.enum(['S/o', 'D/o', 'W/o', 'C/o']).optional(),
   age: z.coerce.number().int().min(18).max(120).optional(),
   occupation: z.string().max(120).optional(),
   pan: z

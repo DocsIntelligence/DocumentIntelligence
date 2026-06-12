@@ -223,6 +223,11 @@ function Sidebar({
               label={t('nav.pipelines', 'Pipelines')}
               icon={<FlowIcon />}
             />
+            <NavItem
+              to="/admin/intelligence/lookups"
+              label={t('nav.lookups', 'Lookups')}
+              icon={<ListIcon />}
+            />
           </NavGroup>
 
           <NavItem
@@ -476,6 +481,18 @@ function FlowIcon() {
       <rect x="3" y="3" width="6" height="6" rx="1" />
       <rect x="15" y="15" width="6" height="6" rx="1" />
       <path d="M9 6h6a3 3 0 0 1 3 3v6" />
+    </svg>
+  );
+}
+function ListIcon() {
+  return (
+    <svg {...iconProps}>
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
 }

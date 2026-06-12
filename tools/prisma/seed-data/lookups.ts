@@ -24,15 +24,21 @@ export const lookupGroups: LookupSeed[] = [
   {
     key: 'currency',
     name: 'Currency',
-    description: 'Supported currencies',
-    values: toValues([
-      { label: 'USD ($)', value: 'USD' },
-      { label: 'EUR (€)', value: 'EUR' },
-      { label: 'INR (₹)', value: 'INR' },
-      { label: 'GBP (£)', value: 'GBP' },
-      { label: 'CAD (C$)', value: 'CAD' },
-      { label: 'AUD (A$)', value: 'AUD' },
-    ]),
+    description: 'ISO 4217 currency codes',
+    // Literal (NOT toValues, which lowercases) — values must stay uppercase ISO
+    // codes: Intl.NumberFormat and the Zod currency enums expect 'INR'/'USD'/…
+    values: (
+      [
+        ['₹ INR', 'INR'],
+        ['$ USD', 'USD'],
+        ['€ EUR', 'EUR'],
+        ['£ GBP', 'GBP'],
+        ['AED', 'AED'],
+        ['S$ SGD', 'SGD'],
+        ['A$ AUD', 'AUD'],
+        ['C$ CAD', 'CAD'],
+      ] as Array<[string, string]>
+    ).map(([label, value], i) => ({ label, value, order: i })),
   },
   {
     key: 'country',
@@ -62,6 +68,204 @@ export const lookupGroups: LookupSeed[] = [
       { label: 'Monthly', value: 'monthly' },
       { label: 'Quarterly', value: 'quarterly' },
       { label: 'Yearly', value: 'yearly' },
+    ]),
+  },
+  {
+    key: 'party_relation',
+    name: 'Parentage / relation',
+    description: 'S/o, D/o, W/o, C/o — case-sensitive, used across documents',
+    // Literal — values keep their exact case/slash to match the Zod enums.
+    values: (
+      [
+        ['Son of (S/o)', 'S/o'],
+        ['Daughter of (D/o)', 'D/o'],
+        ['Wife of (W/o)', 'W/o'],
+        ['Care of (C/o)', 'C/o'],
+      ] as Array<[string, string]>
+    ).map(([label, value], i) => ({ label, value, order: i })),
+  },
+  {
+    key: 'paid_by',
+    name: 'Paid by',
+    description: 'Who bears a charge (tenancy utilities, etc.)',
+    values: toValues([
+      { label: 'Landlord', value: 'landlord' },
+      { label: 'Tenant', value: 'tenant' },
+      { label: 'Shared', value: 'shared' },
+    ]),
+  },
+  {
+    key: 'entity_type',
+    name: 'Entity type',
+    description: 'Legal nature of a party',
+    values: toValues([
+      { label: 'Individual', value: 'individual' },
+      { label: 'Company', value: 'company' },
+      { label: 'LLP', value: 'llp' },
+      { label: 'Partnership firm', value: 'partnership' },
+      { label: 'Sole proprietorship', value: 'proprietorship' },
+      { label: 'HUF', value: 'huf' },
+      { label: 'Trust', value: 'trust' },
+      { label: 'Society', value: 'society' },
+      { label: 'Other', value: 'other' },
+    ]),
+  },
+  {
+    key: 'employment_type',
+    name: 'Employment type',
+    description: 'Nature of employment',
+    values: toValues([
+      { label: 'Full-time', value: 'full_time' },
+      { label: 'Part-time', value: 'part_time' },
+      { label: 'Contract', value: 'contract' },
+      { label: 'Internship', value: 'internship' },
+    ]),
+  },
+  {
+    key: 'pay_frequency',
+    name: 'Pay frequency',
+    description: 'How compensation is quoted/paid',
+    values: toValues([
+      { label: 'Monthly', value: 'monthly' },
+      { label: 'Annually', value: 'annual' },
+    ]),
+  },
+  {
+    key: 'dispute_resolution',
+    name: 'Dispute resolution',
+    description: 'Forum for disputes',
+    values: toValues([
+      { label: 'Courts', value: 'courts' },
+      { label: 'Arbitration', value: 'arbitration' },
+    ]),
+  },
+  {
+    key: 'invoice_tax_mode',
+    name: 'Invoice tax mode',
+    description: 'GST / single tax / none',
+    values: toValues([
+      { label: 'GST (India — CGST/SGST/IGST)', value: 'gst' },
+      { label: 'Single tax (VAT / sales tax)', value: 'single' },
+      { label: 'No tax', value: 'none' },
+    ]),
+  },
+  {
+    key: 'rent_property_type',
+    name: 'Property type',
+    description: 'Type of premises let',
+    values: toValues([
+      { label: 'Apartment / Flat', value: 'apartment' },
+      { label: 'Independent house', value: 'independent_house' },
+      { label: 'Villa', value: 'villa' },
+      { label: 'Commercial', value: 'commercial' },
+      { label: 'PG room', value: 'pg_room' },
+    ]),
+  },
+  {
+    key: 'rent_furnishing',
+    name: 'Furnishing',
+    description: 'Furnishing status of premises',
+    values: toValues([
+      { label: 'Unfurnished', value: 'unfurnished' },
+      { label: 'Semi-furnished', value: 'semi_furnished' },
+      { label: 'Fully furnished', value: 'fully_furnished' },
+    ]),
+  },
+  {
+    key: 'affidavit_id_type',
+    name: 'ID type',
+    description: 'Identity document type',
+    values: toValues([
+      { label: 'None', value: 'none' },
+      { label: 'Aadhaar', value: 'aadhaar' },
+      { label: 'PAN', value: 'pan' },
+      { label: 'Passport', value: 'passport' },
+      { label: 'Voter ID', value: 'voter_id' },
+      { label: 'Driving Licence', value: 'driving_licence' },
+    ]),
+  },
+  {
+    key: 'affidavit_attestation',
+    name: 'Attestation',
+    description: 'Who attests the affidavit',
+    values: toValues([
+      { label: 'Notary Public', value: 'notary' },
+      { label: 'Oath Commissioner', value: 'oath_commissioner' },
+      { label: 'Executive Magistrate', value: 'executive_magistrate' },
+      { label: 'Self-attested', value: 'self_attested' },
+    ]),
+  },
+  {
+    key: 'notice_type',
+    name: 'Legal notice type',
+    description: 'Statutory framing of a legal notice',
+    values: toValues([
+      { label: 'Cheque bounce (NI Act §138)', value: 'cheque_bounce' },
+      { label: 'Consumer (CPA 2019)', value: 'consumer' },
+      { label: 'Civil recovery of money', value: 'civil_recovery' },
+      { label: 'Employment', value: 'employment' },
+      { label: 'General', value: 'general' },
+    ]),
+  },
+  {
+    key: 'notice_delivery_mode',
+    name: 'Mode of service',
+    description: 'How a notice/document is served',
+    values: toValues([
+      { label: 'Registered post (A/D)', value: 'registered_post_ad' },
+      { label: 'Email', value: 'email' },
+      { label: 'Courier', value: 'courier' },
+      { label: 'By hand', value: 'hand' },
+    ]),
+  },
+  {
+    key: 'poa_type',
+    name: 'Power of attorney type',
+    description: 'General or special PoA',
+    values: toValues([
+      { label: 'Special (specific acts)', value: 'special' },
+      { label: 'General (broad powers)', value: 'general' },
+    ]),
+  },
+  {
+    key: 'duration_type',
+    name: 'Duration type',
+    description: 'Until revoked or until a fixed date',
+    values: toValues([
+      { label: 'Until revoked', value: 'until_revoked' },
+      { label: 'Until a fixed date', value: 'fixed' },
+    ]),
+  },
+  {
+    key: 'payable_on',
+    name: 'Payable on',
+    description: 'On demand or on a fixed date',
+    values: toValues([
+      { label: 'On demand', value: 'demand' },
+      { label: 'On a fixed date', value: 'fixed_date' },
+    ]),
+  },
+  {
+    key: 'rti_info_format',
+    name: 'RTI information format',
+    description: 'Form in which RTI information is sought',
+    values: toValues([
+      { label: 'Certified copies', value: 'certified_copies' },
+      { label: 'Inspection of records', value: 'inspection' },
+      { label: 'Soft copy (CD / email)', value: 'soft_copy' },
+      { label: 'Samples of material', value: 'sample' },
+    ]),
+  },
+  {
+    key: 'rti_fee_mode',
+    name: 'RTI fee mode',
+    description: 'How the RTI fee is paid',
+    values: toValues([
+      { label: 'Indian Postal Order', value: 'ipo' },
+      { label: 'Demand Draft', value: 'dd' },
+      { label: 'Court-fee stamp', value: 'court_fee_stamp' },
+      { label: 'Cash', value: 'cash' },
+      { label: 'Online payment', value: 'online' },
     ]),
   },
   {

@@ -64,6 +64,7 @@ export {
 import './schemas/rent-agreement';
 import './schemas/rti';
 import './schemas/legal-notice';
+import './schemas/nda';
 import './schemas/generic';
 
 export {
@@ -75,4 +76,5 @@ export {
   legalNoticeExtractionSchema,
   legalNoticeFieldMap,
 } from './schemas/legal-notice';
+export { ndaExtractionSchema, ndaFieldMap } from './schemas/nda';
 export { genericExtractionSchema } from './schemas/generic';

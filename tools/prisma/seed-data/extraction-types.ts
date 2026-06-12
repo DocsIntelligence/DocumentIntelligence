@@ -81,34 +81,11 @@ export const extractionTypes: SeedExtractionType[] = [
       f('signatureBlocks', 'Signature Blocks (name, title, date)', 'string', { example: 'Signed by authorized representatives' }),
     ],
   },
-  {
-    key: 'nda',
-    name: 'Non-Disclosure Agreement',
-    description:
-      'A contract in which one or both parties agree to protect confidential information shared during a business relationship',
-    fields: [
-      f('documentTitle', 'Document Title', 'string', { example: 'Mutual Non-Disclosure Agreement' }),
-      f('effectiveDate', 'Effective Date', 'date', { format: ISO, example: '2024-01-01' }),
-      f('ndaType', 'NDA Type (unilateral, bilateral/mutual)', 'string', { example: 'Mutual' }),
-      f('disclosingParty', 'Disclosing Party Name and Contact', 'string', { example: 'Company A' }),
-      f('disclosingPartyAddress', 'Disclosing Party Address', 'string', { example: '123 Main St, City, State 12345' }),
-      f('receivingParty', 'Receiving Party Name and Contact', 'string', { example: 'Company B' }),
-      f('receivingPartyAddress', 'Receiving Party Address', 'string', { example: '456 Oak Ave, City, State 67890' }),
-      f('purposeOfDisclosure', 'Purpose of Disclosure', 'string', { example: 'Exploring potential business partnership' }),
-      f('definitionOfConfidentialInformation', 'Definition of Confidential Information', 'string', { example: 'Trade secrets, business plans, customer data' }),
-      f('exclusionsFromConfidentialInformation', 'Exclusions from Confidential Information (public knowledge, prior possession, independent development, third-party receipt)', 'string', { example: 'Publicly available information, independently developed' }),
-      f('obligationsOfReceivingParty', 'Obligations of Receiving Party (non-disclosure, non-use, safeguarding)', 'string', { example: 'Maintain confidentiality, use only for stated purpose' }),
-      f('permittedDisclosures', 'Permitted Disclosures (legal/regulatory compulsion, prior written consent)', 'string', { example: 'Disclosure required by law with notice to disclosing party' }),
-      f('confidentialityTerm', 'Confidentiality Term / Duration', 'string', { example: '2 years from disclosure date' }),
-      f('returnOrDestruction', 'Return or Destruction of Confidential Information', 'string', { example: 'Return or destroy all materials upon request' }),
-      f('remediesForBreach', 'Remedies for Breach (injunctive relief, damages)', 'string', { example: 'Injunctive relief available, plus damages' }),
-      f('nonSolicitationClause', 'Non-Solicitation Clause (if applicable)', 'string', { example: 'No solicitation of employees for 1 year' }),
-      f('residualKnowledgeClause', 'Residual Knowledge Clause (if applicable)', 'string', { example: 'Receiving party may use residual knowledge' }),
-      f('governingLaw', 'Governing Law / Jurisdiction', 'string', { example: 'State of California' }),
-      f('disputeResolution', 'Dispute Resolution', 'string', { example: 'Binding arbitration' }),
-      f('signatureBlocks', 'Signature Blocks (name, title, date)', 'string', { example: 'Signed by authorized representatives' }),
-    ],
-  },
+  // NOTE: `nda` now lives in the @org/doc-intelligence code registry
+  // (libs/doc-intelligence/src/schemas/nda.ts) with `documentTypeKey: 'nda'` and
+  // a FieldMap, so a reviewed NDA converts straight into the structured `nda`
+  // DocumentTypeBundle template. It was removed from this read-only catalog to
+  // avoid a duplicate (null-documentTypeKey) seed overwriting that routing.
   {
     key: 'contractor_agreement',
     name: 'Contractor Agreement',

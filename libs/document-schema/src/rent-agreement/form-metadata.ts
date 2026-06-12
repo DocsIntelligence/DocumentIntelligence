@@ -1,16 +1,4 @@
-import type { FieldOption, FormMetadata } from '../types';
-
-const PARENT_RELATION: FieldOption[] = [
-  { value: 'S/o', label: 'Son of (S/o)' },
-  { value: 'D/o', label: 'Daughter of (D/o)' },
-  { value: 'W/o', label: 'Wife of (W/o)' },
-];
-
-const PAID_BY: FieldOption[] = [
-  { value: 'landlord', label: 'Landlord' },
-  { value: 'tenant', label: 'Tenant' },
-  { value: 'shared', label: 'Shared' },
-];
+import type { FormMetadata } from '../types';
 
 export const rentAgreementFormMetadata: FormMetadata = {
   state: {
@@ -40,8 +28,8 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'parties.landlord.name': { label: 'Landlord — full name' },
   'parties.landlord.parentRelation': {
     label: 'Relation',
-    widget: 'select',
-    options: PARENT_RELATION,
+    widget: 'lookup',
+    lookupKey: 'party_relation',
   },
   'parties.landlord.parentName': {
     label: "Father/Husband/Mother's name",
@@ -65,8 +53,8 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'parties.tenant.name': { label: 'Tenant — full name' },
   'parties.tenant.parentRelation': {
     label: 'Relation',
-    widget: 'select',
-    options: PARENT_RELATION,
+    widget: 'lookup',
+    lookupKey: 'party_relation',
   },
   'parties.tenant.parentName': { label: "Father/Husband/Mother's name" },
   'parties.tenant.age': { label: 'Age', widget: 'number' },
@@ -90,14 +78,8 @@ export const rentAgreementFormMetadata: FormMetadata = {
   'property.pincode': { label: 'PIN code', widget: 'pincode' },
   'property.type': {
     label: 'Property type',
-    widget: 'select',
-    options: [
-      { value: 'apartment', label: 'Apartment / Flat' },
-      { value: 'independent_house', label: 'Independent house' },
-      { value: 'villa', label: 'Villa' },
-      { value: 'commercial', label: 'Commercial' },
-      { value: 'pg_room', label: 'PG room' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'rent_property_type',
   },
   'property.builtUpAreaSqft': {
     label: 'Built-up area (sq ft)',
@@ -105,12 +87,8 @@ export const rentAgreementFormMetadata: FormMetadata = {
   },
   'property.furnished': {
     label: 'Furnishing',
-    widget: 'select',
-    options: [
-      { value: 'unfurnished', label: 'Unfurnished' },
-      { value: 'semi_furnished', label: 'Semi-furnished' },
-      { value: 'fully_furnished', label: 'Fully furnished' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'rent_furnishing',
   },
   'property.inventory': {
     label: 'Inventory of fittings/fixtures',
@@ -171,29 +149,33 @@ export const rentAgreementFormMetadata: FormMetadata = {
   // Utilities
   'utilities.electricityPaidBy': {
     label: 'Electricity',
-    widget: 'select',
-    options: PAID_BY,
+    widget: 'lookup',
+    lookupKey: 'paid_by',
   },
-  'utilities.waterPaidBy': { label: 'Water', widget: 'select', options: PAID_BY },
+  'utilities.waterPaidBy': {
+    label: 'Water',
+    widget: 'lookup',
+    lookupKey: 'paid_by',
+  },
   'utilities.maintenancePaidBy': {
     label: 'Maintenance',
-    widget: 'select',
-    options: PAID_BY,
+    widget: 'lookup',
+    lookupKey: 'paid_by',
   },
   'utilities.internetPaidBy': {
     label: 'Internet',
-    widget: 'select',
-    options: PAID_BY,
+    widget: 'lookup',
+    lookupKey: 'paid_by',
   },
   'utilities.societyChargesPaidBy': {
     label: 'Society charges',
-    widget: 'select',
-    options: PAID_BY,
+    widget: 'lookup',
+    lookupKey: 'paid_by',
   },
   'utilities.propertyTaxPaidBy': {
     label: 'Property tax',
-    widget: 'select',
-    options: PAID_BY,
+    widget: 'lookup',
+    lookupKey: 'paid_by',
   },
 
   // Rules

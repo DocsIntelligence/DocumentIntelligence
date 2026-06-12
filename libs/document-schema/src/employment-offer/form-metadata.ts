@@ -26,13 +26,8 @@ export const employmentOfferFormMetadata: FormMetadata = {
   'role.location': { label: 'Work location' },
   'role.employmentType': {
     label: 'Employment type',
-    widget: 'select',
-    options: [
-      { value: 'full_time', label: 'Full-time' },
-      { value: 'part_time', label: 'Part-time' },
-      { value: 'contract', label: 'Contract' },
-      { value: 'internship', label: 'Internship' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'employment_type',
   },
   'role.startDate': { label: 'Start date', widget: 'date' },
   'role.probationMonths': { label: 'Probation (months)', widget: 'number' },
@@ -40,15 +35,8 @@ export const employmentOfferFormMetadata: FormMetadata = {
   // Compensation
   'compensation.currency': {
     label: 'Currency',
-    widget: 'select',
-    options: [
-      { value: 'INR', label: '₹ INR' },
-      { value: 'USD', label: '$ USD' },
-      { value: 'EUR', label: '€ EUR' },
-      { value: 'GBP', label: '£ GBP' },
-      { value: 'AED', label: 'AED' },
-      { value: 'SGD', label: 'S$ SGD' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'currency',
   },
   'compensation.annualCtc': {
     label: 'Total annual compensation / CTC',
@@ -56,11 +44,8 @@ export const employmentOfferFormMetadata: FormMetadata = {
   },
   'compensation.payFrequency': {
     label: 'Paid',
-    widget: 'select',
-    options: [
-      { value: 'monthly', label: 'Monthly' },
-      { value: 'annual', label: 'Annually' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'pay_frequency',
   },
   'compensation.breakup': {
     label: 'Compensation break-up (optional)',

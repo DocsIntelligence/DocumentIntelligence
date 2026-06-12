@@ -1,10 +1,4 @@
-import type { FieldOption, FormMetadata } from '../types';
-
-const PARENT_RELATION: FieldOption[] = [
-  { value: 'S/o', label: 'Son of (S/o)' },
-  { value: 'D/o', label: 'Daughter of (D/o)' },
-  { value: 'W/o', label: 'Wife of (W/o)' },
-];
+import type { FormMetadata } from '../types';
 
 export const rtiFormMetadata: FormMetadata = {
   place: { label: 'Place', placeholder: 'New Delhi' },
@@ -14,8 +8,8 @@ export const rtiFormMetadata: FormMetadata = {
   'applicant.name': { label: 'Applicant — full name' },
   'applicant.parentRelation': {
     label: 'Relation',
-    widget: 'select',
-    options: PARENT_RELATION,
+    widget: 'lookup',
+    lookupKey: 'party_relation',
   },
   'applicant.parentName': { label: "Father/Husband/Mother's name" },
   'applicant.address': { label: 'Address for reply', widget: 'address' },
@@ -60,13 +54,8 @@ export const rtiFormMetadata: FormMetadata = {
   'request.periodTo': { label: 'Period to', widget: 'date' },
   'request.preferredFormat': {
     label: 'Preferred format',
-    widget: 'select',
-    options: [
-      { value: 'certified_copies', label: 'Certified copies' },
-      { value: 'inspection', label: 'Inspection of records' },
-      { value: 'soft_copy', label: 'Soft copy (CD / email)' },
-      { value: 'sample', label: 'Samples of material' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'rti_info_format',
   },
   'request.lifeOrLiberty': {
     label: 'Concerns life or liberty?',
@@ -78,14 +67,8 @@ export const rtiFormMetadata: FormMetadata = {
   'fee.amount': { label: 'Application fee (₹)', widget: 'currency' },
   'fee.mode': {
     label: 'Fee mode',
-    widget: 'select',
-    options: [
-      { value: 'ipo', label: 'Indian Postal Order' },
-      { value: 'dd', label: 'Demand Draft' },
-      { value: 'court_fee_stamp', label: 'Court-fee stamp' },
-      { value: 'cash', label: 'Cash' },
-      { value: 'online', label: 'Online payment' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'rti_fee_mode',
   },
   'fee.paid': { label: 'Fee enclosed/paid' },
 };

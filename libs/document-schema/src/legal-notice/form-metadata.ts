@@ -3,26 +3,15 @@ import type { FormMetadata } from '../types';
 export const legalNoticeFormMetadata: FormMetadata = {
   noticeType: {
     label: 'Notice type',
-    widget: 'select',
+    widget: 'lookup',
+    lookupKey: 'notice_type',
     helperText:
       'Drives the statutory framing (e.g. cheque bounce → NI Act §138).',
-    options: [
-      { value: 'cheque_bounce', label: 'Cheque bounce (NI Act §138)' },
-      { value: 'consumer', label: 'Consumer (CPA 2019)' },
-      { value: 'civil_recovery', label: 'Civil recovery of money' },
-      { value: 'employment', label: 'Employment' },
-      { value: 'general', label: 'General' },
-    ],
   },
   deliveryMode: {
     label: 'Mode of service',
-    widget: 'select',
-    options: [
-      { value: 'registered_post_ad', label: 'Registered post (A/D)' },
-      { value: 'email', label: 'Email' },
-      { value: 'courier', label: 'Courier' },
-      { value: 'hand', label: 'By hand' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'notice_delivery_mode',
   },
   throughAdvocate: {
     label: 'Issued through an advocate?',

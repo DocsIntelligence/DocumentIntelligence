@@ -247,6 +247,29 @@ export const documentTypes: DocumentTypeSeed[] = [
     ],
   },
   {
+    key: 'invoice',
+    name: 'Invoice',
+    category: 'business',
+    description:
+      'Full tax invoice — line items, per-item GST (CGST/SGST/IGST) or single tax or none, inclusive/exclusive pricing, discounts, multi-currency, computed totals and amount in words.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'receipt',
+    sortOrder: 90,
+    schemaShape: {
+      sections: ['invoice', 'seller', 'buyer', 'items', 'summary', 'payment', 'notes'],
+    },
+    templates: [
+      {
+        key: 'invoice-standard',
+        name: 'Standard Invoice',
+        componentKey: 'invoice.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
     key: 'freeform',
     name: 'Freeform / AI Draft',
     category: 'general',

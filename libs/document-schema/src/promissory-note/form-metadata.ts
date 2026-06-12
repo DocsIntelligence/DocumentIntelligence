@@ -1,12 +1,5 @@
 import type { FormMetadata } from '../types';
 
-const RELATION_OPTIONS = [
-  { value: 'S/o', label: 'S/o (son of)' },
-  { value: 'D/o', label: 'D/o (daughter of)' },
-  { value: 'W/o', label: 'W/o (wife of)' },
-  { value: 'C/o', label: 'C/o (care of)' },
-];
-
 const partyFields = (
   prefix: 'maker' | 'payee',
   who: string,
@@ -14,8 +7,8 @@ const partyFields = (
   [`${prefix}.name`]: { label: `${who} — name`, placeholder: 'Full name' },
   [`${prefix}.parentRelation`]: {
     label: `${who} — relation`,
-    widget: 'select',
-    options: RELATION_OPTIONS,
+    widget: 'lookup',
+    lookupKey: 'party_relation',
   },
   [`${prefix}.parentName`]: {
     label: `${who} — father/husband's name`,
@@ -38,11 +31,8 @@ export const promissoryNoteFormMetadata: FormMetadata = {
   },
   'note.payableOn': {
     label: 'Payable',
-    widget: 'select',
-    options: [
-      { value: 'demand', label: 'On demand' },
-      { value: 'fixed_date', label: 'On a fixed date' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'payable_on',
   },
   'note.dueDate': {
     label: 'Due date',

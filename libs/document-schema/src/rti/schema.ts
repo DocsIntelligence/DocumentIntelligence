@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 export const RtiApplicantSchema = z.object({
   name: z.string().min(1).max(200),
-  parentRelation: z.enum(['S/o', 'D/o', 'W/o']).optional(),
+  parentRelation: z.enum(['S/o', 'D/o', 'W/o', 'C/o']).optional(),
   parentName: z.string().max(200).optional(),
   address: z.string().min(1).max(500),
   phone: z

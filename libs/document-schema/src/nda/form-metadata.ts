@@ -1,23 +1,11 @@
 import type { FormMetadata } from '../types';
 
-const ENTITY_OPTIONS = [
-  { value: 'individual', label: 'Individual' },
-  { value: 'company', label: 'Company' },
-  { value: 'llp', label: 'LLP' },
-  { value: 'partnership', label: 'Partnership firm' },
-  { value: 'proprietorship', label: 'Sole proprietorship' },
-  { value: 'huf', label: 'HUF' },
-  { value: 'trust', label: 'Trust' },
-  { value: 'society', label: 'Society' },
-  { value: 'other', label: 'Other' },
-];
-
 const partyFields = (prefix: 'partyA' | 'partyB', who: string): FormMetadata => ({
   [`${prefix}.name`]: { label: `${who} — name`, placeholder: 'Full legal name' },
   [`${prefix}.entityType`]: {
     label: `${who} — type`,
-    widget: 'select',
-    options: ENTITY_OPTIONS,
+    widget: 'lookup',
+    lookupKey: 'entity_type',
   },
   [`${prefix}.address`]: { label: `${who} — address`, widget: 'textarea' },
   [`${prefix}.repName`]: {
@@ -95,11 +83,8 @@ export const ndaFormMetadata: FormMetadata = {
   },
   'governing.disputeResolution': {
     label: 'Dispute resolution',
-    widget: 'select',
-    options: [
-      { value: 'courts', label: 'Courts' },
-      { value: 'arbitration', label: 'Arbitration' },
-    ],
+    widget: 'lookup',
+    lookupKey: 'dispute_resolution',
   },
   'governing.arbitrationSeat': {
     label: 'Arbitration seat',

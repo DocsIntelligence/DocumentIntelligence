@@ -3,6 +3,7 @@ import { cn } from '@org/utils';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
+import { LookupManager } from '../lookups/LookupManager';
 import { PipelineManager } from './PipelineManager';
 import { SchemaManager } from './SchemaManager';
 
@@ -38,6 +39,9 @@ function ConfigShell({ children }: { children: ReactNode }) {
         </SubNavLink>
         <SubNavLink to="/admin/intelligence/pipelines">
           {t('adminIntel.tabs.pipelines', 'Pipelines')}
+        </SubNavLink>
+        <SubNavLink to="/admin/intelligence/lookups">
+          {t('adminIntel.tabs.lookups', 'Lookups')}
         </SubNavLink>
       </div>
 
@@ -76,6 +80,14 @@ export function PipelinesPage() {
   return (
     <ConfigShell>
       <PipelineManager />
+    </ConfigShell>
+  );
+}
+
+export function LookupsPage() {
+  return (
+    <ConfigShell>
+      <LookupManager />
     </ConfigShell>
   );
 }

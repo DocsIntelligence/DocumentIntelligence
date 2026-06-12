@@ -8,6 +8,7 @@ import { NdaStandard } from './nda/standard';
 import { PromissoryNoteStandard } from './promissory-note/standard';
 import { EmploymentOfferStandard } from './employment-offer/standard';
 import { PowerOfAttorneyStandard } from './power-of-attorney/standard';
+import { InvoiceStandard } from './invoice/standard';
 import { FreeformDocument } from './freeform';
 
 /**
@@ -49,6 +50,8 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   // Power of attorney (general/special; not eSignable, IT Act Schedule 1).
   'power-of-attorney.standard':
     PowerOfAttorneyStandard as TemplateComponent<unknown>,
+  // Tax invoice (GST/single/none, multi-currency, computed totals).
+  'invoice.standard': InvoiceStandard as TemplateComponent<unknown>,
   // Freeform / AI-drafted documents — editor HTML rendered to pages.
   freeform: FreeformDocument as TemplateComponent<unknown>,
 };

@@ -23,7 +23,7 @@ import { z } from 'zod';
 
 export const AffidavitDeponentSchema = z.object({
   name: z.string().min(1).max(200),
-  parentRelation: z.enum(['S/o', 'D/o', 'W/o']).optional(),
+  parentRelation: z.enum(['S/o', 'D/o', 'W/o', 'C/o']).optional(),
   parentName: z.string().max(200).optional(),
   age: z.coerce.number().int().min(1).max(120).optional(),
   occupation: z.string().max(200).optional(),

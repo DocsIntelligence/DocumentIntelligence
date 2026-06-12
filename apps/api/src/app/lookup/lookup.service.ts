@@ -52,6 +52,27 @@ export class LookupService {
     return this.db.lookupGroup.create({ data });
   }
 
+  /** Admin: update a group's properties */
+  async updateGroup(
+    id: string,
+    data: { name?: string; description?: string; isPublic?: boolean },
+  ) {
+    const exists = await this.db.lookupGroup.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Lookup group not found');
+    return this.db.lookupGroup.update({ where: { id }, data });
+  }
+
+  /** Admin: delete a group and all its values */
+  async deleteGroup(id: string) {
+    const exists = await this.db.lookupGroup.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Lookup group not found');
+    await this.db.$transaction([
+      this.db.lookupValue.deleteMany({ where: { groupId: id } }),
+      this.db.lookupGroup.delete({ where: { id } }),
+    ]);
+    return { message: 'Group deleted' };
+  }
+
   /** Admin: add a value to a group */
   async addValue(
     groupId: string,

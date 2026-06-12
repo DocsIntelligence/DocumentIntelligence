@@ -821,3 +821,145 @@ category-filter chips (derived from the catalog) with an empty state. Uses `@org
 - ⚠️ The 4 new structured types appear in the Templates catalog only after a DB RE-SEED
   (`/documents/catalog` reads DB rows from `tools/prisma/seed-data/document-types.ts`). Run the
   project's prisma seed + restart API. Freeform presets need only an API restart (static import).
+
+---
+
+## 2026-06-12 (next phase) — Schedule-1 signing gate + NDA convert→structured
+
+Closing roadmap gaps. (Note: server-side citation validation was already wired — legal-ai
+generate/revise scan the AI HTML via `citationWarnings` and return them; the docs/08 "asserted
+not enforced" line is now stale. Left as-is; it's enforced.)
+
+**Schedule-1 eSign hard-gate (`apps/api/.../signers/signers.service.ts`):** `assertAccess` now
+includes `documentType`; new `assertESignAllowed()` throws `ForbiddenException(SCHEDULE_1_NOTE)`
+when `isESignExcluded(doc.documentType?.key)`. Gated in `add()` (adding signers) and `sign()`
+(recording a signature). So wills, PoAs, trusts, promissory notes and immovable-property
+conveyances can't be e-signed in-app (IT Act 2000 Schedule 1) — must be wet-signed. Read paths
+(list) remain open.
+
+**NDA extraction → structured convert (`libs/doc-intelligence/src/schemas/nda.ts`):** registered
+`ndaExtractionSchema` (key `nda`, `documentTypeKey: 'nda'`, the 20 camelCase fields) + `ndaFieldMap`
+mapping the clean scalars (effectiveDate→agreement.effectiveDate, purposeOfDisclosure→
+agreement.purpose, disclosing/receivingParty[Address]→partyA/partyB.name/address, governingLaw→
+governing.state). Prose clause fields (definition/obligations/remedies/etc.) and free-text
+enum-ish fields (ndaType/disputeResolution) are intentionally UNMAPPED — the structured `nda`
+template authors that clause language. Imported in doc-intelligence index for side-effect
+registration. Removed the duplicate read-only `nda` from `tools/prisma/seed-data/extraction-types.ts`
+(the catalog loop runs after the registry loop and would have reset documentTypeKey→null,
+defeating the routing). Result: a reviewed NDA now converts via the structured path
+(documentTypeKey + fieldMap + template) into a real templated NDA, not a freeform dump.
+
+- Verified: @org/api build ✓, lint ✓ (0 errors, 6 pre-existing warnings); @org/doc-intelligence
+  lint ✓. NOT browser/runtime-verified.
+- ⚠️ Needs a DB RE-SEED for the NDA routing (extractionSchemaDef `nda` must carry documentTypeKey
+  'nda' + the fieldMapDef) and an API restart for the signing gate.
+
+---
+
+## 2026-06-12 (next phase) — Invoice doc type + DB-lookup migration of all option-sets
+
+**Invoice (full structured `DocumentTypeBundle`, key `invoice`):** schema (line items, GST/single/
+none tax, inclusive/exclusive pricing, per-line + invoice-level discount, shipping, round-off,
+amount-paid, multi-currency, seller/buyer with GSTIN/PAN/state, payment + notes) + form-metadata +
+prompts (terms assist) + risks (GSTIN presence/format, place-of-supply inter-state, due<date,
+reverse-charge, etc.) + index + a COMPUTING page-faithful template. The template derives every total
+from the items so they can't drift: per-line taxable/tax (incl/excl), proportional invoice-level
+discount, intra-state CGST+SGST vs inter-state IGST (seller state vs place-of-supply/buyer state),
+round-off, balance due, a rate-wise GST tax-summary table, and amount-in-words (INR). Registered in
+document-schema index + _registry + seed (sortOrder 90).
+
+**LookupGroup/LookupValue migration (user request):** moved EVERY hardcoded `select` option-set in the
+doc-type forms to DB lookups (the `lookup` widget + `lookupKey` were already fully wired:
+GET /lookups → useLookupOptions() → BuilderForm resolves). 
+- Seed (`tools/prisma/seed-data/lookups.ts`): FIXED `currency` to uppercase ISO codes (was lowercased
+  by `toValues`) + added AED/SGD, built literally. Added 18 groups: party_relation (literal, S/o…C/o),
+  paid_by, entity_type, employment_type, pay_frequency, dispute_resolution, invoice_tax_mode,
+  rent_property_type, rent_furnishing, affidavit_id_type, affidavit_attestation, notice_type,
+  notice_delivery_mode, poa_type, duration_type, payable_on, rti_info_format, rti_fee_mode. All values
+  EXACTLY match the Zod enums.
+- Forms: replaced `widget:'select', options:[…]` with `widget:'lookup', lookupKey:'…'` across invoice,
+  nda, legal-notice, affidavit, employment-offer, promissory-note, power-of-attorney, rent-agreement,
+  rti — removed all inline option arrays + the PARENT_RELATION/PAID_BY/ENTITY_OPTIONS/RELATION_OPTIONS/
+  CURRENCY_OPTIONS consts + now-unused FieldOption imports. No `widget:'select'` remains in doc-schema.
+- Widened the 3-value `parentRelation` enums (rent/affidavit/rti) to include 'C/o' so the shared
+  `party_relation` lookup (4 values) is valid everywhere.
+- Verified: @org/app typecheck ✓, @org/api build ✓, lint 0 errors. NOT runtime-verified.
+- ⚠️ Needs DB RE-SEED (lookups + doc types). NOTE: lookup seeding is add-only — if a dev DB already
+  has the OLD lowercase `currency` values, clear that group first or it will contain both cases.
+
+---
+
+## 2026-06-12 — Admin Lookup management UI
+
+Full CRUD UI for the DB-backed lookups that drive form dropdowns.
+- **API (`apps/api/.../lookup`)**: added the missing admin endpoints (inline body types, RolesGuard
+  admin, matching existing style): `GET /lookups/admin` (all groups incl. non-public + inactive
+  values; declared BEFORE `:key` so the literal wins), `PATCH /lookups/:groupId` (update group),
+  `DELETE /lookups/:groupId` (deletes the group + its values in a transaction). Service gained
+  `updateGroup`/`deleteGroup`. (create-group, add/update/delete-value already existed.)
+- **api-client (`lookups.service.ts`)**: added `isPublic` to `LookupGroup`; new payload types
+  (Create/UpdateLookupGroupPayload, Add/UpdateLookupValuePayload) and admin methods getAllAdmin,
+  createGroup, updateGroup, deleteGroup, addValue, updateValue, deleteValue.
+- **Frontend (`apps/app/.../admin/lookups`)**: `queries.ts` (useAdminLookups + create/update/delete
+  group + add/update/delete value mutations; each invalidates the admin list AND the public
+  ['lookups'] cache the builder uses). `LookupManager.tsx`: groups DataTable (name/key/value-count/
+  visibility + manage/delete), RHF+zod create-group form (with applyServerFieldErrors), and a
+  per-group editor — editable meta (name/description/isPublic) + a values table with inline
+  label/value/order edit (save on blur), enable/disable toggle, delete, and an add-value row.
+- **Wiring**: added a third "Lookups" tab to the Document-Intelligence `ConfigShell`
+  (`LookupsPage`), route `/admin/intelligence/lookups` in app.tsx, and a sidebar NavItem (+ListIcon).
+- Verified: @org/api build ✓, @org/app typecheck ✓, lint 0 errors across app/api/api-client. NOT
+  runtime-verified. (Admin endpoints are role-gated server-side; the admin section is currently
+  open to any authed user on the client, same as the other intelligence-config pages.)
+
+---
+
+## 2026-06-12 — Fix: API not hot-restarting in `pnpm dev`
+
+Root cause: `apps/api` `serve` used `@nx/js:node`, which only restarts Node when its
+**buildTarget runs in watch mode** — but `build` is a one-shot `nx:run-commands` `webpack-cli build`
+(no watch). So `pnpm dev` built the API once, ran it, and never rebuilt on source edits.
+(Also: `NxAppWebpackPlugin` requires Nx task env vars — it only loads when run THROUGH nx, not via a
+bare `webpack-cli` call.)
+
+Fix:
+- `serve` → `nx:run-commands`, `parallel`, two long-running commands:
+  `NX_TASK_TARGET_TARGET=build webpack-cli build --node-env=development --watch` (rebuilds the bundle
+  on change) + `node --watch --enable-source-maps ../../dist/apps/api/main.js` (restarts Node when the
+  bundle changes). `dependsOn: ["build"]` seeds an initial `main.js` so `node --watch` doesn't start
+  before the file exists. The explicit `NX_TASK_TARGET_TARGET=build` makes the plugin resolve the
+  build target (the serve task would otherwise set it to `serve`).
+- `webpack.config.js`: `output.clean` is now `process.env.NODE_ENV === 'production'` only — so dev
+  `--watch` rebuilds overwrite `main.js` in place rather than wiping the dir (which would make
+  `node --watch` see the file vanish mid-rebuild). Prod build still cleans.
+- Verified: `nx run @org/api:build:development` ✓; `nx run @org/api:serve` boots — webpack dev watch
+  compiles, type-check passes, Nest app starts; webpack + node watchers run in parallel.
+
+---
+
+## 2026-06-12 — API hot-reload: canonical fix (supersedes the run-commands one above)
+
+The earlier run-commands `serve` workaround was reverted in favour of the standard Nx setup (matching
+another project's `server` target). Root cause restated: `@nx/js:node` serve only hot-restarts when
+its `buildTarget` runs in WATCH mode, which it can only do for a watch-capable build executor. The
+`build` target was `nx:run-commands` (`webpack-cli build`, one-shot) → not watchable → no restart.
+
+Fix:
+- `apps/api` `build` → `@nx/webpack:webpack` executor (target node, compiler tsc, outputPath
+  dist/apps/api, main/tsConfig/assets/webpackConfig, optimization:false, outputHashing:none,
+  generatePackageJson:false, sourceMap:true; `development` config sets skipTypeChecking).
+- `apps/api/webpack.config.js` → `composePlugins(withNx(), cfg => …)` form (the executor applies the
+  Node build from project.json options; replaces the standalone `NxAppWebpackPlugin` object).
+- `serve` left as `@nx/js:node` + `buildTarget @org/api:build:development` — now watch-capable, so it
+  rebuilds + restarts on source edits with no further change.
+- Verified: `nx build @org/api` (prod) ✓ main.js emitted; `nx run @org/api:serve` boots, and touching
+  a source file triggers a webpack recompile + Nest restart (observed live).
+
+## 2026-06-13 — Fix: lookup admin endpoints 403
+
+`GET /api/lookups/admin` (and the lookup write endpoints) used `@UseGuards(RolesGuard) @Roles('admin')`,
+but users default to role `user`, so the Lookups admin UI got 403. The rest of the admin config UI
+(Document types / Pipelines via `IntelligenceAdminController`) is intentionally open to any
+AUTHENTICATED user (role-gate removed for now). Aligned `LookupController` to the same policy: class-
+level `@UseGuards(JwtAuthGuard)`, removed per-method `RolesGuard`/`@Roles('admin')` (public GET / and
+GET :key unchanged). Role system intact — re-add RolesGuard/@Roles to lock down. Build ✓.

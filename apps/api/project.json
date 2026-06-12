@@ -6,16 +6,27 @@
   "tags": [],
   "targets": {
     "build": {
-      "executor": "nx:run-commands",
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
       "options": {
-        "command": "webpack-cli build",
-        "args": ["--node-env=production"],
-        "cwd": "apps/api"
+        "target": "node",
+        "compiler": "tsc",
+        "outputPath": "dist/apps/api",
+        "main": "apps/api/src/main.ts",
+        "tsConfig": "apps/api/tsconfig.app.json",
+        "assets": ["apps/api/src/assets"],
+        "webpackConfig": "apps/api/webpack.config.js",
+        "optimization": false,
+        "outputHashing": "none",
+        "generatePackageJson": false,
+        "sourceMap": true
       },
       "configurations": {
         "development": {
-          "args": ["--node-env=development"]
-        }
+          "skipTypeChecking": true
+        },
+        "production": {}
       }
     },
     "prune-lockfile": {
