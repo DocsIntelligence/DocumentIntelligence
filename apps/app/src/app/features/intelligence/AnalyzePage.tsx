@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useExtraction, useIntelligenceJob } from './queries';
 import { DocumentInsights } from './DocumentInsights';
 import { ReviewExtraction } from './ReviewExtraction';
+import { ViewOriginalButton } from './ViewOriginalButton';
 
 const STAGE_LABELS: Record<string, string> = {
   uploaded: 'Queued',
@@ -104,11 +105,14 @@ export function AnalyzePage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           {t('intelligence.analyze.reviewTitle', 'Review extraction')}
         </h1>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/analyze">
-            {t('intelligence.analyze.newUpload', 'Analyze another')}
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <ViewOriginalButton sourceId={sourceId as string} />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/analyze">
+              {t('intelligence.analyze.newUpload', 'Analyze another')}
+            </Link>
+          </Button>
+        </div>
       </div>
       <ReviewExtraction
         key={extraction.id}

@@ -1,6 +1,13 @@
 import { cn } from '@org/utils';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { Input } from './input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './select';
 
 export interface DataTableColumn<T> {
   /** Stable id; also the sort key. */
@@ -16,6 +23,34 @@ export interface DataTableColumn<T> {
   width?: string;
 }
 
+export interface DataTableSort {
+  key: string;
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * Opt-in server-driven mode. When provided, the table does NOT filter/sort/
+ * paginate internally — it renders `data` as given (the current page) and
+ * delegates page/sort/search changes to these callbacks. Use for unbounded,
+ * user-owned lists (documents, batches). Omit for small, fully-loaded lists.
+ */
+export interface DataTableServer {
+  /** 0-based current page index. */
+  page: number;
+  pageCount: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  sort?: DataTableSort | null;
+  onSortChange?: (sort: DataTableSort | null) => void;
+  query?: string;
+  onQueryChange?: (query: string) => void;
+  /** Current page size (for the page-size selector). */
+  pageSize?: number;
+  onPageSizeChange?: (pageSize: number) => void;
+  /** Dim the rows while the next page is being fetched. */
+  loading?: boolean;
+}
+
 export interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
@@ -28,15 +63,26 @@ export interface DataTableProps<T> {
   /** Return expanded content to make rows expandable (adds a chevron column). */
   renderExpanded?: (row: T) => ReactNode;
   pageSize?: number;
-  initialSort?: { key: string; dir: 'asc' | 'desc' };
+  /** Show a "Rows" page-size dropdown with these options (e.g. [10,50,100,200]). */
+  pageSizeOptions?: number[];
+  initialSort?: DataTableSort;
   empty?: ReactNode;
   className?: string;
+  /**
+   * Provide to switch to server-driven paging/sort/search (see DataTableServer).
+   * When set, internal filtering/sorting/slicing is bypassed and `data` is
+   * treated as the already-fetched current page.
+   */
+  server?: DataTableServer;
 }
 
 /**
- * A compact, dependency-free admin data table: search, sortable columns,
- * always-on pagination, optional expandable rows, and a toolbar slot for
- * filters. Client-side over the rows it's given (admin lists are small).
+ * A compact, dependency-free data table: search, sortable columns, always-on
+ * pagination, optional expandable rows, and a toolbar slot for filters.
+ *
+ * Default: client-side over the rows it's given (small, fully-loaded lists).
+ * Pass `server` to delegate paging/sort/search to the backend for unbounded,
+ * user-owned lists (documents, batches).
  */
 export function DataTable<T>({
   data,
@@ -47,25 +93,44 @@ export function DataTable<T>({
   toolbar,
   renderExpanded,
   pageSize = 10,
+  pageSizeOptions,
   initialSort,
   empty,
   className,
+  server,
 }: DataTableProps<T>) {
+  const serverMode = !!server;
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
-    initialSort ?? null,
-  );
+  const [sort, setSort] = useState<DataTableSort | null>(initialSort ?? null);
   const [page, setPage] = useState(0);
+  const [localPageSize, setLocalPageSize] = useState(pageSize);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  // Effective page size: server-controlled in server mode, local otherwise.
+  const effectivePageSize = serverMode
+    ? server.pageSize ?? pageSize
+    : localPageSize;
+  const changePageSize = (n: number) => {
+    if (serverMode) server.onPageSizeChange?.(n);
+    else {
+      setLocalPageSize(n);
+      setPage(0);
+    }
+  };
+
+  // Active query/sort come from the server props in server mode, else local.
+  const activeQuery = serverMode ? server.query ?? '' : query;
+  const activeSort = serverMode ? server.sort ?? null : sort;
+
   const filtered = useMemo(() => {
+    if (serverMode) return data;
     const q = query.trim().toLowerCase();
     if (!q || !search) return data;
     return data.filter((r) => search(r).toLowerCase().includes(q));
-  }, [data, query, search]);
+  }, [serverMode, data, query, search]);
 
   const sorted = useMemo(() => {
-    if (!sort) return filtered;
+    if (serverMode || !sort) return filtered;
     const col = columns.find((c) => c.key === sort.key);
     if (!col?.sortValue) return filtered;
     const dir = sort.dir === 'asc' ? 1 : -1;
@@ -76,20 +141,35 @@ export function DataTable<T>({
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [filtered, sort, columns]);
+  }, [serverMode, filtered, sort, columns]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const current = Math.min(page, pageCount - 1);
-  const start = current * pageSize;
-  const rows = sorted.slice(start, start + pageSize);
+  // Page math: trust the server's counts in server mode, else derive locally.
+  const pageCount = serverMode
+    ? Math.max(1, server.pageCount)
+    : Math.max(1, Math.ceil(sorted.length / effectivePageSize));
+  const current = serverMode
+    ? Math.min(server.page, pageCount - 1)
+    : Math.min(page, pageCount - 1);
+  const total = serverMode ? server.total : sorted.length;
+  const start = current * effectivePageSize;
+  const rows = serverMode
+    ? data
+    : sorted.slice(start, start + effectivePageSize);
   const colSpan = columns.length + (renderExpanded ? 1 : 0);
 
-  const toggleSort = (key: string) =>
-    setSort((s) =>
-      s?.key === key
-        ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: 'asc' },
-    );
+  const goToPage = (p: number) => {
+    if (serverMode) server.onPageChange(p);
+    else setPage(p);
+  };
+
+  const toggleSort = (key: string) => {
+    const next: DataTableSort =
+      activeSort?.key === key
+        ? { key, dir: activeSort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+    if (serverMode) server.onSortChange?.(next);
+    else setSort(next);
+  };
   const toggleRow = (k: string) =>
     setExpanded((s) => {
       const next = new Set(s);
@@ -104,10 +184,14 @@ export function DataTable<T>({
         <div className="flex flex-wrap items-center gap-2">
           {search && (
             <Input
-              value={query}
+              value={activeQuery}
               onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(0);
+                if (serverMode) {
+                  server.onQueryChange?.(e.target.value);
+                } else {
+                  setQuery(e.target.value);
+                  setPage(0);
+                }
               }}
               placeholder={searchPlaceholder}
               className="h-9 w-full sm:w-64"
@@ -136,15 +220,20 @@ export function DataTable<T>({
                 >
                   <span className="inline-flex items-center gap-1">
                     {c.header}
-                    {c.sortValue && sort?.key === c.key && (
-                      <Chevron dir={sort.dir === 'asc' ? 'up' : 'down'} />
+                    {c.sortValue && activeSort?.key === c.key && (
+                      <Chevron dir={activeSort.dir === 'asc' ? 'up' : 'down'} />
                     )}
                   </span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/60">
+          <tbody
+            className={cn(
+              'divide-y divide-border/60',
+              server?.loading && 'opacity-50 transition-opacity',
+            )}
+          >
             {rows.map((row) => {
               const k = rowKey(row);
               const isOpen = expanded.has(k);
@@ -200,16 +289,37 @@ export function DataTable<T>({
           </tbody>
         </table>
 
-        {sorted.length > 0 && (
+        {total > 0 && (
           <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-foreground/55">
-            <span className="tabular-nums">
-              {start + 1}–{Math.min(start + pageSize, sorted.length)} of{' '}
-              {sorted.length}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="tabular-nums">
+                {start + 1}–{start + rows.length} of {total}
+              </span>
+              {pageSizeOptions && pageSizeOptions.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <span>Rows</span>
+                  <Select
+                    value={String(effectivePageSize)}
+                    onValueChange={(v) => changePageSize(Number(v))}
+                  >
+                    <SelectTrigger className="h-7 w-[4.5rem] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pageSizeOptions.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <PagerButton
-                disabled={current === 0}
-                onClick={() => setPage(current - 1)}
+                disabled={current === 0 || !!server?.loading}
+                onClick={() => goToPage(current - 1)}
               >
                 Prev
               </PagerButton>
@@ -217,8 +327,8 @@ export function DataTable<T>({
                 {current + 1} / {pageCount}
               </span>
               <PagerButton
-                disabled={current >= pageCount - 1}
-                onClick={() => setPage(current + 1)}
+                disabled={current >= pageCount - 1 || !!server?.loading}
+                onClick={() => goToPage(current + 1)}
               >
                 Next
               </PagerButton>

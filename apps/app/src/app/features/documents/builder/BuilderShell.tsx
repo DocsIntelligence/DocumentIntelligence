@@ -22,6 +22,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
 import { PageSizeSelect } from '../../../lib/page-sizes';
+import { ViewOriginalButton } from '../../intelligence/ViewOriginalButton';
 import { CommentsDialog } from '../CommentsDialog';
 import { ShareDialog } from '../ShareDialog';
 import { SignaturesDialog } from '../SignaturesDialog';
@@ -500,6 +501,19 @@ export function BuilderShell({ documentId }: Props) {
           >
             {t('builder.detach', 'Edit as free-form')}
           </Button>
+
+          {(() => {
+            const sourceId = (
+              doc.data as { sourceDocumentId?: string } | undefined
+            )?.sourceDocumentId;
+            return sourceId ? (
+              <ViewOriginalButton
+                sourceId={sourceId}
+                size="sm"
+                variant="ghost"
+              />
+            ) : null;
+          })()}
 
           <span aria-hidden className="mx-1 h-5 w-px flex-none bg-border/70" />
 

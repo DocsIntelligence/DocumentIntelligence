@@ -4,9 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { BatchStatus, PipelineRunStatus } from '@prisma/client';
+import { BatchStatus, PipelineRunStatus, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
+import { bucketTotals, deriveBatchCounts, deriveBatchStatus } from './batch-status';
+import type { ListBatchesQueryDto } from './intelligence.dto';
 import {
   DEFAULT_PIPELINE_KEY,
   PipelineExecutorService,
@@ -94,14 +96,48 @@ export class BatchService {
     return { batchId: batch.id, runIds };
   }
 
-  async list(userId: string) {
-    const batches = await this.db.batch.findMany({
-      where: { ownerUserId: userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      include: { runs: { select: { status: true } } },
-    });
-    return batches.map((b) => this.withCounts(b));
+  async list(userId: string, query: ListBatchesQueryDto) {
+    const where: Prisma.BatchWhereInput = { ownerUserId: userId };
+    if (query.q) where.name = { contains: query.q, mode: 'insensitive' };
+    if (query.status) where.status = query.status as BatchStatus;
+
+    const dir = query.dir;
+    const orderBy: Prisma.BatchOrderByWithRelationInput =
+      query.sort === 'name'
+        ? { name: dir }
+        : query.sort === 'status'
+          ? { status: dir }
+          : { createdAt: dir };
+
+    // Page of batches + total count.
+    const [batches, total] = await this.db.$transaction([
+      this.db.batch.findMany({
+        where,
+        orderBy,
+        take: query.pageSize,
+        skip: query.page * query.pageSize,
+        include: { runs: { select: { status: true } } },
+      }),
+      this.db.batch.count({ where }),
+    ]);
+
+    // Workspace funnel totals — across ALL the user's runs, so the KPI tiles
+    // stay correct regardless of the current page or status filter.
+    const grouped = (await this.db.pipelineRun.groupBy({
+      by: ['status'],
+      where: { batch: { ownerUserId: userId } },
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    })) as unknown as {
+      status: PipelineRunStatus;
+      _count: { _all: number };
+    }[];
+
+    return {
+      items: batches.map((b) => this.withCounts(b)),
+      total,
+      totals: bucketTotals(grouped),
+    };
   }
 
   async get(userId: string, batchId: string) {
@@ -165,7 +201,7 @@ export class BatchService {
     };
   }
 
-  /** Derive live status counts from the batch's runs. */
+  /** Derive live status counts from the batch's runs (single-sourced). */
   private withCounts(batch: {
     id: string;
     name: string | null;
@@ -173,32 +209,17 @@ export class BatchService {
     createdAt: Date;
     runs: { status: PipelineRunStatus }[];
   }) {
-    const total = batch.runs.length;
-    const count = (s: PipelineRunStatus) =>
-      batch.runs.filter((r) => r.status === s).length;
-    const completed = count('completed') + count('approved');
-    const needsReview = count('needs_review');
-    const failed = count('failed') + count('rejected');
-    const archived = count('archived');
-    const running = total - completed - needsReview - failed - archived;
-    const status: BatchStatus =
-      running > 0
-        ? BatchStatus.running
-        : needsReview > 0
-          ? BatchStatus.needs_review
-          : failed === total && total > 0
-            ? BatchStatus.failed
-            : BatchStatus.completed;
+    const c = deriveBatchCounts(batch.runs);
     return {
       id: batch.id,
       name: batch.name,
-      status,
-      total,
-      completed,
-      needsReview,
-      failed,
-      archived,
-      running,
+      status: deriveBatchStatus(c),
+      total: c.total,
+      completed: c.completed,
+      needsReview: c.needsReview,
+      failed: c.failed,
+      archived: c.archived,
+      running: c.running,
       createdAt: batch.createdAt,
     };
   }

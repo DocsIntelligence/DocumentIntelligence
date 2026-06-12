@@ -1,9 +1,15 @@
 import type {
   EngineMode,
   IntelligenceJob,
+  ListBatchesQuery,
   SaveReviewPayload,
 } from '@org/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { toast } from 'sonner';
 import { useIntelligenceService } from '../documents/services-context';
@@ -16,6 +22,8 @@ export const intelligenceKeys = {
   analysis: (sourceId: string) =>
     ['intelligence', 'analysis', sourceId] as const,
   batches: ['intelligence', 'batches'] as const,
+  batchPage: (params: ListBatchesQuery) =>
+    ['intelligence', 'batches', params] as const,
   batch: (id: string) => ['intelligence', 'batch', id] as const,
   reviewQueue: ['intelligence', 'review-queue'] as const,
   pipelines: ['intelligence', 'pipelines'] as const,
@@ -125,12 +133,13 @@ export function usePipelineOptions() {
   });
 }
 
-export function useBatches() {
+export function useBatches(params: ListBatchesQuery = {}) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: intelligenceKeys.batches,
-    queryFn: () => svc.listBatches(),
+    queryKey: intelligenceKeys.batchPage(params),
+    queryFn: () => svc.listBatches(params),
     refetchInterval: 5000, // batches progress while runs process
+    placeholderData: keepPreviousData,
   });
 }
 

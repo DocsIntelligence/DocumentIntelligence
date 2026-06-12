@@ -86,6 +86,13 @@ export interface ExtractionResponse {
   extraction: ExtractionDetail | null;
 }
 
+/** Presigned URL to the original uploaded file + its metadata. */
+export interface OriginalFileUrl {
+  url: string;
+  filename: string;
+  contentType: string;
+}
+
 export interface SaveReviewPayload {
   fields: Record<string, unknown>;
   edits: { fieldPath: string; newValue: unknown }[];
@@ -115,6 +122,14 @@ export const createIntelligenceService = (http: HttpClient) => ({
   getExtraction: (sourceId: string) =>
     http
       .get<ExtractionResponse>(`/intelligence/sources/${sourceId}/extraction`)
+      .then((r) => r.data),
+
+  /** Presigned download URL for the original uploaded file. */
+  getOriginalUrl: (sourceId: string) =>
+    http
+      .get<OriginalFileUrl>(
+        `/intelligence/sources/${sourceId}/original-url`,
+      )
       .then((r) => r.data),
 
   /** Save reviewed/corrected values (records an edit audit trail server-side). */
@@ -200,8 +215,10 @@ export const createIntelligenceService = (http: HttpClient) => ({
       .then((r) => r.data);
   },
 
-  listBatches: () =>
-    http.get<BatchSummary[]>('/intelligence/batches').then((r) => r.data),
+  listBatches: (q?: ListBatchesQuery) =>
+    http
+      .get<BatchListResult>('/intelligence/batches', { params: q })
+      .then((r) => r.data),
 
   getBatch: (batchId: string) =>
     http
@@ -335,6 +352,28 @@ export interface BatchSummary {
   archived: number;
   running: number;
   createdAt: string;
+}
+/** Workspace funnel totals (KPI tiles) — across ALL the user's runs. */
+export interface BatchTotals {
+  running: number;
+  needsReview: number;
+  completed: number;
+  archived: number;
+  failed: number;
+}
+/** A page of batches + total count + workspace funnel totals. */
+export interface BatchListResult {
+  items: BatchSummary[];
+  total: number;
+  totals: BatchTotals;
+}
+export interface ListBatchesQuery {
+  q?: string;
+  status?: 'running' | 'needs_review' | 'completed' | 'failed';
+  page?: number;
+  pageSize?: number;
+  sort?: 'name' | 'status' | 'created';
+  dir?: 'asc' | 'desc';
 }
 export interface BatchRun {
   id: string;

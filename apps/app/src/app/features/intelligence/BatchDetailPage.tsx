@@ -284,7 +284,7 @@ export function BatchDetailPage() {
                   r.status === 'completed' ||
                   r.status === 'approved') && (
                   <Link
-                    to={`/analyze/${r.sourceDocumentId}`}
+                    to={`/review-queue?batch=${id}&doc=${r.sourceDocumentId}`}
                     className="text-sm text-primary hover:underline"
                   >
                     {t('intelligence.batches.open', 'Open')}

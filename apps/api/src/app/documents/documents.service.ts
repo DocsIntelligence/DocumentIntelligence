@@ -63,17 +63,40 @@ export class DocumentsService {
     if (query.documentTypeKey) {
       where.documentType = { key: query.documentTypeKey };
     }
+    if (query.q) {
+      where.title = { contains: query.q, mode: 'insensitive' };
+    }
 
-    return this.db.document.findMany({
-      where,
-      orderBy: { updatedAt: 'desc' },
-      take: query.limit,
-      ...(query.cursor && { skip: 1, cursor: { id: query.cursor } }),
-      include: {
-        documentType: { select: { key: true, name: true } },
-        template: { select: { key: true, name: true } },
-      },
-    });
+    const dir = query.dir;
+    const orderBy: Prisma.DocumentOrderByWithRelationInput =
+      query.sort === 'title'
+        ? { title: dir }
+        : query.sort === 'type'
+          ? { documentType: { name: dir } }
+          : query.sort === 'status'
+            ? { status: dir }
+            : query.sort === 'created'
+              ? { createdAt: dir }
+              : { updatedAt: dir };
+
+    // Offset pagination + total count, both over the same filter, so the
+    // client can render real page N / M and search/sort across the FULL set
+    // (not just a pre-fetched window).
+    const [items, total] = await this.db.$transaction([
+      this.db.document.findMany({
+        where,
+        orderBy,
+        take: query.pageSize,
+        skip: query.page * query.pageSize,
+        include: {
+          documentType: { select: { key: true, name: true } },
+          template: { select: { key: true, name: true } },
+        },
+      }),
+      this.db.document.count({ where }),
+    ]);
+
+    return { items, total };
   }
 
   async getById(userId: string, id: string) {

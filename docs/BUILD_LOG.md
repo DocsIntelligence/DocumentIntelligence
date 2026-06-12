@@ -1024,3 +1024,69 @@ Seed additions: 5 document types (sortOrder 96–99) + 1 lookup group (`credit_n
   @org/api build ✓, lint 0 errors on document-schema/document-templates/legal-reference/api/app
   (pre-existing warnings only). NOT runtime-verified. Needs DB re-seed for the 5 new types + the
   `credit_note_type` lookup.
+
+## 2026-06-13 — Server-side pagination (documents + batches), config layout, page-size dropdown
+
+User flagged that list tables paginate/sort/search CLIENT-side only (DataTable over a pre-fetched
+array) — a real bug at scale for the unbounded, per-user tables.
+
+- **DataTable** (`@org/ui`): added an opt-in `server` mode (`DataTableServer`: page/pageCount/total/
+  onPageChange + sort/onSortChange + query/onQueryChange + pageSize/onPageSizeChange + loading). When
+  set, internal filter/sort/slice is bypassed and `data` is the current page. Backward-compatible — the
+  3 config tables (schemas/pipelines/lookups) stay client-side (small, system-owned). Added a **page-size
+  dropdown** (`pageSizeOptions`) rendered in the footer via the @org/ui Select.
+- **Documents** (THE per-user growth table; server cursor pagination existed but was unused): rewrote
+  `documents.service.list` → offset pagination + `count`, title search (`q`), and sort
+  (title/type/status/updated/created) → returns `{ items, total }`. DTO/api-client updated. New
+  `useDocumentsPage` hook (keepPreviousData); `useDocumentList` kept (unwraps `.items`) for the dashboard
+  "Recent". `DocumentsList` now fully server-driven: page/sort/search + status (static enum) & type
+  (from catalog) facets all hit the server; default pageSize 50, options [10,25,50,100,200].
+- **Batches**: was hard-capped at `take:50` (silent truncation). Found `Batch.status` is written once
+  (`running`) and never updated — status is derived in `withCounts`. Per user's choice, **persisted real
+  status**: extracted `batch-status.ts` (`deriveBatchCounts`/`deriveBatchStatus`/`bucketTotals`), made
+  `withCounts` use it, and added `recomputeBatchStatus(batchId)` in the executor, called at every run
+  lifecycle endpoint (run() terminal/park/fail/complete, approveRun success+fail, archiveRun, reprocess).
+  `batch.service.list` → offset pagination + name search + sort(name/status/created) + `{ items, total,
+  totals }` where `totals` is a `pipelineRun.groupBy` across ALL the user's runs (KPI tiles stay correct
+  regardless of page). New `ListBatchesQueryDto`; controller `@Get('batches')` takes `@Query`. api-client
+  `listBatches(q)` → `{items,total,totals}`; `useBatches(params)` (keepPreviousData, 5s refetch kept).
+  `BatchesPage` server-driven; derived count-columns (docs/done) no longer sortable.
+- **Doc-Intelligence config layout**: removed the in-page tab/sub-nav strip from `IntelligenceConfigPage`
+  (`ConfigShell` now takes title/subtitle); the 3 pages (types/pipelines/lookups) stand alone, navigated
+  from the sidebar (which already links them).
+- Verified: @org/app typecheck ✓, @org/api build ✓, lint 0 errors (ui/api-client/api/app; pre-existing
+  warnings only). NOT browser-verified. Existing batches created before this change keep status='running'
+  until a run transitions (recompute is on-write); a one-off backfill could refresh them.
+
+STILL OPEN (user asked, not yet done): (a) retain/expose the ORIGINAL uploaded file for batch runs (the
+SourceDocument already stores `s3Key`; need to clarify exact ask — "keep original for review"); (b)
+batch review flow with Prev/Next + easier UX (currently the queue is a list → "Review" jumps to
+/analyze/:id with no sequential navigation).
+
+## 2026-06-13 (cont.) — Original-file access + batch review stepper
+
+- **View original file** (user: keep/expose the original for review): SourceDocument already retains
+  `s3Key`. Added `GET /intelligence/sources/:id/original-url` → `IntelligenceService.getOriginalUrl`
+  (access-checked, `storage.getPresignedDownloadUrl`). api-client `getOriginalUrl(sourceId)` →
+  `{url,filename,contentType}`. New `<ViewOriginalButton>` (lazy presigned fetch on click → opens in new
+  tab) placed in the review/analyze header AND in the document builder header. `convert()` now stashes
+  `sourceDocumentId` in the freeform doc's `data`, so converted docs link back to their source (the
+  builder shows "View original" when present). Structured-convert path unchanged (its `data` is schema-
+  validated) — could add a real `Document.sourceDocumentId` column later for full coverage.
+- **Batch review stepper** (user: Prev/Next + easier UX): rewrote `ReviewQueuePage` with two modes —
+  LIST (click any item, or "Review all") and FOCUSED, a single-doc stepper that reuses `ReviewExtraction`
+  + `ViewOriginalButton` with Prev / Next across the queue, a "{n} of {total}" progress, and "Approve &
+  next" (approving removes the item so the index lands on the next automatically; an effect clamps/closes
+  when the queue empties). No more bouncing to /analyze and back between docs.
+- Verified: @org/app typecheck ✓, @org/api build ✓, lint 0 errors (api/api-client/app; pre-existing
+  warnings only). NOT browser-verified.
+
+## 2026-06-13 (cont.) — Batch review stepper: walk ALL batch docs
+
+User: in a batch's review (`/review-queue?batch=`), Next/Prev wasn't usable because the queue only held
+the parked (needs_review) runs — if a batch had several docs but one parked, there was nothing to step
+to. Fix: when scoped to a batch, the stepper now walks ALL openable docs in the batch
+(needs_review + completed + approved, needs_review first) so Prev/Next traverse the whole batch; Approve
+shows only on still-parked runs and advances on success. Global `/review-queue` unchanged (parked only).
+Added `?doc=<sourceId>` deep-link so the batch detail "Open" routes INTO the stepper (was → /analyze with
+no nav). Verified: @org/app typecheck ✓, lint 0 errors.

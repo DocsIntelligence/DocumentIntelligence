@@ -96,8 +96,19 @@ export interface ListDocumentsQuery {
   documentTypeKey?: string;
   status?: DocumentStatus;
   orgId?: string;
-  limit?: number;
-  cursor?: string;
+  /** Free-text search over the title. */
+  q?: string;
+  /** 0-based page index. */
+  page?: number;
+  pageSize?: number;
+  sort?: 'title' | 'type' | 'status' | 'updated' | 'created';
+  dir?: 'asc' | 'desc';
+}
+
+/** A page of documents plus the total matching count (for offset pagination). */
+export interface DocumentListResult {
+  items: DocumentSummary[];
+  total: number;
 }
 
 export interface DocumentExportStatus {
@@ -206,7 +217,7 @@ export const createDocumentsService = (http: HttpClient) => ({
     http.get<DocumentTypeSummary[]>('/documents/catalog').then((r) => r.data),
   list: (q?: ListDocumentsQuery) =>
     http
-      .get<DocumentSummary[]>('/documents', { params: q })
+      .get<DocumentListResult>('/documents', { params: q })
       .then((r) => r.data),
   get: (id: string) =>
     http.get<DocumentDetail>(`/documents/${id}`).then((r) => r.data),

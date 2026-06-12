@@ -388,12 +388,35 @@ export class IntelligenceService {
       title,
       documentTypeKey: 'freeform',
       templateKey: 'freeform',
-      data: { html, values, fields: fieldDefs, templateId: 'freeform' },
+      // Keep a back-reference to the original upload so the editor can offer a
+      // "View original" link (the file is retained at SourceDocument.s3Key).
+      data: {
+        html,
+        values,
+        fields: fieldDefs,
+        templateId: 'freeform',
+        sourceDocumentId: extraction.sourceDocumentId,
+      },
     } as Parameters<DocumentsService['create']>[1]);
     this.logger.log(
       `Converted extraction ${extractionId} → freeform doc ${doc.id}`,
     );
     return { documentId: doc.id, mode: 'freeform' as const };
+  }
+
+  /**
+   * Presigned download URL for a source document's ORIGINAL uploaded file —
+   * so reviewers can open/compare the source against the extraction, and the
+   * converted document can link back to it. The file is retained at `s3Key`.
+   */
+  async getOriginalUrl(userId: string, sourceId: string) {
+    const source = await this.db.sourceDocument.findUnique({
+      where: { id: sourceId },
+    });
+    if (!source) throw new NotFoundException('Source document not found');
+    await this.assertCanAccess(userId, source);
+    const url = await this.storage.getPresignedDownloadUrl(source.s3Key);
+    return { url, filename: source.filename, contentType: source.contentType };
   }
 
   /** First active template key for a document type (the create path validates it). */

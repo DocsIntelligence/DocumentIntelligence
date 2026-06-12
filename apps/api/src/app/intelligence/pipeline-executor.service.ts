@@ -22,6 +22,7 @@ import {
 } from '@org/doc-intelligence';
 import { DatabaseService } from '../database/database.service';
 import { errorMessage } from '../common/error.util';
+import { deriveBatchCounts, deriveBatchStatus } from './batch-status';
 import { IntelligenceService } from './intelligence.service';
 import { PipelineService } from './pipeline.service';
 import { SchemaResolverService } from './config/schema-resolver.service';
@@ -284,6 +285,7 @@ export class PipelineExecutorService {
           where: { id: runId },
           data: { status: 'failed', error: `${stage.type}: ${message}` },
         });
+        await this.recomputeBatchStatus(run.batchId);
         throw e;
       }
     }
@@ -293,6 +295,7 @@ export class PipelineExecutorService {
       data: { status: 'completed' },
     });
     this.logger.log(`Run ${runId} approved + completed`);
+    await this.recomputeBatchStatus(run.batchId);
     return { pipelineRunId: runId, status: 'completed' as const };
   }
 
@@ -334,6 +337,7 @@ export class PipelineExecutorService {
         archivedReason: reason ?? 'Manually skipped',
       },
     });
+    await this.recomputeBatchStatus(run.batchId);
     return { pipelineRunId: runId, status: 'archived' as const };
   }
 
@@ -423,6 +427,7 @@ export class PipelineExecutorService {
           error: null,
         },
       });
+      await this.recomputeBatchStatus(run.batchId);
     }
 
     this.logger.log(
@@ -450,6 +455,24 @@ export class PipelineExecutorService {
       if (m) return;
     }
     throw new ForbiddenException('Not allowed');
+  }
+
+  /**
+   * Recompute + persist a batch's status from its runs, so the column can be
+   * filtered/sorted server-side (the displayed status is derived the same way
+   * via the shared helper, so they never drift). No-op for batch-less runs.
+   */
+  private async recomputeBatchStatus(batchId: string | null | undefined) {
+    if (!batchId) return;
+    const runs = await this.db.pipelineRun.findMany({
+      where: { batchId },
+      select: { status: true },
+    });
+    if (runs.length === 0) return;
+    await this.db.batch.update({
+      where: { id: batchId },
+      data: { status: deriveBatchStatus(deriveBatchCounts(runs)) },
+    });
   }
 
   // ─── Execution ────────────────────────────────────────────────────────────
@@ -529,6 +552,7 @@ export class PipelineExecutorService {
           this.logger.log(
             `Run ${runId} ${terminal} at ${stage.type}: ${archivedReason ?? ''}`,
           );
+          await this.recomputeBatchStatus(run.batchId);
           return;
         }
 
@@ -538,6 +562,7 @@ export class PipelineExecutorService {
             data: { status: 'needs_review' },
           });
           this.logger.log(`Run ${runId} parked at ${stage.type} for review`);
+          await this.recomputeBatchStatus(run.batchId);
           return;
         }
       } catch (e) {
@@ -551,6 +576,7 @@ export class PipelineExecutorService {
           data: { status: 'failed', error: `${stage.type}: ${message}` },
         });
         this.logger.error(`Run ${runId} failed at ${stage.type}: ${message}`);
+        await this.recomputeBatchStatus(run.batchId);
         return;
       }
     }
@@ -560,6 +586,7 @@ export class PipelineExecutorService {
       data: { status: 'completed' },
     });
     this.logger.log(`Run ${runId} completed`);
+    await this.recomputeBatchStatus(run.batchId);
   }
 
   /**

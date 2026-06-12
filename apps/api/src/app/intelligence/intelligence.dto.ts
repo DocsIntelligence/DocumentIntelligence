@@ -70,3 +70,16 @@ const ReprocessSchema = z.object({
   schemaKey: z.string().min(1).max(120),
 });
 export class ReprocessDto extends createZodDto(ReprocessSchema) {}
+
+/** Server-side pagination/search/sort for the batches list. */
+const ListBatchesQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  status: z
+    .enum(['running', 'needs_review', 'completed', 'failed'])
+    .optional(),
+  page: z.coerce.number().int().min(0).default(0),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  sort: z.enum(['name', 'status', 'created']).default('created'),
+  dir: z.enum(['asc', 'desc']).default('desc'),
+});
+export class ListBatchesQueryDto extends createZodDto(ListBatchesQuerySchema) {}

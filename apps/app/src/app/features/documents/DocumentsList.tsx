@@ -23,7 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import {
   useDeleteDocument,
-  useDocumentList,
+  useDocumentCatalog,
+  useDocumentsPage,
   useDuplicateDocument,
   useRenameDocument,
 } from './queries';
@@ -31,19 +32,59 @@ import { documentHref } from './document-href';
 import { ShareDialog } from './ShareDialog';
 import { VersionHistoryDialog } from './VersionHistoryDialog';
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200];
+// DocumentStatus enum values (prisma) — a stable facet source independent of
+// the current page (server-side filtering means the page only holds one page).
+const STATUSES = ['draft', 'in_review', 'ready', 'signed', 'archived'] as const;
+
 export function DocumentsList() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { data, isLoading, error } = useDocumentList();
-  const docs = useMemo(() => data ?? [], [data]);
-
   const del = useDeleteDocument();
   const duplicate = useDuplicateDocument();
   const rename = useRenameDocument();
 
+  // Server-driven list state: page, sort, search, and the status/type facets
+  // are ALL resolved by the backend (the table only ever holds one page).
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
+    { key: 'updated', dir: 'desc' },
+  );
+  const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  // Any filter/search/sort/page-size change resets to the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [query, statusFilter, typeFilter, sort, pageSize]);
+
+  const { data, isLoading, isFetching, isPlaceholderData, error } =
+    useDocumentsPage({
+      page,
+      pageSize,
+      q: query.trim() || undefined,
+      sort: (sort?.key as never) ?? undefined,
+      dir: sort?.dir ?? undefined,
+      status: (statusFilter as never) ?? undefined,
+      documentTypeKey: typeFilter ?? undefined,
+    });
+  const rows = useMemo(() => data?.items ?? [], [data]);
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = !!(query.trim() || statusFilter || typeFilter);
+
+  // Type facets come from the full catalog (stable, page-independent).
+  const { data: catalog } = useDocumentCatalog();
+  const types = useMemo(
+    () =>
+      (catalog ?? [])
+        .map((c) => [c.key, c.name] as const)
+        .sort((a, b) => a[1].localeCompare(b[1])),
+    [catalog],
+  );
 
   // Dialog targets (keyed by doc id so one dialog instance serves every card).
   const [shareId, setShareId] = useState<string | null>(null);
@@ -52,32 +93,7 @@ export function DocumentsList() {
     null,
   );
 
-  // Filter facets derived from the loaded list (no hardcoded enums).
-  const statuses = useMemo(
-    () => [...new Set(docs.map((d) => d.status))].sort(),
-    [docs],
-  );
-  const types = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const d of docs) {
-      if (d.documentType) m.set(d.documentType.key, d.documentType.name);
-    }
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [docs]);
-
-  // Status/type facets are pre-filtered here; free-text search, sorting, and
-  // pagination are handled by the DataTable itself.
-  const rows = useMemo(
-    () =>
-      docs.filter((d) => {
-        if (statusFilter && d.status !== statusFilter) return false;
-        if (typeFilter && d.documentType?.key !== typeFilter) return false;
-        return true;
-      }),
-    [docs, statusFilter, typeFilter],
-  );
-
-  const columns: DataTableColumn<(typeof docs)[number]>[] = [
+  const columns: DataTableColumn<(typeof rows)[number]>[] = [
     {
       key: 'title',
       header: t('documents.colTitle', 'Title'),
@@ -220,7 +236,7 @@ export function DocumentsList() {
         </Card>
       )}
 
-      {!isLoading && !error && docs.length === 0 && (
+      {!isLoading && !error && total === 0 && !hasFilters && (
         <Card className="rounded-xl border-dashed p-10 text-center">
           <p className="text-foreground/70">
             {t('dashboard.emptyTitle', 'No documents yet.')}
@@ -239,20 +255,33 @@ export function DocumentsList() {
         </Card>
       )}
 
-      {!isLoading && !error && docs.length > 0 && (
+      {!isLoading && !error && (total > 0 || hasFilters) && (
         <DataTable
           data={rows}
           columns={columns}
           rowKey={(d) => d.id}
           search={(d) => d.title ?? ''}
           searchPlaceholder={t('documents.search', 'Search by title…')}
-          initialSort={{ key: 'updated', dir: 'desc' }}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          server={{
+            page,
+            pageCount,
+            total,
+            onPageChange: setPage,
+            sort,
+            onSortChange: setSort,
+            query,
+            onQueryChange: setQuery,
+            pageSize,
+            onPageSizeChange: setPageSize,
+            loading: isFetching && isPlaceholderData,
+          }}
           toolbar={
             <div className="flex flex-wrap items-center gap-2">
               <Chip active={!statusFilter} onClick={() => setStatusFilter(null)}>
                 {t('common.all', 'All')}
               </Chip>
-              {statuses.map((s) => (
+              {STATUSES.map((s) => (
                 <Chip
                   key={s}
                   active={statusFilter === s}

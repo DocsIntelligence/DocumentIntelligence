@@ -28,6 +28,7 @@ import {
   ArchiveRunDto,
   AskDto,
   BulkArchiveDto,
+  ListBatchesQueryDto,
   PresignUploadDto,
   RegisterSourceDto,
   ReprocessDto,
@@ -114,6 +115,14 @@ export class IntelligenceController {
   })
   getExtraction(@CurrentUser() user: User, @Param('id') id: string) {
     return this.intelligence.getExtraction(user.id, id);
+  }
+
+  @Get('sources/:id/original-url')
+  @ApiOperation({
+    summary: 'Presigned download URL for the original uploaded file',
+  })
+  getOriginalUrl(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.intelligence.getOriginalUrl(user.id, id);
   }
 
   @Post('extractions/:id/review')
@@ -220,8 +229,11 @@ export class IntelligenceController {
 
   @Get('batches')
   @ApiOperation({ summary: 'List my batches with progress counts' })
-  listBatches(@CurrentUser() user: User) {
-    return this.batches.list(user.id);
+  listBatches(
+    @CurrentUser() user: User,
+    @Query() query: ListBatchesQueryDto,
+  ) {
+    return this.batches.list(user.id, query);
   }
 
   @Get('batches/:id')

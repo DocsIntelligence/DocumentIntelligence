@@ -3,12 +3,18 @@ import type {
   CreateDocumentPayload,
   CreateSharePayload,
   DocumentDetail,
+  ListDocumentsQuery,
   PatchDocumentPayload,
   RecordSignaturePayload,
   UpdateSignerPayload,
 } from '@org/api-client';
 import type { FieldOption } from '@org/document-schema';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   useDocumentsService,
@@ -20,6 +26,8 @@ export const documentsKeys = {
   all: ['documents'] as const,
   catalog: ['documents', 'catalog'] as const,
   list: () => ['documents', 'list'] as const,
+  page: (params: ListDocumentsQuery) =>
+    ['documents', 'list', 'page', params] as const,
   detail: (id: string) => ['documents', 'detail', id] as const,
 };
 
@@ -32,11 +40,30 @@ export function useDocumentCatalog() {
   });
 }
 
+/**
+ * Lightweight list for the dashboard "Recent" — the most-recent page, unwrapped
+ * to a plain array. NOT for the full documents table (use useDocumentsPage).
+ */
 export function useDocumentList() {
   const svc = useDocumentsService();
   return useQuery({
     queryKey: documentsKeys.list(),
-    queryFn: () => svc.list({ limit: 50 }),
+    queryFn: () => svc.list({ pageSize: 50 }),
+    select: (r) => r.items,
+  });
+}
+
+/**
+ * Server-paginated documents list — page/pageSize/sort/dir/search + status &
+ * type filters all resolved by the backend. Keeps the previous page visible
+ * while the next loads, so paging doesn't flash empty.
+ */
+export function useDocumentsPage(params: ListDocumentsQuery) {
+  const svc = useDocumentsService();
+  return useQuery({
+    queryKey: documentsKeys.page(params),
+    queryFn: () => svc.list(params),
+    placeholderData: keepPreviousData,
   });
 }
 

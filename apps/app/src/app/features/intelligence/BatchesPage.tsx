@@ -7,7 +7,7 @@ import {
   type DataTableColumn,
 } from '@org/ui';
 import { cn } from '@org/utils';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useBatches } from './queries';
@@ -20,6 +20,17 @@ import {
   LayersIcon,
   UploadIcon,
 } from './icons';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200];
+// BatchStatus enum values (prisma) — stable facet source, page-independent.
+const BATCH_STATUSES = ['running', 'needs_review', 'completed', 'failed'] as const;
+const ZERO_TOTALS = {
+  running: 0,
+  needsReview: 0,
+  completed: 0,
+  archived: 0,
+  failed: 0,
+};
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
   completed: 'success',
@@ -36,33 +47,33 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> =
  */
 export function BatchesPage() {
   const { t } = useTranslation();
-  const { data: batches } = useBatches();
+  // Server-driven: page/sort/search/status + KPI totals all from the backend.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
+    { key: 'created', dir: 'desc' },
+  );
+  const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
-  const totals = useMemo(() => {
-    const list = batches ?? [];
-    return list.reduce(
-      (a, b) => ({
-        running: a.running + b.running,
-        needsReview: a.needsReview + b.needsReview,
-        completed: a.completed + b.completed,
-        archived: a.archived + b.archived,
-        failed: a.failed + b.failed,
-      }),
-      { running: 0, needsReview: 0, completed: 0, archived: 0, failed: 0 },
-    );
-  }, [batches]);
+  useEffect(() => {
+    setPage(0);
+  }, [query, statusFilter, sort, pageSize]);
 
-  const statuses = useMemo(
-    () => [...new Set((batches ?? []).map((b) => b.status))].sort(),
-    [batches],
-  );
-  const rows = useMemo(
-    () =>
-      (batches ?? []).filter((b) => !statusFilter || b.status === statusFilter),
-    [batches, statusFilter],
-  );
-  const hasBatches = (batches ?? []).length > 0;
+  const { data, isFetching, isPlaceholderData } = useBatches({
+    page,
+    pageSize,
+    q: query.trim() || undefined,
+    sort: (sort?.key as never) ?? undefined,
+    dir: sort?.dir ?? undefined,
+    status: (statusFilter as never) ?? undefined,
+  });
+  const rows = useMemo(() => data?.items ?? [], [data]);
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const totals = data?.totals ?? ZERO_TOTALS;
+  const hasFilters = !!(query.trim() || statusFilter);
+  const hasBatches = total > 0;
 
   const columns: DataTableColumn<BatchSummary>[] = [
     {
@@ -102,14 +113,13 @@ export function BatchesPage() {
       key: 'docs',
       header: t('intelligence.batches.colDocs', 'Docs'),
       align: 'right',
-      sortValue: (b) => b.total,
+      // Derived per-batch count — not a server-sortable column.
       cell: (b) => <span className="tabular-nums">{b.total}</span>,
     },
     {
       key: 'done',
       header: t('intelligence.funnel.completed', 'Done'),
       align: 'right',
-      sortValue: (b) => (b.total ? b.completed / b.total : 0),
       cell: (b) => (
         <span className="tabular-nums text-foreground/70">
           {b.completed}/{b.total}
@@ -166,8 +176,8 @@ export function BatchesPage() {
         </Button>
       </div>
 
-      {/* KPI tiles */}
-      {hasBatches && (
+      {/* KPI tiles — workspace totals (across all batches, any page) */}
+      {(hasBatches || hasFilters) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile
             tone="info"
@@ -202,21 +212,34 @@ export function BatchesPage() {
         </div>
       )}
 
-      {hasBatches ? (
+      {hasBatches || hasFilters ? (
         <DataTable
           data={rows}
           columns={columns}
           rowKey={(b) => b.id}
           search={(b) => `${b.name ?? ''} ${b.id}`}
           searchPlaceholder={t('intelligence.batches.search', 'Search batches…')}
-          initialSort={{ key: 'created', dir: 'desc' }}
           renderExpanded={(b) => <BatchBreakdown batch={b} />}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          server={{
+            page,
+            pageCount,
+            total,
+            onPageChange: setPage,
+            sort,
+            onSortChange: setSort,
+            query,
+            onQueryChange: setQuery,
+            pageSize,
+            onPageSizeChange: setPageSize,
+            loading: isFetching && isPlaceholderData,
+          }}
           toolbar={
             <div className="flex flex-wrap items-center gap-2">
               <Chip active={!statusFilter} onClick={() => setStatusFilter(null)}>
                 {t('common.all', 'All')}
               </Chip>
-              {statuses.map((s) => (
+              {BATCH_STATUSES.map((s) => (
                 <Chip
                   key={s}
                   active={statusFilter === s}
