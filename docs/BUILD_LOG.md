@@ -730,3 +730,94 @@ Feedback was the batch/review UI felt rough. Rebuilt both to the app's existing 
 - Frozen until paying users: marketplace, white-label, PWA/offline, configurable pipelines
   (docs/07 P4.2+), OCR benchmarking, 5th+ doc type.
 - No code changed this session — analysis + docs only.
+
+---
+
+## 2026-06-12 — Preset upgrade + convert-to-document quality fix
+
+**Freeform "Draft with AI" presets (`@org/legal-reference`)**
+- Future-proofed `DocumentPreset`: added optional `applicableLaw` (display chip),
+  `tags` (search synonyms), `popular`, `structuredTypeKey` (nudge toward a real bundle).
+  Did NOT duplicate eSign-exclusion — that stays in `schedule1.ts` (`isESignExcluded`).
+- Enriched all existing presets (richer sampleBriefs, applicableLaw, citationTopics) and
+  added ~22 new Indian docs across a new **HR & Corporate** category plus Notices/
+  Court Filings/Affidavits/Agreements/Personal/Information: eviction & termination & public
+  notices; mutual-divorce, maintenance (BNSS §144), domestic-violence (PWDVA); name-change/
+  income/gap affidavits, indemnity bond; service/loan/leave-licence/sale agreements,
+  promissory note; offer/appointment/experience letters, board resolution; NOC; RTI first
+  appeal. Added `presetsByCategory()` (popular-first).
+- Added matching `COURT_SCAFFOLDS` (apps/api `legal-ai/court-scaffolds.ts`) for every new
+  key so AI output is shaped (agreement/notice/affidavit/court-filing variants), and wired
+  the new `HR & Corporate` category into `DraftWithAIPage`.
+
+**Convert-from-extraction → freeform document quality (bug reported by user)**
+- Symptom: converted docs rendered as a key/value dump and every scalar became an editable
+  placeholder field. Root cause: `IntelligenceService.buildFreeformHtml` (the fallback used
+  when the original text/layout can't be recovered, e.g. scanned PDF) emitted
+  `<strong>Label:</strong> {{token}}` per field + registered each as a `FreeformFieldDef`.
+- Fix: rewrote the fallback to compose a clean grouped document — values BAKED IN as text
+  (no `{{tokens}}`), fields grouped into titled sections by key prefix, empties dropped,
+  arrays as ordered lists, and **zero** placeholder fields registered (`values`/`fields`
+  empty) so the editor opens prose, not a form. The "source recoverable" path
+  (`buildSourceHtml`→`tokenizeFields`, which reads like the original upload) is unchanged and
+  remains preferred. Updated the now-inaccurate `convert()` comment.
+- Verified: `@org/app` typecheck ✓, `legal-reference` tsc ✓, `@org/api` build ✓, lint 0 errors
+  (10 pre-existing warnings in untouched files). NOT browser-verified.
+- DEFERRED (asked user): structured NDA + Promissory Note `DocumentTypeBundle`s (tasks open).
+
+### 2026-06-12 (follow-up) — convert fallback now composes a sectioned document
+
+- Two user screenshots (NDA + SOW, both "signed"/scanned PDFs, no text layer) showed the
+  OLD `buildFreeformHtml` output: `<strong>{label}:</strong> {{camelCaseToken}}` per field +
+  a 20–27 field panel (tokens are the generic extraction-schema keys in
+  `tools/prisma/seed-data/extraction-types.ts`). Confirms (a) the running API predates the
+  fix and existing docs are frozen with old HTML, and (b) snake_case-prefix grouping was
+  useless for these camelCase schemas.
+- Rewrote `IntelligenceService.buildFreeformHtml` to compose a real document: short scalars
+  (title/dates/parties/refs) → a compact top "particulars" block (`Label: value`); long /
+  sentence-ish values (scope, background, clauses — already prose) → `<h2>Label</h2>` +
+  paragraph sections; arrays → headed ordered lists. Values BAKED as text, zero placeholder
+  fields. Reads like the original SOW/NDA instead of a fill-in form.
+- ⚠️ Requires API rebuild + restart to take effect; ALREADY-converted docs keep their old
+  saved HTML — user must RE-CONVERT them. Deeper "looks exactly like original" path
+  (`buildSourceHtml`→`tokenizeFields`) only fires when there's a recoverable text layer;
+  scanned/signed PDFs need OCR (vision) to populate `normalizedText` for that path.
+- Verified: `@org/api` build ✓, lint 0 errors (6 pre-existing warnings).
+
+---
+
+## 2026-06-12 (autonomous batch) — 4 new structured types, global+India presets, Templates UX
+
+User directive: keep adding templates (India + global), more AI presets, and improve the
+Templates page UX — "do not pause, I will not be around." Delivered in one verified batch.
+
+**New structured DocumentTypeBundles (full: schema + form-metadata + prompts + risks + index +
+page-faithful React template + _registry + seed):**
+- `nda` — Non-Disclosure Agreement (mutual/one-way; Indian Contract Act 1872). Template
+  branches obligations on `agreement.mutual`; numbered clauses (definition/exclusions/
+  obligations/term+survival/return/remedies/governing law/general) + signature & witness blocks.
+- `promissory_note` — NI Act 1881 §4. Classic single-paragraph instrument with amount-in-words,
+  optional interest, demand/fixed-date term, revenue-stamp box. Added to `ESIGN_EXCLUDED_KEYS`.
+- `employment_offer` — India + global (currency enum INR/USD/EUR/GBP/AED/SGD; optional at-will,
+  with a risk flagging at-will+INR). Letter format with compensation + numbered terms + accept blocks.
+- `power_of_attorney` — General/Special (Powers-of-Attorney Act 1882). Deed format, powers list,
+  ratification + duration + witnesses + registration/eSign-exclusion note. Added to `ESIGN_EXCLUDED_KEYS`.
+- Bundle draft schemas use shallow `Schema.partial()` (top-level sections optional) to satisfy the
+  `DocumentTypeBundle<Partial<T>>` generic — matching the legal-notice pattern (deep-partial breaks it).
+
+**Freeform AI presets — big expansion (`@org/legal-reference`):** added a `Business` category and
+~30 presets (global-friendly + Indian): invoice, quotation, SOW, privacy policy, terms of service,
+refund policy, DPA, term sheet, meeting minutes; consulting/MSA/SaaS/employment/non-compete (with
+§27 caution)/shareholders/sale-of-goods agreements; internship/termination/resignation/
+recommendation/warning letters; authorization letter, rent receipt, relinquishment deed. Each with
+applicableLaw/tags and a matching `COURT_SCAFFOLDS` entry (AGREEMENT/LETTER/POLICY/specific).
+Wired `Business` into `DraftWithAIPage`; linked offer-letter→employment_offer, gpa→power_of_attorney.
+
+**Templates page UX (`TemplatesPage.tsx`):** added a search box (name/description/category) and
+category-filter chips (derived from the catalog) with an empty state. Uses `@org/ui` Input.
+
+- Verified: legal-reference tsc ✓ · @org/app typecheck+lint ✓ (0 errors) · @org/api build+lint ✓
+  (0 errors) · document-schema/document-templates lint ✓. NOT browser-verified.
+- ⚠️ The 4 new structured types appear in the Templates catalog only after a DB RE-SEED
+  (`/documents/catalog` reads DB rows from `tools/prisma/seed-data/document-types.ts`). Run the
+  project's prisma seed + restart API. Freeform presets need only an API restart (static import).

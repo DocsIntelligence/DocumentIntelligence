@@ -4,6 +4,10 @@ import { RentAgreementClassic } from './rent-agreement/classic';
 import { RtiDefault } from './rti/default';
 import { LegalNoticeFormal } from './legal-notice/formal';
 import { AffidavitDefault } from './affidavit/default';
+import { NdaStandard } from './nda/standard';
+import { PromissoryNoteStandard } from './promissory-note/standard';
+import { EmploymentOfferStandard } from './employment-offer/standard';
+import { PowerOfAttorneyStandard } from './power-of-attorney/standard';
 import { FreeformDocument } from './freeform';
 
 /**
@@ -34,6 +38,17 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   'legal-notice.formal': LegalNoticeFormal as TemplateComponent<unknown>,
   // General-purpose affidavit (deponent + numbered declarations + attestation).
   'affidavit.default': AffidavitDefault as TemplateComponent<unknown>,
+  // Non-disclosure agreement (mutual/one-way; Indian Contract Act, 1872).
+  'nda.standard': NdaStandard as TemplateComponent<unknown>,
+  // Promissory note (NI Act §4; revenue-stamped, not eSignable).
+  'promissory-note.standard':
+    PromissoryNoteStandard as TemplateComponent<unknown>,
+  // Employment offer letter (India + global; currency + at-will aware).
+  'employment-offer.standard':
+    EmploymentOfferStandard as TemplateComponent<unknown>,
+  // Power of attorney (general/special; not eSignable, IT Act Schedule 1).
+  'power-of-attorney.standard':
+    PowerOfAttorneyStandard as TemplateComponent<unknown>,
   // Freeform / AI-drafted documents — editor HTML rendered to pages.
   freeform: FreeformDocument as TemplateComponent<unknown>,
 };

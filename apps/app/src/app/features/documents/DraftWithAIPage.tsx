@@ -21,6 +21,8 @@ const PRESET_CATEGORIES: DocumentPresetCategory[] = [
   'Court Filings',
   'Notices',
   'Agreements',
+  'Business',
+  'HR & Corporate',
   'Personal',
   'Affidavits',
   'Information',

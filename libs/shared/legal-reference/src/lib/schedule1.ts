@@ -57,6 +57,8 @@ export const ESIGN_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   'trust-deed',
   'trust_deed',
   'promissory-note',
+  'promissory_note', // structured doc-type key
+  'power_of_attorney', // structured doc-type key
 ]);
 
 /** Is this doc-type/preset key excluded from valid eSignature under Schedule 1? */

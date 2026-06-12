@@ -170,7 +170,11 @@ export class IntelligenceService {
     });
 
     const job = await this.db.intelligenceJob.create({
-      data: { sourceDocumentId: source.id, status: 'queued', engineMode: engine },
+      data: {
+        sourceDocumentId: source.id,
+        status: 'queued',
+        engineMode: engine,
+      },
     });
 
     await this.enqueue({ jobId: job.id });
@@ -197,7 +201,9 @@ export class IntelligenceService {
         );
       });
     });
-    this.logger.debug(`Running intelligence job ${payload.jobId} inline (no Redis)`);
+    this.logger.debug(
+      `Running intelligence job ${payload.jobId} inline (no Redis)`,
+    );
   }
 
   // ─── Reads ─────────────────────────────────────────────────────────────
@@ -345,7 +351,10 @@ export class IntelligenceService {
         extraction.documentTypeKey,
       );
       if (templateKey) {
-        const data = applyFieldMap(this.coerceForBundle(schema, fields), fieldMap);
+        const data = applyFieldMap(
+          this.coerceForBundle(schema, fields),
+          fieldMap,
+        );
         const doc = await this.documents.create(userId, {
           title,
           documentTypeKey: extraction.documentTypeKey,
@@ -361,11 +370,18 @@ export class IntelligenceService {
 
     // Freeform fallback — reproduce the ORIGINAL document's formatting when we
     // can (DOCX → rich HTML; PDF/text/scan → paragraphs + page breaks), so the
-    // editable doc looks like the upload. Falls back to a field summary.
-    // Either way the extracted values become `{{token}}` placeholders backed by
-    // a values map, so the doc opens as editable fields rather than baked text.
+    // editable doc looks like the upload. When source text IS recoverable, the
+    // extracted values that literally appear are turned into `{{token}}`
+    // placeholders (editable fields) within the original prose. When it is NOT
+    // recoverable (e.g. a scanned image), we compose a clean grouped document
+    // with values baked in as text and NO placeholder fields — never a
+    // key/value form dump.
     const sourceHtml = await this.buildSourceHtml(extraction.sourceDocument);
-    const { html, values, fields: fieldDefs } = sourceHtml
+    const {
+      html,
+      values,
+      fields: fieldDefs,
+    } = sourceHtml
       ? this.tokenizeFields(sourceHtml, schema, fields)
       : this.buildFreeformHtml(schema, fields);
     const doc = await this.documents.create(userId, {
@@ -408,7 +424,8 @@ export class IntelligenceService {
   ): FieldValues {
     const out: FieldValues = { ...fields };
     for (const field of schema.fields) {
-      if (field.type !== 'table' || (field.columns?.length ?? 0) !== 1) continue;
+      if (field.type !== 'table' || (field.columns?.length ?? 0) !== 1)
+        continue;
       const value = out[field.key];
       if (!Array.isArray(value)) continue;
       const col = field.columns?.[0]?.key;
@@ -452,9 +469,7 @@ export class IntelligenceService {
       }
     }
 
-    const pages = src.normalizedText as
-      | { page: number; text: string }[]
-      | null;
+    const pages = src.normalizedText as { page: number; text: string }[] | null;
     if (Array.isArray(pages) && pages.length) {
       const html = pages
         .map((p) => this.textToParagraphs(p.text ?? ''))
@@ -487,10 +502,27 @@ export class IntelligenceService {
   }
 
   /**
-   * Build a clean, editor-friendly HTML body from extracted field values.
-   * Scalars become `{{field_key}}` placeholders backed by the returned values
-   * map (so they open as editable fields); arrays stay as literal lists since
-   * they don't map onto a single freeform token.
+   * Last-resort fallback used ONLY when the original document's text/layout
+   * can't be recovered (e.g. a scanned/"signed" image PDF with no OCR text
+   * layer, so `buildSourceHtml` returned null). We can't reproduce the source
+   * prose verbatim, so we compose the most document-like rendering we can from
+   * the extracted fields — NOT a key/value form:
+   *
+   *   - short identifying fields (title, dates, party names, references) form a
+   *     compact "particulars" block at the top and ARE kept as editable
+   *     `{{placeholder}}` fields (backed by the values map) — these are the few
+   *     values a user actually tweaks;
+   *   - long / prose fields (scope, background, clauses — the values that are
+   *     already full sentences) become proper `<h2>Label</h2>` sections with the
+   *     value BAKED IN as paragraphs (no token, no field), so the doc reads like
+   *     the original and isn't a wall of placeholders;
+   *   - array/table fields become headed ordered lists (baked, no field);
+   *   - empty fields are dropped.
+   *
+   * Deterministic and conservative — it does not invent legal prose or
+   * statutory text; it only lays out what was extracted. For documents whose
+   * original text IS recoverable, the caller uses `tokenizeFields` over the
+   * reproduced source instead, which reads like the upload.
    */
   private buildFreeformHtml(
     schema: ExtractionSchema,
@@ -501,12 +533,26 @@ export class IntelligenceService {
     fields: FreeformFieldDef[];
   } {
     const esc = (s: unknown) => this.escapeHtml(s);
+    // A trimmed string → one or more escaped <p> paragraphs (blank line splits).
+    const toParagraphs = (text: string) => {
+      const paras = text
+        .replace(/\r\n/g, '\n')
+        .split(/\n{2,}/)
+        .map((b) => b.trim())
+        .filter(Boolean)
+        .map((b) => `<p>${esc(b).replace(/\n/g, '<br>')}</p>`);
+      return paras.length ? paras.join('\n') : `<p>${esc(text)}</p>`;
+    };
+
+    const particulars: string[] = []; // short scalars → opening block (fields)
+    const sections: string[] = []; // prose / arrays → headed sections (baked)
     const values: Record<string, string> = {};
     const defs: FreeformFieldDef[] = [];
-    const rows: string[] = [];
+
     for (const field of schema.fields) {
       const value = fields[field.key];
       if (value === undefined || value === null || value === '') continue;
+
       if (Array.isArray(value)) {
         const items = value
           .map((v) =>
@@ -514,21 +560,46 @@ export class IntelligenceService {
               ? esc(Object.values(v as Record<string, unknown>)[0])
               : esc(v),
           )
+          .filter((v) => v.trim())
           .map((v) => `<li>${v}</li>`)
           .join('');
-        rows.push(`<p><strong>${esc(field.label)}:</strong></p><ul>${items}</ul>`);
+        if (items) {
+          sections.push(`<h2>${esc(field.label)}</h2>\n<ol>${items}</ol>`);
+        }
+        continue;
+      }
+
+      const text = String(value).trim();
+      // Treat a value as prose (its own baked section) when it's long or
+      // multi-line, or a sentence-ish string — otherwise it's a short
+      // particular kept as an editable placeholder field.
+      const isProse =
+        text.length > 120 ||
+        text.includes('\n') ||
+        (field.type === 'string' && text.length > 70 && /[.;:]/.test(text));
+      if (isProse) {
+        sections.push(`<h2>${esc(field.label)}</h2>\n${toParagraphs(text)}`);
       } else {
         const key = this.tokenKey(field.key);
-        values[key] = String(value).trim();
+        values[key] = text;
         defs.push(this.fieldDef(field, value));
-        rows.push(`<p><strong>${esc(field.label)}:</strong> {{${key}}}</p>`);
+        particulars.push(
+          `<p><strong>${esc(field.label)}:</strong> {{${key}}}</p>`,
+        );
       }
     }
-    return {
-      html: `<h1>${esc(schema.name)}</h1>\n${rows.join('\n')}`,
-      values,
-      fields: defs,
-    };
+
+    const body = [particulars.join('\n'), sections.join('\n')]
+      .filter(Boolean)
+      .join('\n');
+
+    const html =
+      `<h1 style="text-align:center">${esc(schema.name)}</h1>\n` +
+      (body || '<p></p>');
+
+    // Short particulars stay editable as `{{token}}` fields; long prose and
+    // lists are baked into the body.
+    return { html, values, fields: defs };
   }
 
   /**
@@ -621,12 +692,17 @@ export class IntelligenceService {
             }
           : { ...base, type: 'text' };
       case 'currency':
-        return { ...base, type: 'text', ...(field.format ? { hint: field.format } : {}) };
+        return {
+          ...base,
+          type: 'text',
+          ...(field.format ? { hint: field.format } : {}),
+        };
       case 'string':
       default: {
         if (/email/i.test(field.key)) return { ...base, type: 'email' };
         const s = String(value ?? '');
-        if (s.length > 80 || s.includes('\n')) return { ...base, type: 'textarea' };
+        if (s.length > 80 || s.includes('\n'))
+          return { ...base, type: 'textarea' };
         return { ...base, type: 'text' };
       }
     }

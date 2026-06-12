@@ -1,5 +1,5 @@
-import { Button, Card } from '@org/ui';
-import { useState } from 'react';
+import { Button, Card, Input } from '@org/ui';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCreateDocument, useDocumentCatalog } from './queries';
@@ -7,7 +7,8 @@ import { useCreateDocument, useDocumentCatalog } from './queries';
 /**
  * Structured templates — promoted to a top-level page (/documents/templates)
  * instead of being buried at the bottom of the New-document picker. Browse the
- * document-type catalog, then pick a template to start a structured draft.
+ * document-type catalog (with search + category filter), then pick a template
+ * to start a structured draft.
  */
 export function TemplatesPage() {
   const { data: catalog, isLoading } = useDocumentCatalog();
@@ -15,8 +16,26 @@ export function TemplatesPage() {
   const create = useCreateDocument();
   const navigate = useNavigate();
   const [typeKey, setTypeKey] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
 
   const selectedType = catalog?.find((c) => c.key === typeKey) ?? null;
+
+  const categories = useMemo(() => {
+    const set = new Set((catalog ?? []).map((c) => c.category).filter(Boolean));
+    return [...set].sort();
+  }, [catalog]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (catalog ?? []).filter((c) => {
+      if (category && c.category !== category) return false;
+      if (!q) return true;
+      return [c.name, c.description, c.category]
+        .filter((s): s is string => !!s)
+        .some((s) => s.toLowerCase().includes(q));
+    });
+  }, [catalog, query, category]);
 
   async function startWithTemplate(templateKey: string) {
     if (!selectedType) return;
@@ -53,31 +72,81 @@ export function TemplatesPage() {
       )}
 
       {!isLoading && !selectedType && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {catalog?.map((ct) => (
-            <button
-              key={ct.key}
-              type="button"
-              onClick={() => setTypeKey(ct.key)}
-              className="text-left"
-            >
-              <Card className="cursor-pointer space-y-2 rounded-xl p-5 transition-all hover:border-primary hover:shadow-md">
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">
-                  {ct.category}
-                </span>
-                <h3 className="font-semibold text-foreground">{ct.name}</h3>
-                <p className="line-clamp-3 text-sm text-foreground/60">
-                  {ct.description}
-                </p>
-                <p className="text-xs text-foreground/40">
-                  {t('newDoc.templateCount', '{{count}} template', {
-                    count: ct.templates.length,
-                  })}
-                </p>
-              </Card>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t(
+                'templates.searchPlaceholder',
+                'Search templates (e.g. rent, NDA, affidavit)…',
+              )}
+              aria-label={t('templates.searchLabel', 'Search templates')}
+            />
+            {categories.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCategory(null)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    category === null
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-foreground/60 hover:border-primary/40'
+                  }`}
+                >
+                  {t('templates.allCategories', 'All')}
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                      category === cat
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-foreground/60 hover:border-primary/40'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-foreground/50">
+              {t('templates.noResults', 'No templates match your search.')}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((ct) => (
+                <button
+                  key={ct.key}
+                  type="button"
+                  onClick={() => setTypeKey(ct.key)}
+                  className="text-left"
+                >
+                  <Card className="cursor-pointer space-y-2 rounded-xl p-5 transition-all hover:border-primary hover:shadow-md">
+                    <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">
+                      {ct.category}
+                    </span>
+                    <h3 className="font-semibold text-foreground">{ct.name}</h3>
+                    <p className="line-clamp-3 text-sm text-foreground/60">
+                      {ct.description}
+                    </p>
+                    <p className="text-xs text-foreground/40">
+                      {t('newDoc.templateCount', '{{count}} template', {
+                        count: ct.templates.length,
+                      })}
+                    </p>
+                  </Card>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {selectedType && (

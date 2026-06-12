@@ -12,6 +12,10 @@ import './rent-agreement';
 import './rti';
 import './legal-notice';
 import './affidavit';
+import './nda';
+import './promissory-note';
+import './employment-offer';
+import './power-of-attorney';
 
 export { rentAgreementBundle } from './rent-agreement';
 export type { RentAgreementData, Party } from './rent-agreement/schema';
@@ -24,3 +28,18 @@ export type { LegalNoticeData } from './legal-notice/schema';
 
 export { affidavitBundle } from './affidavit';
 export type { AffidavitData } from './affidavit/schema';
+
+export { ndaBundle } from './nda';
+export type { NdaData, NdaParty } from './nda/schema';
+
+export { promissoryNoteBundle } from './promissory-note';
+export type {
+  PromissoryNoteData,
+  PromissoryParty,
+} from './promissory-note/schema';
+
+export { employmentOfferBundle } from './employment-offer';
+export type { EmploymentOfferData } from './employment-offer/schema';
+
+export { powerOfAttorneyBundle } from './power-of-attorney';
+export type { PowerOfAttorneyData } from './power-of-attorney/schema';

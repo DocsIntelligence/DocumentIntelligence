@@ -155,6 +155,98 @@ export const documentTypes: DocumentTypeSeed[] = [
     ],
   },
   {
+    key: 'nda',
+    name: 'Non-Disclosure Agreement',
+    category: 'contracts',
+    description:
+      'Mutual or one-way confidentiality agreement (Indian Contract Act, 1872). Defines confidential information, exclusions, obligations, term/survival, and governing law.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'lock',
+    sortOrder: 50,
+    schemaShape: {
+      sections: ['agreement', 'partyA', 'partyB', 'terms', 'governing', 'witnesses'],
+    },
+    templates: [
+      {
+        key: 'nda-standard',
+        name: 'Standard NDA (English)',
+        componentKey: 'nda.standard',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
+    key: 'promissory_note',
+    name: 'Promissory Note',
+    category: 'contracts',
+    description:
+      'Unconditional promise to pay a sum of money (Negotiable Instruments Act, 1881 §4). Must be stamped; cannot be eSigned (IT Act Schedule 1).',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'banknote',
+    sortOrder: 60,
+    schemaShape: {
+      sections: ['note', 'maker', 'payee', 'witnesses'],
+    },
+    templates: [
+      {
+        key: 'pronote-standard',
+        name: 'Promissory Note (English)',
+        componentKey: 'promissory-note.standard',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
+    key: 'employment_offer',
+    name: 'Employment Offer Letter',
+    category: 'hr',
+    description:
+      'Offer of employment with role, compensation, and terms. Works for India and globally (currency + optional at-will term).',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'briefcase',
+    sortOrder: 70,
+    schemaShape: {
+      sections: ['offer', 'company', 'candidate', 'role', 'compensation', 'terms'],
+    },
+    templates: [
+      {
+        key: 'offer-standard',
+        name: 'Offer Letter (English)',
+        componentKey: 'employment-offer.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'power_of_attorney',
+    name: 'Power of Attorney',
+    category: 'authorisations',
+    description:
+      'General or Special Power of Attorney (Powers-of-Attorney Act, 1882). Often needs notarisation/registration; cannot be eSigned (IT Act Schedule 1).',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'scroll',
+    sortOrder: 80,
+    schemaShape: {
+      sections: ['poa', 'principal', 'attorney', 'powers', 'terms', 'witnesses'],
+    },
+    templates: [
+      {
+        key: 'poa-standard',
+        name: 'Power of Attorney (English)',
+        componentKey: 'power-of-attorney.standard',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
     key: 'freeform',
     name: 'Freeform / AI Draft',
     category: 'general',
