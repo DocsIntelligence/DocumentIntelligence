@@ -203,7 +203,34 @@ COURT_SCAFFOLDS['invoice'] = `Format as a clean commercial invoice:
 - Payment terms, due date, and bank/UPI details.
 Keep figures and identifiers as {{placeholders}}.`;
 
+COURT_SCAFFOLDS['payment-receipt'] = `Format as a simple payment receipt:
+- Heading "RECEIPT", receipt number and date; issuer name/address at the top.
+- A single sentence: "Received with thanks from {{payer_name}} the sum of ₹{{amount}} ({{amount_words}}) by {{mode}} (ref {{reference}}) towards {{purpose}}."
+- An optional balance line for part payments, and an authorised-signatory block.
+Keep names, amounts and references as {{placeholders}}.`;
+
 COURT_SCAFFOLDS['quotation'] = `Format as a price quotation/estimate: provider and client, a line-item table with quantities and unit prices, the total, validity period, and terms. Keep figures as {{placeholders}}.`;
+
+COURT_SCAFFOLDS['purchase-order'] = `Format as a purchase order:
+- Heading "PURCHASE ORDER", PO number and date; buyer (issuing org) at the top, vendor (supplier) below.
+- A line-item table (description, qty, unit price, amount) and the total.
+- Required-by/delivery date and ship-to address; terms.
+- A note to quote the PO number on all invoices, and an authorised-signatory block.
+Keep figures and identifiers as {{placeholders}}.`;
+
+COURT_SCAFFOLDS['credit-note'] = `Format as a credit/debit note:
+- Heading "{{note_type}} NOTE", note number and date; seller and buyer details.
+- The original invoice number and date it adjusts, and the reason.
+- A line-item table of adjusted amounts and the total.
+- A line stating the amount has been credited/debited to the buyer's account, and a signatory block.
+Keep figures and identifiers as {{placeholders}}.`;
+
+COURT_SCAFFOLDS['payslip'] = `Format as a monthly payslip:
+- Employer name/address at the top; "PAYSLIP FOR {{pay_period}}".
+- Employee details (name, ID, designation, PAN/UAN, bank account, paid days).
+- Two columns: Earnings (Basic, HRA, allowances) and Deductions (PF, ESI, PT, TDS) with amounts.
+- Gross earnings, total deductions, and NET PAY (with amount in words).
+Keep figures as {{placeholders}}. This is a computer-generated payslip.`;
 
 COURT_SCAFFOLDS['statement-of-work'] = `${AGREEMENT}
 This is a Statement of Work under a Master Services Agreement. Include: reference to the MSA (date), project description, detailed scope, deliverables, timeline/milestones, fees and payment schedule, and acceptance criteria. Defined terms not set out here take their meaning from the MSA.`;

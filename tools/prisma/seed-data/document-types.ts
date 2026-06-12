@@ -270,6 +270,158 @@ export const documentTypes: DocumentTypeSeed[] = [
     ],
   },
   {
+    key: 'receipt',
+    name: 'Payment Receipt',
+    category: 'business',
+    description:
+      'Acknowledges money received — payer, amount (with words), mode/reference, and an optional running balance for part payments. India + global.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'receipt',
+    sortOrder: 95,
+    schemaShape: {
+      sections: ['receipt', 'payer', 'payee', 'payment', 'notes'],
+    },
+    templates: [
+      {
+        key: 'receipt-standard',
+        name: 'Standard Receipt',
+        componentKey: 'receipt.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'quotation',
+    name: 'Quotation / Estimate',
+    category: 'business',
+    description:
+      'A priced proposal — line items, GST/single/none tax, computed totals, and a validity date. Reuses the invoice engine. India + global.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'file-text',
+    sortOrder: 96,
+    schemaShape: {
+      sections: ['quote', 'seller', 'buyer', 'items', 'summary', 'notes'],
+    },
+    templates: [
+      {
+        key: 'quotation-standard',
+        name: 'Standard Quotation',
+        componentKey: 'quotation.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'purchase_order',
+    name: 'Purchase Order',
+    category: 'business',
+    description:
+      'A buyer-issued order to a vendor — line items, computed totals, required-by and ship-to. Reuses the invoice engine. India + global.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'file-text',
+    sortOrder: 97,
+    schemaShape: {
+      sections: ['po', 'buyer', 'vendor', 'items', 'summary', 'notes'],
+    },
+    templates: [
+      {
+        key: 'purchase-order-standard',
+        name: 'Standard Purchase Order',
+        componentKey: 'purchase-order.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'credit_note',
+    name: 'Credit / Debit Note',
+    category: 'business',
+    description:
+      'Adjusts an earlier invoice (GST-mandated in India) — credit reduces the amount due, debit increases it. References the original invoice and reason. India + global.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'file-text',
+    sortOrder: 98,
+    schemaShape: {
+      sections: ['note', 'seller', 'buyer', 'items', 'summary', 'notes'],
+    },
+    templates: [
+      {
+        key: 'credit-note-standard',
+        name: 'Standard Credit/Debit Note',
+        componentKey: 'credit-note.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'payslip',
+    name: 'Payslip / Salary Slip',
+    category: 'business',
+    description:
+      'Monthly pay statement — earnings and deductions with computed net pay (in words). India statutory components (PF/ESI/PT/TDS) or a generic global mode.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'file-text',
+    sortOrder: 99,
+    schemaShape: {
+      sections: [
+        'payslip',
+        'employer',
+        'employee',
+        'earnings',
+        'deductions',
+        'notes',
+      ],
+    },
+    templates: [
+      {
+        key: 'payslip-standard',
+        name: 'Standard Payslip',
+        componentKey: 'payslip.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
+    key: 'will',
+    name: 'Last Will & Testament',
+    category: 'personal',
+    description:
+      'A last will and testament (Indian Succession Act, 1925, or generic common-law). Numbered bequests, executor, residue, guardianship, and a two-witness attestation. Not eSignable (Schedule 1).',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*', 'GLOBAL'],
+    iconKey: 'file-text',
+    sortOrder: 99,
+    schemaShape: {
+      sections: [
+        'will',
+        'testator',
+        'executor',
+        'bequests',
+        'wishes',
+        'witnesses',
+      ],
+    },
+    templates: [
+      {
+        key: 'will-standard',
+        name: 'Standard Will',
+        componentKey: 'will.standard',
+        language: 'en',
+        jurisdictions: ['IN-*', 'GLOBAL'],
+      },
+    ],
+  },
+  {
     key: 'freeform',
     name: 'Freeform / AI Draft',
     category: 'general',

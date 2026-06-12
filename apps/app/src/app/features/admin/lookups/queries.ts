@@ -69,6 +69,41 @@ export function useUpdateGroup() {
   });
 }
 
+export function useDuplicateGroup() {
+  const svc = useLookupsService();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (vars: {
+      key: string;
+      name: string;
+      description?: string | null;
+      isPublic?: boolean;
+      values: { label: string; value: string | null; order: number }[];
+    }) => {
+      const group = await svc.createGroup({
+        key: vars.key,
+        name: vars.name,
+        description: vars.description ?? undefined,
+        isPublic: vars.isPublic ?? true,
+      });
+      // Copy values in order (sequential to preserve order + avoid races).
+      for (const v of [...vars.values].sort((a, b) => a.order - b.order)) {
+        await svc.addValue(group.id, {
+          label: v.label,
+          value: v.value ?? v.label,
+          order: v.order,
+        });
+      }
+      return group;
+    },
+    onSuccess: () => {
+      toast.success('Lookup group duplicated');
+      invalidate();
+    },
+    onError: (err) => toast.error(msg(err, 'Failed to duplicate group')),
+  });
+}
+
 export function useDeleteGroup() {
   const svc = useLookupsService();
   const invalidate = useInvalidate();

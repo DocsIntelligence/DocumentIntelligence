@@ -9,6 +9,12 @@ import { PromissoryNoteStandard } from './promissory-note/standard';
 import { EmploymentOfferStandard } from './employment-offer/standard';
 import { PowerOfAttorneyStandard } from './power-of-attorney/standard';
 import { InvoiceStandard } from './invoice/standard';
+import { ReceiptStandard } from './receipt/standard';
+import { QuotationStandard } from './quotation/standard';
+import { PurchaseOrderStandard } from './purchase-order/standard';
+import { CreditNoteStandard } from './credit-note/standard';
+import { PayslipStandard } from './payslip/standard';
+import { WillStandard } from './will/standard';
 import { FreeformDocument } from './freeform';
 
 /**
@@ -52,6 +58,19 @@ const registry: Record<string, TemplateComponent<unknown>> = {
     PowerOfAttorneyStandard as TemplateComponent<unknown>,
   // Tax invoice (GST/single/none, multi-currency, computed totals).
   'invoice.standard': InvoiceStandard as TemplateComponent<unknown>,
+  // Payment receipt ("received with thanks…", amount in words, balance).
+  'receipt.standard': ReceiptStandard as TemplateComponent<unknown>,
+  // Quotation / estimate (invoice engine; valid-until, no payment).
+  'quotation.standard': QuotationStandard as TemplateComponent<unknown>,
+  // Purchase order (buyer→vendor; invoice engine; required-by, ship-to).
+  'purchase-order.standard':
+    PurchaseOrderStandard as TemplateComponent<unknown>,
+  // Credit / debit note (invoice engine; references the original invoice).
+  'credit-note.standard': CreditNoteStandard as TemplateComponent<unknown>,
+  // Payslip / salary slip (earnings − deductions = net, in words).
+  'payslip.standard': PayslipStandard as TemplateComponent<unknown>,
+  // Last will & testament (Schedule-1: not eSignable; two witnesses).
+  'will.standard': WillStandard as TemplateComponent<unknown>,
   // Freeform / AI-drafted documents — editor HTML rendered to pages.
   freeform: FreeformDocument as TemplateComponent<unknown>,
 };

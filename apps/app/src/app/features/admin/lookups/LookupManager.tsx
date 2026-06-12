@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { applyServerFieldErrors } from '../../../lib/server-errors';
 import {
+  CopyIcon,
   EditIcon,
   EyeIcon,
   EyeOffIcon,
@@ -29,6 +30,7 @@ import {
   useCreateGroup,
   useDeleteGroup,
   useDeleteValue,
+  useDuplicateGroup,
   useUpdateGroup,
   useUpdateValue,
 } from './queries';
@@ -57,11 +59,34 @@ export function LookupManager() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const confirm = useConfirm();
   const deleteGroup = useDeleteGroup();
+  const duplicateGroup = useDuplicateGroup();
 
   const selected = useMemo(
     () => groups?.find((g) => g.id === selectedId) ?? null,
     [groups, selectedId],
   );
+
+  // Pick a key not already taken (key, key_copy, key_copy_2, …).
+  const uniqueKey = (base: string) => {
+    const existing = new Set((groups ?? []).map((g) => g.key));
+    let candidate = `${base}_copy`;
+    let i = 2;
+    while (existing.has(candidate)) candidate = `${base}_copy_${i++}`;
+    return candidate;
+  };
+
+  const onDuplicate = (g: LookupGroup) =>
+    duplicateGroup.mutate({
+      key: uniqueKey(g.key),
+      name: `${g.name} (copy)`,
+      description: g.description,
+      isPublic: g.isPublic,
+      values: g.values.map((v) => ({
+        label: v.label,
+        value: v.value,
+        order: v.order,
+      })),
+    });
 
   if (creating) {
     return <CreateGroup onClose={() => setCreating(false)} />;
@@ -133,6 +158,13 @@ export function LookupManager() {
             onClick={() => setSelectedId(g.id)}
           >
             <EditIcon />
+          </IconButton>
+          <IconButton
+            title={t('adminLookups.duplicate', 'Duplicate (with values)')}
+            disabled={duplicateGroup.isPending}
+            onClick={() => onDuplicate(g)}
+          >
+            <CopyIcon />
           </IconButton>
           <IconButton
             danger

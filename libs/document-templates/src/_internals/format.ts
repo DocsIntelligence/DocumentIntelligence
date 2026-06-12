@@ -11,6 +11,20 @@ export function formatINR(value: number | undefined | null): string {
   }).format(value);
 }
 
+/** Format an amount in any ISO currency (₹, $, €, …) with 2 decimals. */
+export function formatMoney(
+  value: number | undefined | null,
+  currency = 'INR',
+): string {
+  if (value == null || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export function formatINRWords(value: number | undefined | null): string {
   if (value == null || Number.isNaN(value)) return '';
   // Lakh / Crore style for amounts. Conservative; no AI involvement.

@@ -237,6 +237,28 @@ export const lookupGroups: LookupSeed[] = [
     ]),
   },
   {
+    key: 'payment_mode',
+    name: 'Payment mode',
+    description: 'How a payment was made',
+    values: toValues([
+      { label: 'Cash', value: 'cash' },
+      { label: 'Cheque', value: 'cheque' },
+      { label: 'Bank transfer (NEFT/RTGS/IMPS)', value: 'bank_transfer' },
+      { label: 'UPI', value: 'upi' },
+      { label: 'Card', value: 'card' },
+      { label: 'Other', value: 'other' },
+    ]),
+  },
+  {
+    key: 'credit_note_type',
+    name: 'Credit / Debit note type',
+    description: 'Whether the note reduces (credit) or increases (debit) the amount due',
+    values: toValues([
+      { label: 'Credit note', value: 'credit' },
+      { label: 'Debit note', value: 'debit' },
+    ]),
+  },
+  {
     key: 'payable_on',
     name: 'Payable on',
     description: 'On demand or on a fixed date',

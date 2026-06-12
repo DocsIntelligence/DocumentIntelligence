@@ -464,6 +464,7 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
       'Will of {{testator_name}}, aged {{age}}, resident of {{address}}, made of sound mind and free will. I appoint {{executor_name}} as executor. My assets and bequests: {{bequests}}. Residue to {{residuary_beneficiary}}. This is my last will and revokes all earlier wills and codicils. Signed in the presence of two witnesses.',
     applicableLaw: 'Indian Succession Act, 1925',
     tags: ['will', 'testament', 'executor', 'bequest', 'inheritance', 'witnesses'],
+    structuredTypeKey: 'will',
   },
   {
     key: 'gpa',
@@ -528,6 +529,19 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
     applicableLaw: 'Commercial invoice (GST where applicable in India)',
     tags: ['invoice', 'bill', 'gst', 'tax invoice', 'billing'],
     popular: true,
+    structuredTypeKey: 'invoice',
+  },
+  {
+    key: 'payment-receipt',
+    name: 'Payment receipt',
+    category: 'Business',
+    description: 'Acknowledges money received (any payment).',
+    sampleBrief:
+      'Payment receipt no. {{receipt_no}} dated {{date}}. Received with thanks from {{payer_name}} the sum of ₹{{amount}} ({{amount_words}}) by {{mode}} (ref {{reference}}) towards {{purpose}}. Issued by {{issuer_name}}.',
+    applicableLaw: 'Receipt (acknowledgement of payment)',
+    tags: ['receipt', 'payment received', 'acknowledgement', 'paid'],
+    popular: true,
+    structuredTypeKey: 'receipt',
   },
   {
     key: 'quotation',
@@ -538,6 +552,40 @@ export const DOCUMENT_PRESETS: DocumentPreset[] = [
       'Quotation from {{company_name}} to {{client_name}} for {{scope}}. Line items with quantities and unit prices: {{items}}. Total {{total}}, valid until {{valid_until}}. Terms: {{terms}}.',
     applicableLaw: 'Commercial document',
     tags: ['quotation', 'estimate', 'quote', 'proposal'],
+    structuredTypeKey: 'quotation',
+  },
+  {
+    key: 'purchase-order',
+    name: 'Purchase order (PO)',
+    category: 'Business',
+    description: 'A buyer-issued order to a vendor for goods or services.',
+    sampleBrief:
+      'Purchase order no. {{po_no}} dated {{date}} from {{buyer_name}}, {{buyer_address}} to {{vendor_name}}, {{vendor_address}}. Items ordered with quantities and unit prices: {{items}}. Total {{total}}. Delivery required by {{required_by}} at {{ship_to}}. Terms: {{terms}}. Please quote this PO number on all invoices.',
+    applicableLaw: 'Commercial document',
+    tags: ['purchase order', 'po', 'procurement', 'order', 'vendor'],
+    structuredTypeKey: 'purchase_order',
+  },
+  {
+    key: 'credit-note',
+    name: 'Credit / debit note',
+    category: 'Business',
+    description: 'Adjusts an earlier invoice (return, discount, under-charge).',
+    sampleBrief:
+      '{{note_type}} note no. {{note_no}} dated {{date}} issued by {{seller_name}} to {{buyer_name}} against invoice {{invoice_no}} dated {{invoice_date}}. Reason: {{reason}}. Adjusted line items: {{items}}. Total {{total}}. The amount has been credited/debited to the buyer’s account.',
+    applicableLaw: 'GST credit/debit note (where applicable in India)',
+    tags: ['credit note', 'debit note', 'gst', 'return', 'adjustment'],
+    structuredTypeKey: 'credit_note',
+  },
+  {
+    key: 'payslip',
+    name: 'Payslip / salary slip',
+    category: 'Business',
+    description: 'A monthly pay statement with earnings, deductions, and net pay.',
+    sampleBrief:
+      'Payslip for {{employee_name}} ({{designation}}, {{employee_id}}) at {{employer_name}} for {{pay_period}}. Earnings: {{earnings}}. Deductions: {{deductions}}. Net pay {{net_pay}} ({{net_pay_words}}). Paid on {{pay_date}} to account {{bank_account}}.',
+    applicableLaw: 'Pay statement (Payment of Wages Act / company policy)',
+    tags: ['payslip', 'salary slip', 'pay statement', 'wages', 'salary'],
+    structuredTypeKey: 'payslip',
   },
   {
     key: 'statement-of-work',

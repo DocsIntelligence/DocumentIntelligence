@@ -963,3 +963,64 @@ but users default to role `user`, so the Lookups admin UI got 403. The rest of t
 AUTHENTICATED user (role-gate removed for now). Aligned `LookupController` to the same policy: class-
 level `@UseGuards(JwtAuthGuard)`, removed per-method `RolesGuard`/`@Roles('admin')` (public GET / and
 GET :key unchanged). Role system intact — re-add RolesGuard/@Roles to lock down. Build ✓.
+
+---
+
+## 2026-06-13 — Receipt doc type + template→freeform converter + lookup duplicate
+
+**Lookup duplicate:** added `useDuplicateGroup` (client-side clone via existing createGroup +
+addValue endpoints — no backend change) and a Duplicate (CopyIcon) action in `LookupManager`. Clones
+a group as `{key}_copy` (uniquified) + `{name} (copy)` with all values copied in order. "Easier to
+create a similar set."
+
+**Receipt (structured + freeform):** full `DocumentTypeBundle` `receipt` — schema (payer/payee/
+payment{amount,towards,mode,reference,part-payment+totalAmount}/notes, currency lookup) + form-metadata
+(mode→new `payment_mode` lookup) + prompts + risks + index + computing template (`receipt.standard`:
+"Received with thanks…", amount in words for INR via `formatMoney`+`formatINRWords`, optional balance,
+signatory). Registered in document-schema index + _registry + seed (sortOrder 95). Added freeform
+preset `payment-receipt` (Business) + scaffold; new `payment_mode` lookup group seeded. Extracted
+reusable `formatMoney(amount,currency)` into `_internals/format.ts`.
+
+**Template → free-form converter (one-way "eject"):** `BuilderShell` "Edit as free-form" button →
+confirm → `renderToStaticMarkup` of the registered template with current `draft` data (no edit
+provider, so values bake in) → take the Paginator hidden-mirror's innerHTML as the clean body → create
+a `freeform` Document (`data.html`) → navigate to `/documents/:id/draft`. One-way by design (prose
+can't be parsed back to typed fields); confirm dialog states it leaves the guided form/risks/recompute.
+Reusable for every structured type.
+
+- Verified: @org/app typecheck ✓, @org/api build ✓, lint 0 errors (10 pre-existing warnings). NOT
+  runtime-verified. Needs DB re-seed for the `receipt` type + `payment_mode` lookup.
+
+## 2026-06-13 — Financial-document family (Tier-1) + Payslip + Will
+
+Implemented five new structured `DocumentTypeBundle`s (schema + form-metadata + prompts + risks + index)
+plus a standard computing template for each, all registered in document-schema `index.ts`, the templates
+`_registry.tsx`, the seed `document-types.ts`, and where relevant the freeform presets + court scaffolds.
+
+Shared infra (extracted last session) reused by the invoice family: `_internals/invoice-compute.ts`
+(`computeInvoice`, `makeMoney`, cell styles) and `_internals/invoice-parts.tsx` (`ItemsTable`,
+`TotalsBlock`, `TaxSummary`). Added to invoice-parts: `PartyBlock` + `partyLines()` helper for
+seller/buyer/vendor address blocks. Shared form fields via `_shared/commercial-fields.ts`.
+
+- **quotation** (`quotation.standard`): priced proposal; invoice engine + `validUntil`, no payment/balance.
+  Quote-terms AI assist (`quotation.terms`). Preset `quotation` got `structuredTypeKey`.
+- **purchase_order** (`purchase-order.standard`): buyer→vendor order; `requiredBy`/`shipTo`; PO-terms
+  assist. New preset `purchase-order` + scaffold.
+- **credit_note** (`credit-note.standard`): credit/debit note vs an original invoice; `noteType` via new
+  `credit_note_type` lookup; reason + original-invoice reference; figure-driven (no AI prompts). New
+  preset `credit-note` + scaffold.
+- **payslip** (`payslip.standard`): own compute (gross − deductions = net, INR in words); flexible
+  earnings/deductions component arrays (India PF/ESI/PT/TDS or global); side-by-side table. New preset
+  `payslip` + scaffold.
+- **will** (`will.standard`): last will & testament; numbered declaration/revocation/executor/bequests/
+  residue/guardian/funeral + two-witness attestation; risks enforce ≥2 witnesses (ISA 1925 §63) and
+  flag Schedule-1 (not eSignable — already in `ESIGN_EXCLUDED_KEYS`). Bequest-phrasing AI assist only
+  (never authors who-inherits or statutory text). Preset `will` got `structuredTypeKey`; `will` scaffold
+  already existed. Also added `structuredTypeKey: 'invoice'` to the invoice preset.
+
+Seed additions: 5 document types (sortOrder 96–99) + 1 lookup group (`credit_note_type`).
+
+- Verified: @org/app typecheck ✓ (transitively typechecks templates + schema via the registry),
+  @org/api build ✓, lint 0 errors on document-schema/document-templates/legal-reference/api/app
+  (pre-existing warnings only). NOT runtime-verified. Needs DB re-seed for the 5 new types + the
+  `credit_note_type` lookup.

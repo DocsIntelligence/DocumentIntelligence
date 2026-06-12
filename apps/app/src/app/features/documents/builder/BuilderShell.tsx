@@ -1,5 +1,5 @@
 import { getBundle, type Warning } from '@org/document-schema';
-import type { FieldClickEvent } from '@org/document-templates';
+import { getTemplate, type FieldClickEvent } from '@org/document-templates';
 import { useDebounce, useMediaQuery } from '@org/hooks';
 import {
   Button,
@@ -13,7 +13,9 @@ import {
   Label,
 } from '@org/ui';
 import { cn } from '@org/utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useConfirm } from '../../../components/confirm/ConfirmProvider';
+import { createElement, useEffect, useMemo, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -67,6 +69,7 @@ export function BuilderShell({ documentId }: Props) {
   const legalAi = useLegalAiService();
   const createDoc = useCreateDocument();
   const navigate = useNavigate();
+  const confirm = useConfirm();
 
   // "Generate in another language" — bridge the structured data to a
   // freeform, fully-translated draft (the structured templates are English).
@@ -230,6 +233,54 @@ export function BuilderShell({ documentId }: Props) {
       );
     } finally {
       setLangBusy(false);
+    }
+  }
+
+  // One-way "eject": render the structured template to static HTML and create a
+  // free-form copy the user can edit without the guided form's constraints.
+  async function detachToFreeform() {
+    if (!doc) return;
+    const ok = await confirm({
+      title: t('builder.detach.title', 'Edit as a free-form document?'),
+      description: t(
+        'builder.detach.desc',
+        'This creates an editable copy in the rich-text editor with the current content baked in. It is no longer tied to the guided form, risk checks, or auto-recalculation — and you cannot convert it back.',
+      ),
+      confirmLabel: t('builder.detach.confirm', 'Create editable copy'),
+    });
+    if (!ok) return;
+    try {
+      const componentKey = resolveComponentKey(doc);
+      const Template = getTemplate(componentKey);
+      if (!Template) {
+        toast.error(t('builder.detach.noTemplate', 'No renderer for this template.'));
+        return;
+      }
+      const markup = renderToStaticMarkup(
+        createElement(Template, {
+          data: draft,
+          pageSize: doc.pageSize,
+        } as never),
+      );
+      // The Paginator renders a hidden "mirror" div holding the full, unpaginated
+      // content in order — use that as the clean body, drop page chrome/styles.
+      const parsed = new DOMParser().parseFromString(markup, 'text/html');
+      const mirror = parsed.querySelector('[aria-hidden]');
+      const html = (mirror?.innerHTML ?? parsed.body.innerHTML).trim();
+      const newDoc = await createDoc.mutateAsync({
+        title: `${draftTitle || doc.title} (editable copy)`,
+        documentTypeKey: 'freeform',
+        templateKey: 'freeform',
+        data: { html, values: {}, fields: [], templateId: 'freeform' },
+      });
+      toast.success(
+        t('builder.detach.done', 'Editable free-form copy created'),
+      );
+      navigate(`/documents/${newDoc.id}/draft`);
+    } catch {
+      toast.error(
+        t('builder.detach.failed', 'Could not create the free-form copy.'),
+      );
     }
   }
 
@@ -435,6 +486,19 @@ export function BuilderShell({ documentId }: Props) {
           >
             <GlobeIcon />
             {t('builder.language', 'Language')}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={detachToFreeform}
+            className="h-7 flex-none gap-1.5 px-2 text-xs"
+            title={t(
+              'builder.detachTooltip',
+              'Create a free-form editable copy (one-way — leaves the guided form)',
+            )}
+          >
+            {t('builder.detach', 'Edit as free-form')}
           </Button>
 
           <span aria-hidden className="mx-1 h-5 w-px flex-none bg-border/70" />
