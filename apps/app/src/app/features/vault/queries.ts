@@ -1,20 +1,32 @@
 import type {
   CreateVaultEntityPayload,
+  ListVaultEntitiesQuery,
   UpdateVaultEntityPayload,
 } from '@org/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useVaultService } from '../documents/services-context';
 
 export const vaultKeys = {
   all: ['vault'] as const,
   list: ['vault', 'entities'] as const,
+  page: (params: ListVaultEntitiesQuery) =>
+    ['vault', 'entities', params] as const,
   entity: (id: string) => ['vault', 'entity', id] as const,
 };
 
-export function useVaultEntities() {
+export function useVaultEntities(params: ListVaultEntitiesQuery = {}) {
   const svc = useVaultService();
-  return useQuery({ queryKey: vaultKeys.list, queryFn: () => svc.list() });
+  return useQuery({
+    queryKey: vaultKeys.page(params),
+    queryFn: () => svc.list(params),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export function useVaultEntity(id: string | undefined) {
@@ -53,6 +65,19 @@ export function useUpdateVaultEntity(id: string) {
   });
 }
 
+export function useDuplicateVaultEntity() {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.duplicate(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.list });
+      toast.success('Entity duplicated');
+    },
+    onError: () => toast.error('Could not duplicate'),
+  });
+}
+
 export function useDeleteVaultEntity() {
   const svc = useVaultService();
   const qc = useQueryClient();
@@ -77,6 +102,39 @@ export function useAddVaultDocument(id: string) {
       toast.success('Document attached');
     },
     onError: () => toast.error('Upload failed'),
+  });
+}
+
+/** Scan a document and merge the suggested values into the entity (empty fields
+ *  only, so existing data is never overwritten). */
+export function useScanVaultDocument(id: string) {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (docId: string) => {
+      const { suggestions } = await svc.scanDocument(id, docId);
+      const keys = Object.keys(suggestions);
+      if (keys.length === 0) return { added: 0 };
+      const revealed = await svc.reveal(id);
+      const merged = { ...revealed.fields };
+      let added = 0;
+      for (const [k, v] of Object.entries(suggestions)) {
+        if (!merged[k] || !merged[k].trim()) {
+          merged[k] = v;
+          added++;
+        }
+      }
+      if (added > 0) await svc.update(id, { fields: merged });
+      return { added };
+    },
+    onSuccess: ({ added }) => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
+      toast.success(
+        added > 0 ? `Filled ${added} field(s) from the document` : 'Nothing new to fill',
+      );
+    },
+    onError: () =>
+      toast.error('Scan failed — needs a vision-capable AI provider (e.g. ANTHROPIC_API_KEY)'),
   });
 }
 

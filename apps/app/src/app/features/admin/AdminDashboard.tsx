@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { selectUser, useAppSelector } from '@org/store';
-import { Button, Card } from '@org/ui';
+import { Button, Card, Spinner } from '@org/ui';
 import { toast } from 'sonner';
 import { AdminLookups } from './AdminLookups';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
@@ -100,7 +100,11 @@ export function AdminDashboard() {
   }
 
   if (loading)
-    return <p className="text-foreground/60">Loading admin panel...</p>;
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner />
+      </div>
+    );
 
   return (
     <div className="space-y-6">

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   LanguageSwitcher,
+  Spinner,
   ThemeSwitcher,
   UserAvatar,
 } from '@org/ui';
@@ -161,8 +162,8 @@ export function Settings() {
 
   if (loading) {
     return (
-      <div className="text-sm text-foreground/60">
-        {t('settings.loading', 'Loading settings...')}
+      <div className="flex justify-center py-16">
+        <Spinner />
       </div>
     );
   }

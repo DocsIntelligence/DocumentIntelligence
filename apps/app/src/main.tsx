@@ -24,6 +24,7 @@ import {
   createSharesService,
   createUsersService,
   createVaultService,
+  createVaultAdminService,
 } from '@org/api-client';
 import { authActions, configureAppStore } from '@org/store';
 import { TooltipProvider } from '@org/ui';
@@ -78,6 +79,7 @@ const intelligence = createIntelligenceService(http);
 const intelligenceAdmin = createIntelligenceAdminService(http);
 const search = createSearchService(http);
 const vault = createVaultService(http);
+const vaultAdmin = createVaultAdminService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -109,6 +111,7 @@ root.render(
             intelligenceAdmin={intelligenceAdmin}
             search={search}
             vault={vault}
+            vaultAdmin={vaultAdmin}
           >
             <BrowserRouter>
               <ConfirmProvider>

@@ -245,6 +245,7 @@ export class BatchService {
         filename: r.sourceDocument.filename,
         documentTypeKey: r.documentTypeKey,
         archivedReason: r.archivedReason,
+        updatedAt: r.updatedAt.toISOString(),
       })),
       total,
     };

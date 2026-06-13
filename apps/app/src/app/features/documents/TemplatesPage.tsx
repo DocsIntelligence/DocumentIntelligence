@@ -1,4 +1,4 @@
-import { Button, Card, Input } from '@org/ui';
+import { Button, Card, Chip, Input } from '@org/ui';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -86,30 +86,18 @@ export function TemplatesPage() {
             />
             {categories.length > 1 && (
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCategory(null)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    category === null
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-foreground/60 hover:border-primary/40'
-                  }`}
-                >
+                <Chip active={category === null} onClick={() => setCategory(null)}>
                   {t('templates.allCategories', 'All')}
-                </button>
+                </Chip>
                 {categories.map((cat) => (
-                  <button
+                  <Chip
                     key={cat}
-                    type="button"
+                    active={category === cat}
                     onClick={() => setCategory(cat)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                      category === cat
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-foreground/60 hover:border-primary/40'
-                    }`}
+                    className="capitalize"
                   >
                     {cat}
-                  </button>
+                  </Chip>
                 ))}
               </div>
             )}

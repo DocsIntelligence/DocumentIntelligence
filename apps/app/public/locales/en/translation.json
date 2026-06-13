@@ -14,7 +14,10 @@
     "save": "Save",
     "prev": "Prev",
     "next": "Next",
-    "delete": "Delete"
+    "delete": "Delete",
+    "edit": "Edit",
+    "actions": "Actions",
+    "status": "Status"
   },
   "newDoc": {
     "subtitle": "Draft freely with AI, or pick a structured document type below.",
@@ -70,7 +73,9 @@
     "lookups": "Lookups",
     "search": "Search",
     "searchSettings": "Search settings",
-    "vault": "Vault"
+    "vault": "Vault",
+    "vaultConfig": "Vault fields",
+    "configuration": "Configuration"
   },
   "greeting": {
     "morning": "Good morning",
@@ -201,7 +206,8 @@
       "open": "Open",
       "goReview": "Review queue",
       "skipType": "Skip type",
-      "skipTypeTitle2": "Skip all of this type?"
+      "skipTypeTitle2": "Skip all of this type?",
+      "skipOneTitle": "Skip this document?"
     },
     "queue": {
       "title": "Review queue",
@@ -209,7 +215,11 @@
       "review": "Review",
       "approve": "Approve & finish",
       "unknownType": "unknown type",
-      "empty": "Nothing to review. 🎉"
+      "empty": "Nothing to review. 🎉",
+      "file": "File",
+      "type": "Type",
+      "confidence": "Confidence",
+      "search": "Search by file or type…"
     }
   },
   "search": {
@@ -278,6 +288,43 @@
     "deleteDesc": "Its details and all attached documents are permanently removed.",
     "insert": "Insert from vault",
     "insertTitle": "Insert from vault",
-    "insertEmpty": "No saved entities yet. Add one in the Vault first."
+    "insertEmpty": "No saved entities yet. Add one in the Vault first.",
+    "scan": "Scan & autofill",
+    "open": "Open",
+    "duplicate": "Duplicate",
+    "disable": "Disable",
+    "enable": "Enable",
+    "disabled": "Disabled",
+    "docs": "Docs",
+    "updated": "Updated",
+    "search": "Search entities…"
+  },
+  "vaultAdmin": {
+    "title": "Vault fields",
+    "subtitle": "Configure the entity fields and document kinds the Document Vault offers — no code. Canonical keys stay stable so autofill keeps working.",
+    "fields": "Fields",
+    "addField": "Add field",
+    "editField": "Edit field",
+    "noFields": "No fields for this type.",
+    "docKinds": "Document kinds",
+    "addDocKind": "Add document kind",
+    "editDocKind": "Edit document kind",
+    "scannable": "scannable",
+    "scannableLabel": "Scannable (OCR autofill)",
+    "fillsN": "fills {{n}}",
+    "entityKind": "Entity kind",
+    "type": "Type",
+    "key": "Key (stable)",
+    "label": "Label",
+    "group": "Group",
+    "sortOrder": "Order",
+    "options": "Options (comma-separated)",
+    "sensitive": "Sensitive (encrypted + masked)",
+    "fills": "Fills",
+    "knownKeys": "Known keys",
+    "lookupKey": "Lookup key (e.g. country, state)",
+    "searchFields": "Search fields…",
+    "searchDocKinds": "Search document kinds…",
+    "noDocKinds": "No document kinds configured."
   }
 }

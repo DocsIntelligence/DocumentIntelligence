@@ -1,6 +1,7 @@
 import type { SearchKind, SearchSort } from '@org/api-client';
 import {
   Badge,
+  Button,
   Card,
   Chip,
   Input,
@@ -99,10 +100,12 @@ export function SearchPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="text-xl font-semibold">{t('search.title', 'Search')}</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {t('search.title', 'Search')}
+        </h1>
+        <p className="mt-1 text-foreground/60">
           {t(
             'search.subtitle',
             'Search across your drafts and uploaded documents — by title or anything inside.',
@@ -308,12 +311,8 @@ function PagerBtn({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      className="rounded-md border px-3 py-1 disabled:opacity-40"
-      disabled={disabled}
-      onClick={onClick}
-    >
+    <Button variant="outline" size="sm" disabled={disabled} onClick={onClick}>
       {children}
-    </button>
+    </Button>
   );
 }

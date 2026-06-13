@@ -215,6 +215,27 @@ export function PipelineManager() {
     if (ok) purge.mutate(key);
   };
 
+  const onToggleActive = async (key: string, currentlyActive: boolean) => {
+    const ok = await confirm({
+      title: currentlyActive
+        ? t('adminIntel.pipeline.disableTitle', 'Disable this pipeline?')
+        : t('adminIntel.pipeline.enableTitle', 'Enable this pipeline?'),
+      description: currentlyActive
+        ? t(
+            'adminIntel.pipeline.disableDesc',
+            'It will be hidden from new runs but kept for history. You can re-enable it later.',
+          )
+        : t(
+            'adminIntel.pipeline.enableDesc',
+            'It will be available for new runs again.',
+          ),
+      confirmLabel: currentlyActive
+        ? t('adminIntel.pipeline.disable', 'Disable')
+        : t('adminIntel.pipeline.enable', 'Enable'),
+    });
+    if (ok) setActive.mutate({ key, active: !currentlyActive });
+  };
+
   const columns: DataTableColumn<AdminPipelineSummary>[] = [
     {
       key: 'name',
@@ -274,6 +295,8 @@ export function PipelineManager() {
       key: 'actions',
       header: '',
       align: 'right',
+      width: 'w-40',
+      pinned: true,
       cell: (p) => (
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
@@ -292,7 +315,7 @@ export function PipelineManager() {
             <IconButton
               title={t('adminIntel.pipeline.enable', 'Enable')}
               disabled={setActive.isPending}
-              onClick={() => setActive.mutate({ key: p.key, active: true })}
+              onClick={() => onToggleActive(p.key, false)}
             >
               <EyeOffIcon />
             </IconButton>
@@ -300,7 +323,7 @@ export function PipelineManager() {
             <IconButton
               title={t('adminIntel.pipeline.disable', 'Disable')}
               disabled={setActive.isPending}
-              onClick={() => setActive.mutate({ key: p.key, active: false })}
+              onClick={() => onToggleActive(p.key, true)}
             >
               <EyeIcon />
             </IconButton>
@@ -338,6 +361,7 @@ export function PipelineManager() {
         </p>
       ) : (
         <DataTable
+          tableId="admin.intelligence.pipelines"
           data={pipelines ?? []}
           columns={columns}
           rowKey={(p) => p.key}

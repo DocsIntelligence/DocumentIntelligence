@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 
 @Injectable()
@@ -40,6 +41,48 @@ export class LookupService {
       include: { values: { orderBy: { order: 'asc' } } },
       orderBy: { name: 'asc' },
     });
+  }
+
+  /** Admin: server-side paginated groups (with their values) + search. */
+  async getAllPaginated(query: { q?: string; page: number; pageSize: number }) {
+    const where: Prisma.LookupGroupWhereInput = query.q
+      ? {
+          OR: [
+            { key: { contains: query.q, mode: 'insensitive' } },
+            { name: { contains: query.q, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    const [rows, total] = await this.db.$transaction([
+      this.db.lookupGroup.findMany({
+        where,
+        include: { _count: { select: { values: true } } },
+        orderBy: { name: 'asc' },
+        take: query.pageSize,
+        skip: query.page * query.pageSize,
+      }),
+      this.db.lookupGroup.count({ where }),
+    ]);
+    // Lean summaries — values are fetched per-group on select (getOneAdmin).
+    const items = rows.map((g) => ({
+      id: g.id,
+      key: g.key,
+      name: g.name,
+      description: g.description,
+      isPublic: g.isPublic,
+      valueCount: g._count.values,
+    }));
+    return { items, total };
+  }
+
+  /** Admin: one group WITH its values (fetched when the group is selected). */
+  async getOneAdmin(id: string) {
+    const group = await this.db.lookupGroup.findUnique({
+      where: { id },
+      include: { values: { orderBy: { order: 'asc' } } },
+    });
+    if (!group) throw new NotFoundException('Lookup group not found');
+    return group;
   }
 
   /** Admin: create a new lookup group */

@@ -12,12 +12,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
 } from '@org/ui';
 import { cn } from '@org/utils';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
@@ -140,55 +139,67 @@ export function DocumentsList() {
       key: 'actions',
       header: '',
       align: 'right',
+      width: 'w-44',
+      pinned: true,
       cell: (d) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={t('common.actions', 'Actions')}
-              className="rounded p-1 text-foreground/50 hover:bg-secondary hover:text-foreground"
-            >
-              ⋯
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => navigate(documentHref(d))}>
-              {t('common.open', 'Open')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => setRenameDoc({ id: d.id, title: d.title ?? '' })}
-            >
-              {t('common.rename', 'Rename')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => duplicate.mutate(d.id)}>
-              {t('documents.duplicate', 'Duplicate')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setShareId(d.id)}>
-              {t('documents.share', 'Share')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setHistoryId(d.id)}>
-              {t('documents.history', 'Version history')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-error"
-              onSelect={async () => {
-                const ok = await confirm({
-                  title: t('documents.deleteTitle', 'Delete document?'),
-                  description: t(
-                    'documents.deleteDesc',
-                    'This permanently deletes the document. This cannot be undone.',
-                  ),
-                  confirmLabel: t('common.delete', 'Delete'),
-                  variant: 'destructive',
-                });
-                if (ok) del.mutate(d.id);
-              }}
-            >
-              {t('common.delete', 'Delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            title={t('common.open', 'Open')}
+            onClick={() => navigate(documentHref(d))}
+          >
+            <EditGlyph />
+          </IconButton>
+          <IconButton
+            title={t('documents.duplicate', 'Duplicate')}
+            onClick={() => duplicate.mutate(d.id)}
+          >
+            <CopyGlyph />
+          </IconButton>
+          <IconButton
+            danger
+            title={t('common.delete', 'Delete')}
+            onClick={async () => {
+              const ok = await confirm({
+                title: t('documents.deleteTitle', 'Delete document?'),
+                description: t(
+                  'documents.deleteDesc',
+                  'This permanently deletes the document. This cannot be undone.',
+                ),
+                confirmLabel: t('common.delete', 'Delete'),
+                variant: 'destructive',
+              });
+              if (ok) del.mutate(d.id);
+            }}
+          >
+            <TrashGlyph />
+          </IconButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('common.actions', 'Actions')}
+                className="rounded p-1.5 text-foreground/55 transition hover:bg-secondary hover:text-foreground"
+              >
+                ⋯
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() =>
+                  setRenameDoc({ id: d.id, title: d.title ?? '' })
+                }
+              >
+                {t('common.rename', 'Rename')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setShareId(d.id)}>
+                {t('documents.share', 'Share')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setHistoryId(d.id)}>
+                {t('documents.history', 'Version history')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ),
     },
   ];
@@ -257,6 +268,7 @@ export function DocumentsList() {
 
       {!isLoading && !error && (total > 0 || hasFilters) && (
         <DataTable
+          tableId="documents.list"
           data={rows}
           columns={columns}
           rowKey={(d) => d.id}
@@ -386,6 +398,88 @@ function RenameDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function IconButton({
+  title,
+  danger,
+  disabled,
+  onClick,
+  children,
+}: {
+  title: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'rounded p-1.5 transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40',
+        danger
+          ? 'text-error hover:text-error'
+          : 'text-foreground/60 hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EditGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function CopyGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function TrashGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
   );
 }
 

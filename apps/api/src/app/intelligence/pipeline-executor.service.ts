@@ -188,6 +188,7 @@ export class PipelineExecutorService {
         take: pageSize,
         skip: page * pageSize,
         include: {
+          batch: { select: { id: true, name: true } },
           sourceDocument: {
             select: {
               id: true,
@@ -213,11 +214,13 @@ export class PipelineExecutorService {
         sourceDocumentId: r.sourceDocumentId,
         filename: r.sourceDocument.filename,
         batchId: r.batchId,
+        batchName: r.batch?.name ?? null,
         extractionId: r.sourceDocument.extractions[0]?.id ?? null,
         documentTypeKey:
           r.sourceDocument.extractions[0]?.documentTypeKey ?? null,
         overallConfidence:
           r.sourceDocument.extractions[0]?.overallConfidence ?? null,
+        updatedAt: r.updatedAt.toISOString(),
       })),
       total,
     };

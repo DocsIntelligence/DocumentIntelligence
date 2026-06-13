@@ -3,6 +3,7 @@ import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LookupManager } from '../lookups/LookupManager';
 import { SearchSettingsManager } from '../search/SearchSettingsManager';
+import { VaultConfigManager } from '../vault/VaultConfigManager';
 import { PipelineManager } from './PipelineManager';
 import { SchemaManager } from './SchemaManager';
 
@@ -94,6 +95,21 @@ export function SearchConfigPage() {
       )}
     >
       <SearchSettingsManager />
+    </ConfigShell>
+  );
+}
+
+export function VaultConfigPage() {
+  const { t } = useTranslation();
+  return (
+    <ConfigShell
+      title={t('vaultAdmin.title', 'Vault fields')}
+      subtitle={t(
+        'vaultAdmin.subtitle',
+        'Configure the entity fields and document kinds the Document Vault offers — no code. Canonical keys stay stable so autofill keeps working.',
+      )}
+    >
+      <VaultConfigManager />
     </ConfigShell>
   );
 }

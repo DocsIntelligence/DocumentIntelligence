@@ -80,7 +80,7 @@ export function MainLayout() {
 
       {/* Content */}
       <div className="md:pl-64">
-        <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-10">
+        <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 md:px-8 md:py-10">
           <Outlet />
         </main>
       </div>
@@ -210,22 +210,19 @@ function Sidebar({
             />
           </NavGroup>
 
-          <NavItem
-            to="/analyze"
-            label={t('nav.analyze', 'Analyze')}
-            icon={<ScanIcon />}
-          />
-
+          {/* Operational doc-intelligence work */}
           <NavGroup
             label={t('nav.docIntel', 'Document Intelligence')}
             icon={<LayersIcon />}
             storageKey="nav.group.docIntel"
-            childPaths={[
-              '/batches',
-              '/review-queue',
-              '/admin/intelligence',
-            ]}
+            childPaths={['/analyze', '/batches', '/review-queue']}
           >
+            <NavItem
+              to="/analyze"
+              end
+              label={t('nav.analyze', 'Analyze')}
+              icon={<ScanIcon />}
+            />
             <NavItem
               to="/batches"
               end
@@ -242,7 +239,15 @@ function Sidebar({
               label={t('nav.reviewQueue', 'Review queue')}
               icon={<InboxIcon />}
             />
-            {/* Temporarily visible to all users (no admin gate). */}
+          </NavGroup>
+
+          {/* Configuration / admin (catalogs + settings) */}
+          <NavGroup
+            label={t('nav.configuration', 'Configuration')}
+            icon={<GearIcon />}
+            storageKey="nav.group.config"
+            childPaths={['/admin/intelligence', '/admin']}
+          >
             <NavItem
               to="/admin/intelligence/types"
               label={t('nav.docTypes', 'Document types')}
@@ -262,6 +267,11 @@ function Sidebar({
               to="/admin/intelligence/search"
               label={t('nav.searchSettings', 'Search settings')}
               icon={<SearchIcon />}
+            />
+            <NavItem
+              to="/admin/intelligence/vault"
+              label={t('nav.vaultConfig', 'Vault fields')}
+              icon={<VaultIcon />}
             />
           </NavGroup>
 

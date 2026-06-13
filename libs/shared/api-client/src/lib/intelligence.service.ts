@@ -423,6 +423,7 @@ export interface BatchRun {
   filename: string;
   documentTypeKey: string | null;
   archivedReason: string | null;
+  updatedAt: string;
 }
 export interface BatchFunnel {
   inProgress: number;
@@ -458,9 +459,11 @@ export interface ReviewQueueItem {
   sourceDocumentId: string;
   filename: string;
   batchId: string | null;
+  batchName: string | null;
   extractionId: string | null;
   documentTypeKey: string | null;
   overallConfidence: number | null;
+  updatedAt: string;
 }
 export interface ReviewQueueResult {
   items: ReviewQueueItem[];

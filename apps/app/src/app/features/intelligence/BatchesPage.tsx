@@ -214,6 +214,7 @@ export function BatchesPage() {
 
       {hasBatches || hasFilters ? (
         <DataTable
+          tableId="intelligence.batches"
           data={rows}
           columns={columns}
           rowKey={(b) => b.id}

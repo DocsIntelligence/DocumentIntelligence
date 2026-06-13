@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  Input,
   Spinner,
 } from '@org/ui';
 import { useState } from 'react';
@@ -27,7 +28,9 @@ export function VaultAutofillDialog({
 }) {
   const { t } = useTranslation();
   const svc = useVaultService();
-  const { data, isLoading } = useVaultEntities();
+  const [q, setQ] = useState('');
+  const { data, isLoading } = useVaultEntities({ q: q || undefined, pageSize: 50 });
+  const entities = (data?.items ?? []).filter((e) => e.isActive);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const pick = async (id: string, label: string) => {
@@ -47,17 +50,23 @@ export function VaultAutofillDialog({
         <DialogHeader>
           <DialogTitle>{t('vault.insertTitle', 'Insert from vault')}</DialogTitle>
         </DialogHeader>
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t('vault.search', 'Search entities…')}
+          className="mb-2"
+        />
         {isLoading ? (
           <div className="flex justify-center py-8">
             <Spinner />
           </div>
-        ) : (data?.length ?? 0) === 0 ? (
+        ) : entities.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {t('vault.insertEmpty', 'No saved entities yet. Add one in the Vault first.')}
           </p>
         ) : (
           <div className="max-h-80 space-y-1 overflow-y-auto">
-            {data?.map((e) => (
+            {entities.map((e) => (
               <button
                 key={e.id}
                 onClick={() => pick(e.id, e.label)}

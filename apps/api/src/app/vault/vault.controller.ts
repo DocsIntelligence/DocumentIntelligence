@@ -22,7 +22,11 @@ import {
 import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CreateVaultEntityDto, UpdateVaultEntityDto } from './vault.dto';
+import {
+  CreateVaultEntityDto,
+  ListVaultEntitiesQueryDto,
+  UpdateVaultEntityDto,
+} from './vault.dto';
 import { VaultService } from './vault.service';
 
 /** Document Vault (docs/10): entities + their documents, encrypted + owner-scoped. */
@@ -35,9 +39,9 @@ export class VaultController {
   constructor(private readonly vault: VaultService) {}
 
   @Get('entities')
-  @ApiOperation({ summary: 'List my vault entities (fields masked)' })
-  list(@CurrentUser() user: User) {
-    return this.vault.list(user.id);
+  @ApiOperation({ summary: 'List my vault entities, paginated (fields masked)' })
+  list(@CurrentUser() user: User, @Query() query: ListVaultEntitiesQueryDto) {
+    return this.vault.list(user.id, query);
   }
 
   @Post('entities')
@@ -74,6 +78,12 @@ export class VaultController {
     return this.vault.update(user.id, id, body);
   }
 
+  @Post('entities/:id/duplicate')
+  @ApiOperation({ summary: 'Duplicate an entity (fields cloned; documents not)' })
+  duplicate(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.vault.duplicate(user.id, id);
+  }
+
   @Delete('entities/:id')
   @ApiOperation({ summary: 'Delete an entity (and purge its documents)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
@@ -91,6 +101,16 @@ export class VaultController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.vault.addDocument(user.id, id, file, kind ?? 'other');
+  }
+
+  @Post('entities/:id/documents/:docId/scan')
+  @ApiOperation({ summary: 'Vision-scan a document → suggested field values (audited)' })
+  scanDocument(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+  ) {
+    return this.vault.scanDocument(user.id, id, docId);
   }
 
   @Get('entities/:id/documents/:docId/url')

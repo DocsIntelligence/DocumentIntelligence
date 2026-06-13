@@ -6,6 +6,8 @@ import type {
 } from '@org/document-schema';
 import {
   Button,
+  Checkbox,
+  DatePicker,
   Select,
   SelectContent,
   SelectItem,
@@ -346,23 +348,16 @@ function renderInput(
   }
   if (widget === 'date') {
     return (
-      <input
-        id={id}
-        type="date"
-        className={BASE_INPUT_CLS}
-        value={asString(value)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <DatePicker value={asString(value)} onChange={(v) => onChange(v)} />
     );
   }
   if (typeof value === 'boolean' || widget === 'boolean') {
     return (
       <span className="flex items-center gap-2">
-        <input
+        <Checkbox
           id={id}
-          type="checkbox"
           checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
+          onCheckedChange={(c) => onChange(c === true)}
         />
       </span>
     );

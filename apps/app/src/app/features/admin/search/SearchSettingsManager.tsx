@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { SearchConfig, SearchKind } from '@org/api-client';
 import { searchConfigSchema, type SearchConfigDto } from '@org/dto';
-import { Button, FormField, Input, Spinner, Switch } from '@org/ui';
+import { Button, Checkbox, FormField, Input, Spinner, Switch } from '@org/ui';
 import { useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import {
@@ -146,10 +146,9 @@ function SettingsForm({ config }: { config: SearchConfig }) {
         <div className="flex gap-4">
           {ALL_KINDS.map((k) => (
             <label key={k} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={enabledKinds.includes(k)}
-                onChange={() => toggleKind(k)}
+                onCheckedChange={() => toggleKind(k)}
               />
               {k === 'document'
                 ? t('search.drafts', 'Drafts')

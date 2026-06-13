@@ -1,5 +1,27 @@
 import { cn } from '@org/utils';
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import {
+  flexRender,
+  getCoreRowModel,
+  getExpandedRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnOrderState,
+  type ColumnSizingState,
+  type ExpandedState,
+  type PaginationState,
+  type Row,
+  type SortingState,
+} from '@tanstack/react-table';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Input } from './input';
 import {
   Select,
@@ -10,17 +32,26 @@ import {
 } from './select';
 
 export interface DataTableColumn<T> {
-  /** Stable id; also the sort key. */
+  /** Stable id; also the sort key + persisted column identifier. */
   key: string;
   header: ReactNode;
-  /** Cell content. Defaults to nothing — provide for every visible column. */
+  /** Cell content. Provide for every visible column. */
   cell: (row: T) => ReactNode;
   /** Provide to make the column sortable. */
   sortValue?: (row: T) => string | number;
   align?: 'left' | 'right' | 'center';
+  /** Extra classes applied to the cell. */
   className?: string;
-  /** e.g. 'w-32' / 'w-1/3'. */
+  /** Legacy Tailwind width hint (e.g. 'w-32') — used as fallback when no pixel width. */
   width?: string;
+  /** Default pixel width — used when no user override exists. */
+  defaultWidth?: number;
+  /** Min pixel width for resize. Defaults to 60. */
+  minWidth?: number;
+  /** Max pixel width for resize. Defaults to 800. */
+  maxWidth?: number;
+  /** Prevent the user from reordering or resizing this column. */
+  pinned?: boolean;
 }
 
 export interface DataTableSort {
@@ -31,11 +62,9 @@ export interface DataTableSort {
 /**
  * Opt-in server-driven mode. When provided, the table does NOT filter/sort/
  * paginate internally — it renders `data` as given (the current page) and
- * delegates page/sort/search changes to these callbacks. Use for unbounded,
- * user-owned lists (documents, batches). Omit for small, fully-loaded lists.
+ * delegates page/sort/search changes to these callbacks.
  */
 export interface DataTableServer {
-  /** 0-based current page index. */
   page: number;
   pageCount: number;
   total: number;
@@ -44,10 +73,8 @@ export interface DataTableServer {
   onSortChange?: (sort: DataTableSort | null) => void;
   query?: string;
   onQueryChange?: (query: string) => void;
-  /** Current page size (for the page-size selector). */
   pageSize?: number;
   onPageSizeChange?: (pageSize: number) => void;
-  /** Dim the rows while the next page is being fetched. */
   loading?: boolean;
 }
 
@@ -55,252 +82,503 @@ export interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
   rowKey: (row: T) => string;
-  /** Return a row's searchable text to enable the search box. */
   search?: (row: T) => string;
   searchPlaceholder?: string;
-  /** Extra controls (filter chips, etc.) shown in the toolbar. */
   toolbar?: ReactNode;
-  /** Return expanded content to make rows expandable (adds a chevron column). */
   renderExpanded?: (row: T) => ReactNode;
   pageSize?: number;
-  /** Show a "Rows" page-size dropdown with these options (e.g. [10,50,100,200]). */
   pageSizeOptions?: number[];
   initialSort?: DataTableSort;
   empty?: ReactNode;
   className?: string;
-  /**
-   * Provide to switch to server-driven paging/sort/search (see DataTableServer).
-   * When set, internal filtering/sorting/slicing is bypassed and `data` is
-   * treated as the already-fetched current page.
-   */
   server?: DataTableServer;
+  /**
+   * Stable id for persisting per-user column order + widths in localStorage
+   * (key: `dt:<tableId>`). Without it, resize/reorder still work but are
+   * in-memory only.
+   */
+  tableId?: string;
+  resizableColumns?: boolean;
+  reorderableColumns?: boolean;
 }
 
+interface PersistedTableState {
+  widths: ColumnSizingState;
+  order: ColumnOrderState;
+}
+
+const EMPTY_STATE: PersistedTableState = { widths: {}, order: [] };
+
+const loadState = (tableId?: string): PersistedTableState => {
+  if (!tableId || typeof window === 'undefined') return EMPTY_STATE;
+  try {
+    const raw = window.localStorage.getItem(`dt:${tableId}`);
+    if (!raw) return EMPTY_STATE;
+    const parsed = JSON.parse(raw) as Partial<PersistedTableState>;
+    return {
+      widths: parsed.widths ?? {},
+      order: Array.isArray(parsed.order) ? parsed.order : [],
+    };
+  } catch {
+    return EMPTY_STATE;
+  }
+};
+
+const saveState = (tableId: string | undefined, state: PersistedTableState) => {
+  if (!tableId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`dt:${tableId}`, JSON.stringify(state));
+  } catch {
+    /* quota / private-mode — ignore */
+  }
+};
+
+interface ColumnMeta {
+  align?: 'left' | 'right' | 'center';
+  className?: string;
+  widthClass?: string;
+  pinned?: boolean;
+}
+
+/** Map a Tailwind `w-NN` / `w-[NNNpx]` hint to its pixel equivalent. */
+const tailwindWidthToPx = (cls?: string): number | undefined => {
+  if (!cls) return undefined;
+  const bracket = cls.match(/^w-\[(\d+)px\]$/);
+  if (bracket) return Number(bracket[1]);
+  const scale = cls.match(/^w-(\d+)$/);
+  if (scale) return Number(scale[1]) * 4; // Tailwind: 1 unit = 0.25rem = 4 px
+  return undefined;
+};
+
 /**
- * A compact, dependency-free data table: search, sortable columns, always-on
- * pagination, optional expandable rows, and a toolbar slot for filters.
+ * A dependency-light data table built on `@tanstack/react-table`. Provides
+ * search, sortable columns, pagination, expandable rows, column resize + drag-
+ * to-reorder, and per-user persistence via `tableId`.
  *
- * Default: client-side over the rows it's given (small, fully-loaded lists).
- * Pass `server` to delegate paging/sort/search to the backend for unbounded,
- * user-owned lists (documents, batches).
+ * Default: client-side over the rows it's given. Pass `server` to delegate
+ * paging/sort/search to the backend for unbounded lists.
  */
 export function DataTable<T>({
   data,
-  columns,
+  columns: userColumns,
   rowKey,
   search,
   searchPlaceholder = 'Search…',
   toolbar,
   renderExpanded,
-  pageSize = 10,
-  pageSizeOptions,
+  pageSize = 25,
+  pageSizeOptions = [10, 25, 50, 100, 200],
   initialSort,
   empty,
   className,
   server,
+  tableId,
+  resizableColumns = true,
+  reorderableColumns = true,
 }: DataTableProps<T>) {
   const serverMode = !!server;
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<DataTableSort | null>(initialSort ?? null);
-  const [page, setPage] = useState(0);
-  const [localPageSize, setLocalPageSize] = useState(pageSize);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Effective page size: server-controlled in server mode, local otherwise.
-  const effectivePageSize = serverMode
-    ? server.pageSize ?? pageSize
-    : localPageSize;
-  const changePageSize = (n: number) => {
-    if (serverMode) server.onPageSizeChange?.(n);
-    else {
-      setLocalPageSize(n);
-      setPage(0);
-    }
+  // ── Persisted column state (widths + order) ─────────────────────────────
+  const [persisted, setPersisted] = useState<PersistedTableState>(() =>
+    loadState(tableId),
+  );
+  useEffect(() => setPersisted(loadState(tableId)), [tableId]);
+
+  const writeState = (next: PersistedTableState) => {
+    setPersisted(next);
+    saveState(tableId, next);
   };
 
-  // Active query/sort come from the server props in server mode, else local.
-  const activeQuery = serverMode ? server.query ?? '' : query;
-  const activeSort = serverMode ? server.sort ?? null : sort;
+  // ── Map user columns → react-table ColumnDef ────────────────────────────
+  const columnDefs = useMemo<ColumnDef<T>[]>(
+    () =>
+      userColumns.map((c) => ({
+        id: c.key,
+        header: () => c.header,
+        cell: ({ row }) => c.cell(row.original),
+        // sortValue powers the sort comparator (client mode).
+        accessorFn: c.sortValue ?? ((row: T) => rowKey(row)),
+        enableSorting: !!c.sortValue,
+        enableResizing: !c.pinned,
+        // Prefer explicit pixel defaults; fall back to Tailwind hint, then 180.
+        size: c.defaultWidth ?? tailwindWidthToPx(c.width) ?? 180,
+        minSize: c.minWidth ?? 60,
+        maxSize: c.maxWidth ?? 800,
+        meta: {
+          align: c.align,
+          className: c.className,
+          widthClass: c.width,
+          pinned: c.pinned,
+        } satisfies ColumnMeta,
+      })),
+    [userColumns, rowKey],
+  );
 
-  const filtered = useMemo(() => {
-    if (serverMode) return data;
-    const q = query.trim().toLowerCase();
-    if (!q || !search) return data;
-    return data.filter((r) => search(r).toLowerCase().includes(q));
-  }, [serverMode, data, query, search]);
+  // ── Search (global filter) ───────────────────────────────────────────────
+  const [globalFilter, setGlobalFilter] = useState('');
+  const activeQuery = serverMode ? server.query ?? '' : globalFilter;
 
-  const sorted = useMemo(() => {
-    if (serverMode || !sort) return filtered;
-    const col = columns.find((c) => c.key === sort.key);
-    if (!col?.sortValue) return filtered;
-    const dir = sort.dir === 'asc' ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      const av = col.sortValue!(a);
-      const bv = col.sortValue!(b);
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
-  }, [serverMode, filtered, sort, columns]);
+  // ── Sort ────────────────────────────────────────────────────────────────
+  const [sorting, setSorting] = useState<SortingState>(
+    initialSort ? [{ id: initialSort.key, desc: initialSort.dir === 'desc' }] : [],
+  );
+  const effectiveSorting: SortingState = serverMode
+    ? server.sort
+      ? [{ id: server.sort.key, desc: server.sort.dir === 'desc' }]
+      : []
+    : sorting;
 
-  // Page math: trust the server's counts in server mode, else derive locally.
+  // ── Pagination ──────────────────────────────────────────────────────────
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize,
+  });
+  const effectivePagination: PaginationState = serverMode
+    ? { pageIndex: server.page, pageSize: server.pageSize ?? pageSize }
+    : pagination;
+
+  // ── Expanded rows ───────────────────────────────────────────────────────
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+
+  // ── Column resize + order from persisted state ──────────────────────────
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+
+  const table = useReactTable<T>({
+    data,
+    columns: columnDefs,
+    state: {
+      sorting: effectiveSorting,
+      globalFilter: activeQuery,
+      pagination: effectivePagination,
+      expanded,
+      columnSizing: persisted.widths,
+      columnOrder: persisted.order,
+    },
+    columnResizeMode: 'onChange',
+    enableColumnResizing: resizableColumns,
+    manualSorting: serverMode,
+    manualPagination: serverMode,
+    manualFiltering: serverMode,
+    pageCount: serverMode ? Math.max(1, server.pageCount) : undefined,
+    getRowId: (row) => rowKey(row),
+    onSortingChange: (updater) => {
+      const next =
+        typeof updater === 'function' ? updater(effectiveSorting) : updater;
+      if (serverMode) {
+        const head = next[0];
+        server.onSortChange?.(
+          head ? { key: head.id, dir: head.desc ? 'desc' : 'asc' } : null,
+        );
+      } else {
+        setSorting(next);
+      }
+    },
+    onGlobalFilterChange: (updater) => {
+      const value =
+        typeof updater === 'function' ? updater(activeQuery) : updater;
+      if (serverMode) {
+        server.onQueryChange?.(value ?? '');
+      } else {
+        setGlobalFilter(value ?? '');
+        setPagination((p) => ({ ...p, pageIndex: 0 }));
+      }
+    },
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === 'function' ? updater(effectivePagination) : updater;
+      if (serverMode) {
+        if (next.pageIndex !== effectivePagination.pageIndex)
+          server.onPageChange(next.pageIndex);
+        if (next.pageSize !== effectivePagination.pageSize)
+          server.onPageSizeChange?.(next.pageSize);
+      } else {
+        setPagination(next);
+      }
+    },
+    onExpandedChange: setExpanded,
+    onColumnSizingChange: (updater) => {
+      const next =
+        typeof updater === 'function' ? updater(persisted.widths) : updater;
+      writeState({ ...persisted, widths: next });
+    },
+    onColumnOrderChange: (updater) => {
+      const next =
+        typeof updater === 'function' ? updater(persisted.order) : updater;
+      writeState({ ...persisted, order: next });
+    },
+    globalFilterFn: (row, _columnId, filterValue) => {
+      if (!search || !filterValue) return true;
+      return search(row.original)
+        .toLowerCase()
+        .includes(String(filterValue).toLowerCase());
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: serverMode ? undefined : getSortedRowModel(),
+    getFilteredRowModel: serverMode ? undefined : getFilteredRowModel(),
+    getPaginationRowModel: serverMode ? undefined : getPaginationRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    autoResetPageIndex: !serverMode,
+  });
+
+  // ── Layout/reset awareness ──────────────────────────────────────────────
+  const hasCustomLayout =
+    persisted.order.length > 0 || Object.keys(persisted.widths).length > 0;
+  const resetTableLayout = () => writeState(EMPTY_STATE);
+
+  // ── Reorder columns via HTML5 drag-and-drop on header cells ─────────────
+  const reorderColumns = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    const allIds = columnDefs
+      .map((c) => c.id)
+      .filter((id): id is string => typeof id === 'string');
+    const base = persisted.order.length
+      ? persisted.order.filter((k) => allIds.includes(k))
+      : allIds;
+    const pinned = new Set(
+      userColumns.filter((c) => c.pinned).map((c) => c.key),
+    );
+    if (pinned.has(fromKey) || pinned.has(toKey)) return;
+    const from = base.indexOf(fromKey);
+    const to = base.indexOf(toKey);
+    if (from < 0 || to < 0) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromKey);
+    for (const id of allIds) if (!next.includes(id)) next.push(id);
+    writeState({ ...persisted, order: next });
+  };
+
+  // ── Page / row counts (server-aware) ────────────────────────────────────
+  const headerGroups = table.getHeaderGroups();
+  const rowModel = table.getRowModel();
+  const rows = rowModel.rows;
+  const total = serverMode
+    ? server.total
+    : table.getPrePaginationRowModel().rows.length;
   const pageCount = serverMode
     ? Math.max(1, server.pageCount)
-    : Math.max(1, Math.ceil(sorted.length / effectivePageSize));
-  const current = serverMode
-    ? Math.min(server.page, pageCount - 1)
-    : Math.min(page, pageCount - 1);
-  const total = serverMode ? server.total : sorted.length;
-  const start = current * effectivePageSize;
-  const rows = serverMode
-    ? data
-    : sorted.slice(start, start + effectivePageSize);
-  const colSpan = columns.length + (renderExpanded ? 1 : 0);
-
-  const goToPage = (p: number) => {
-    if (serverMode) server.onPageChange(p);
-    else setPage(p);
-  };
-
-  const toggleSort = (key: string) => {
-    const next: DataTableSort =
-      activeSort?.key === key
-        ? { key, dir: activeSort.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: 'asc' };
-    if (serverMode) server.onSortChange?.(next);
-    else setSort(next);
-  };
-  const toggleRow = (k: string) =>
-    setExpanded((s) => {
-      const next = new Set(s);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
+    : table.getPageCount();
+  const current = effectivePagination.pageIndex;
+  const start = total === 0 ? 0 : current * effectivePagination.pageSize;
+  const visibleCount = serverMode ? data.length : rows.length;
+  const colSpan = table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0);
 
   return (
     <div className={cn('space-y-3', className)}>
-      {(search || toolbar) && (
+      {(search || toolbar || hasCustomLayout) && (
         <div className="flex flex-wrap items-center gap-2">
           {search && (
             <Input
               value={activeQuery}
-              onChange={(e) => {
-                if (serverMode) {
-                  server.onQueryChange?.(e.target.value);
-                } else {
-                  setQuery(e.target.value);
-                  setPage(0);
-                }
-              }}
+              onChange={(e) => table.setGlobalFilter(e.target.value)}
               placeholder={searchPlaceholder}
               className="h-9 w-full sm:w-64"
             />
           )}
           {toolbar}
+          {hasCustomLayout && (resizableColumns || reorderableColumns) && (
+            <button
+              type="button"
+              onClick={resetTableLayout}
+              className="ml-auto rounded-md border border-border px-2 py-1 text-xs text-foreground/60 transition hover:bg-secondary hover:text-foreground"
+              title="Reset column widths and order"
+            >
+              Reset columns
+            </button>
+          )}
         </div>
       )}
 
       <div className="overflow-hidden rounded-xl border border-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-secondary/40 text-left text-xs font-medium text-foreground/55">
-              {renderExpanded && <th className="w-8" />}
-              {columns.map((c) => (
-                <th
-                  key={c.key}
-                  className={cn(
-                    'px-3 py-2 font-medium',
-                    c.width,
-                    c.align === 'right' && 'text-right',
-                    c.align === 'center' && 'text-center',
-                    c.sortValue && 'cursor-pointer select-none hover:text-foreground',
-                  )}
-                  onClick={c.sortValue ? () => toggleSort(c.key) : undefined}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {c.header}
-                    {c.sortValue && activeSort?.key === c.key && (
-                      <Chevron dir={activeSort.dir === 'asc' ? 'up' : 'down'} />
-                    )}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody
-            className={cn(
-              'divide-y divide-border/60',
-              server?.loading && 'opacity-50 transition-opacity',
-            )}
+        <div className="overflow-x-auto">
+          <table
+            className="text-sm"
+            style={{
+              tableLayout: 'fixed',
+              width: Math.max(table.getTotalSize(), 1),
+              minWidth: '100%',
+            }}
           >
-            {rows.map((row) => {
-              const k = rowKey(row);
-              const isOpen = expanded.has(k);
-              return (
-                <Fragment key={k}>
-                  <tr className="transition hover:bg-secondary/30">
-                    {renderExpanded && (
-                      <td className="pl-3">
-                        <button
-                          type="button"
-                          aria-label="Toggle details"
-                          onClick={() => toggleRow(k)}
-                          className="rounded p-1 text-foreground/50 hover:bg-secondary hover:text-foreground"
-                        >
-                          <Chevron dir={isOpen ? 'down' : 'right'} />
-                        </button>
-                      </td>
-                    )}
-                    {columns.map((c) => (
-                      <td
-                        key={c.key}
+            <colgroup>
+              {renderExpanded && <col style={{ width: 36 }} />}
+              {table.getVisibleLeafColumns().map((col) => (
+                <col key={col.id} style={{ width: col.getSize() }} />
+              ))}
+            </colgroup>
+
+            <thead>
+              {headerGroups.map((hg) => (
+                <tr
+                  key={hg.id}
+                  className="border-b border-border bg-secondary/40 text-left text-xs font-medium text-foreground/55"
+                >
+                  {renderExpanded && <th className="w-9" />}
+                  {hg.headers.map((header) => {
+                    const col = header.column;
+                    const meta = (col.columnDef.meta ?? {}) as ColumnMeta;
+                    const canSort = col.getCanSort();
+                    const canResize =
+                      resizableColumns && col.getCanResize() && !meta.pinned;
+                    const sortDir = col.getIsSorted();
+                    const draggable =
+                      reorderableColumns &&
+                      !meta.pinned &&
+                      hg.headers.length > 1;
+                    const isDrop = dropTargetKey === col.id && dragKey !== col.id;
+                    return (
+                      <th
+                        key={header.id}
+                        style={{ width: header.getSize() }}
+                        draggable={draggable || undefined}
+                        onDragStart={
+                          draggable
+                            ? (e) => {
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', col.id);
+                                setDragKey(col.id);
+                              }
+                            : undefined
+                        }
+                        onDragOver={
+                          draggable
+                            ? (e) => {
+                                if (!dragKey || dragKey === col.id) return;
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                if (dropTargetKey !== col.id)
+                                  setDropTargetKey(col.id);
+                              }
+                            : undefined
+                        }
+                        onDragLeave={
+                          draggable && dropTargetKey === col.id
+                            ? () => setDropTargetKey(null)
+                            : undefined
+                        }
+                        onDrop={
+                          draggable
+                            ? (e) => {
+                                e.preventDefault();
+                                const from =
+                                  e.dataTransfer.getData('text/plain') ||
+                                  dragKey;
+                                if (from && from !== col.id)
+                                  reorderColumns(from, col.id);
+                                setDragKey(null);
+                                setDropTargetKey(null);
+                              }
+                            : undefined
+                        }
+                        onDragEnd={() => {
+                          setDragKey(null);
+                          setDropTargetKey(null);
+                        }}
                         className={cn(
-                          'px-3 py-2.5 align-middle',
-                          c.align === 'right' && 'text-right',
-                          c.align === 'center' && 'text-center',
-                          c.className,
+                          'group/th relative select-none overflow-hidden px-3 py-2 font-medium',
+                          meta.align === 'right' && 'text-right',
+                          meta.align === 'center' && 'text-center',
+                          draggable && 'cursor-grab active:cursor-grabbing',
+                          isDrop &&
+                            'bg-primary/10 ring-1 ring-inset ring-primary/40',
+                          dragKey === col.id && 'opacity-50',
                         )}
                       >
-                        {c.cell(row)}
-                      </td>
-                    ))}
-                  </tr>
-                  {renderExpanded && isOpen && (
-                    <tr className="bg-secondary/20">
-                      <td colSpan={colSpan} className="px-4 py-3">
-                        {renderExpanded(row)}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td
+                        <span
+                          className={cn(
+                            'inline-flex max-w-full items-center gap-1 truncate align-middle',
+                            canSort && 'cursor-pointer hover:text-foreground',
+                          )}
+                          onClick={
+                            canSort ? col.getToggleSortingHandler() : undefined
+                          }
+                        >
+                          <span className="truncate">
+                            {flexRender(
+                              col.columnDef.header,
+                              header.getContext(),
+                            )}
+                          </span>
+                          {sortDir && (
+                            <Chevron dir={sortDir === 'asc' ? 'up' : 'down'} />
+                          )}
+                        </span>
+                        {canResize && (
+                          <span
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize column"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            onTouchStart={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            onDoubleClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const next = { ...persisted.widths };
+                              delete next[col.id];
+                              writeState({ ...persisted, widths: next });
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              'absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none transition-colors',
+                              col.getIsResizing()
+                                ? 'bg-primary/60'
+                                : 'bg-transparent hover:bg-primary/30 group-hover/th:bg-border/80',
+                            )}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
+            </thead>
+
+            <tbody
+              className={cn(
+                'divide-y divide-border/60',
+                server?.loading && 'opacity-50 transition-opacity',
+              )}
+            >
+              {rows.map((row) => (
+                <DataRow<T>
+                  key={row.id}
+                  row={row}
+                  renderExpanded={renderExpanded}
                   colSpan={colSpan}
-                  className="px-3 py-10 text-center text-sm text-foreground/50"
-                >
-                  {empty ?? 'Nothing to show.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                />
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={colSpan}
+                    className="px-3 py-10 text-center text-sm text-foreground/50"
+                  >
+                    {empty ?? 'Nothing to show.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {total > 0 && (
           <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-foreground/55">
             <div className="flex items-center gap-3">
               <span className="tabular-nums">
-                {start + 1}–{start + rows.length} of {total}
+                {start + 1}–{start + visibleCount} of {total}
               </span>
               {pageSizeOptions && pageSizeOptions.length > 1 && (
                 <div className="flex items-center gap-1.5">
                   <span>Rows</span>
                   <Select
-                    value={String(effectivePageSize)}
-                    onValueChange={(v) => changePageSize(Number(v))}
+                    value={String(effectivePagination.pageSize)}
+                    onValueChange={(v) => table.setPageSize(Number(v))}
                   >
                     <SelectTrigger className="h-7 w-[4.5rem] text-xs">
                       <SelectValue />
@@ -319,16 +597,19 @@ export function DataTable<T>({
             <div className="flex items-center gap-2">
               <PagerButton
                 disabled={current === 0 || !!server?.loading}
-                onClick={() => goToPage(current - 1)}
+                onClick={() => table.setPageIndex(current - 1)}
               >
                 Prev
               </PagerButton>
-              <span className="tabular-nums">
-                {current + 1} / {pageCount}
-              </span>
+              <PageJump
+                current={current}
+                pageCount={pageCount}
+                disabled={!!server?.loading}
+                goToPage={(p) => table.setPageIndex(p)}
+              />
               <PagerButton
                 disabled={current >= pageCount - 1 || !!server?.loading}
-                onClick={() => goToPage(current + 1)}
+                onClick={() => table.setPageIndex(current + 1)}
               >
                 Next
               </PagerButton>
@@ -337,6 +618,103 @@ export function DataTable<T>({
         )}
       </div>
     </div>
+  );
+}
+
+/** A single body row + its optional expanded panel. */
+function DataRow<T>({
+  row,
+  renderExpanded,
+  colSpan,
+}: {
+  row: Row<T>;
+  renderExpanded?: (row: T) => ReactNode;
+  colSpan: number;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <Fragment>
+      <tr className="transition hover:bg-secondary/30">
+        {renderExpanded && (
+          <td className="pl-3">
+            <button
+              type="button"
+              aria-label="Toggle details"
+              onClick={() => setOpen((s) => !s)}
+              className="rounded p-1 text-foreground/50 hover:bg-secondary hover:text-foreground"
+            >
+              <Chevron dir={isOpen ? 'down' : 'right'} />
+            </button>
+          </td>
+        )}
+        {row.getVisibleCells().map((cell) => {
+          const meta = (cell.column.columnDef.meta ?? {}) as ColumnMeta;
+          return (
+            <td
+              key={cell.id}
+              style={{ width: cell.column.getSize() }}
+              className={cn(
+                'overflow-hidden px-3 py-2.5 align-middle',
+                meta.align === 'right' && 'text-right',
+                meta.align === 'center' && 'text-center',
+                meta.className,
+              )}
+            >
+              <div className="min-w-0 max-w-full">
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </div>
+            </td>
+          );
+        })}
+      </tr>
+      {renderExpanded && isOpen && (
+        <tr className="bg-secondary/20">
+          <td colSpan={colSpan} className="px-4 py-3">
+            {renderExpanded(row.original)}
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+
+/** Page indicator + jump-to-any-page input (1-based). */
+function PageJump({
+  current,
+  pageCount,
+  disabled,
+  goToPage,
+}: {
+  current: number;
+  pageCount: number;
+  disabled: boolean;
+  goToPage: (p: number) => void;
+}) {
+  const [val, setVal] = useState(String(current + 1));
+  useEffect(() => setVal(String(current + 1)), [current]);
+  const commit = () => {
+    const n = parseInt(val, 10);
+    if (!Number.isNaN(n)) goToPage(Math.min(Math.max(0, n - 1), pageCount - 1));
+    else setVal(String(current + 1));
+  };
+  return (
+    <span className="flex items-center gap-1.5 tabular-nums">
+      <input
+        type="number"
+        min={1}
+        max={pageCount}
+        value={val}
+        disabled={disabled}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        aria-label="Go to page"
+        className="h-7 w-12 rounded border border-border bg-transparent px-1 text-center text-sm [appearance:textfield] focus:border-primary focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <span className="text-muted-foreground">/ {pageCount}</span>
+    </span>
   );
 }
 

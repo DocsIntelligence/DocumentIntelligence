@@ -227,6 +227,27 @@ export function SchemaManager() {
     if (ok) purge.mutate(key);
   };
 
+  const onToggleActive = async (key: string, currentlyActive: boolean) => {
+    const ok = await confirm({
+      title: currentlyActive
+        ? t('adminIntel.schema.disableTitle', 'Disable this type?')
+        : t('adminIntel.schema.enableTitle', 'Enable this type?'),
+      description: currentlyActive
+        ? t(
+            'adminIntel.schema.disableDesc',
+            'It will be hidden from new extractions but existing data is kept. You can re-enable it later.',
+          )
+        : t(
+            'adminIntel.schema.enableDesc',
+            'It will be available for new extractions again.',
+          ),
+      confirmLabel: currentlyActive
+        ? t('adminIntel.schema.disable', 'Disable')
+        : t('adminIntel.schema.enable', 'Enable'),
+    });
+    if (ok) setActive.mutate({ key, active: !currentlyActive });
+  };
+
   const columns: DataTableColumn<AdminSchemaSummary>[] = [
     {
       key: 'name',
@@ -291,6 +312,8 @@ export function SchemaManager() {
       key: 'actions',
       header: '',
       align: 'right',
+      width: 'w-52',
+      pinned: true,
       cell: (s) => (
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
@@ -298,6 +321,12 @@ export function SchemaManager() {
             onClick={() => startEdit(s.key)}
           >
             <EditIcon />
+          </IconButton>
+          <IconButton
+            title={t('common.clone', 'Clone')}
+            onClick={() => startClone(s.key)}
+          >
+            <CopyIcon />
           </IconButton>
           {s.documentTypeKey && (
             <IconButton
@@ -307,17 +336,11 @@ export function SchemaManager() {
               <MapIcon />
             </IconButton>
           )}
-          <IconButton
-            title={t('common.clone', 'Clone')}
-            onClick={() => startClone(s.key)}
-          >
-            <CopyIcon />
-          </IconButton>
           {s.isActive === false ? (
             <IconButton
               title={t('adminIntel.schema.enable', 'Enable')}
               disabled={setActive.isPending}
-              onClick={() => setActive.mutate({ key: s.key, active: true })}
+              onClick={() => onToggleActive(s.key, false)}
             >
               <EyeOffIcon />
             </IconButton>
@@ -325,7 +348,7 @@ export function SchemaManager() {
             <IconButton
               title={t('adminIntel.schema.disable', 'Disable')}
               disabled={setActive.isPending}
-              onClick={() => setActive.mutate({ key: s.key, active: false })}
+              onClick={() => onToggleActive(s.key, true)}
             >
               <EyeIcon />
             </IconButton>
@@ -363,6 +386,7 @@ export function SchemaManager() {
         </p>
       ) : (
         <DataTable
+          tableId="admin.intelligence.schemas"
           data={schemas ?? []}
           columns={columns}
           rowKey={(s) => s.key}

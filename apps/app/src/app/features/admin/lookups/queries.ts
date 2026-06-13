@@ -1,16 +1,23 @@
 import type {
   AddLookupValuePayload,
+  AdminLookupsQuery,
   CreateLookupGroupPayload,
   UpdateLookupGroupPayload,
   UpdateLookupValuePayload,
 } from '@org/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { toast } from 'sonner';
 import { useLookupsService } from '../../documents/services-context';
 
 export const lookupAdminKeys = {
   all: ['admin-lookups'] as const,
+  page: (params: AdminLookupsQuery) => ['admin-lookups', params] as const,
 };
 
 function msg(err: unknown, fallback: string): string {
@@ -25,11 +32,22 @@ function msg(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function useAdminLookups() {
+export function useAdminLookups(params: AdminLookupsQuery = {}) {
   const svc = useLookupsService();
   return useQuery({
-    queryKey: lookupAdminKeys.all,
-    queryFn: () => svc.getAllAdmin(),
+    queryKey: lookupAdminKeys.page(params),
+    queryFn: () => svc.getAllAdmin(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One group + its values — fetched only when a group is selected. */
+export function useAdminGroup(id: string | null) {
+  const svc = useLookupsService();
+  return useQuery({
+    queryKey: ['admin-lookups', 'group', id],
+    queryFn: () => svc.getAdminGroup(id as string),
+    enabled: !!id,
   });
 }
 

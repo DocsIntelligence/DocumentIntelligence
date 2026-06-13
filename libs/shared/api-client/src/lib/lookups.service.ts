@@ -23,6 +23,25 @@ export interface LookupGroup {
   values: LookupValue[];
 }
 
+/** Lightweight list row — no nested values (fetch per-group on select). */
+export interface LookupGroupSummary {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isPublic?: boolean;
+  valueCount: number;
+}
+export interface AdminLookupsQuery {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+export interface AdminLookupsResult {
+  items: LookupGroupSummary[];
+  total: number;
+}
+
 export interface CreateLookupGroupPayload {
   key: string;
   name: string;
@@ -54,9 +73,14 @@ export const createLookupsService = (http: HttpClient) => ({
     http.get<LookupGroup>(`/lookups/${encodeURIComponent(key)}`).then((r) => r.data),
 
   // ─── Admin (role: admin) ───────────────────────────────────────────────
-  /** ALL groups incl. non-public + inactive values. */
-  getAllAdmin: () =>
-    http.get<LookupGroup[]>('/lookups/admin').then((r) => r.data),
+  /** ALL groups incl. non-public + inactive values (server-paginated). */
+  getAllAdmin: (query?: AdminLookupsQuery) =>
+    http
+      .get<AdminLookupsResult>('/lookups/admin', { params: query })
+      .then((r) => r.data),
+  /** One group with its values (fetched when a group is selected). */
+  getAdminGroup: (id: string) =>
+    http.get<LookupGroup>(`/lookups/admin/${id}`).then((r) => r.data),
   createGroup: (payload: CreateLookupGroupPayload) =>
     http.post<LookupGroup>('/lookups', payload).then((r) => r.data),
   updateGroup: (groupId: string, payload: UpdateLookupGroupPayload) =>

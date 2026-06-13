@@ -13,6 +13,7 @@ import {
   LookupsPage,
   PipelinesPage,
   SearchConfigPage,
+  VaultConfigPage,
 } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
@@ -110,6 +111,10 @@ export function App() {
         <Route
           path="/admin/intelligence/search"
           element={<SearchConfigPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault"
+          element={<VaultConfigPage />}
         />
       </Route>
 

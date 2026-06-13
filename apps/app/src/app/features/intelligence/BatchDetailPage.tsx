@@ -4,6 +4,8 @@ import {
   Card,
   CardContent,
   Chip,
+  DataTable,
+  type DataTableColumn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,7 +14,8 @@ import {
   DropdownMenuTrigger,
   Spinner,
 } from '@org/ui';
-import { useState } from 'react';
+import type { BatchRun } from '@org/api-client';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
@@ -25,7 +28,7 @@ import {
   useReprocessRun,
   useSchemaOptions,
 } from './queries';
-import { InboxIcon } from './icons';
+import { FileTextIcon, InboxIcon } from './icons';
 
 const RUNS_PAGE_SIZE = 50;
 /** Raw run statuses, for the filter chips (counts come from the server). */
@@ -99,6 +102,19 @@ export function BatchDetailPage() {
   const filterBy = (status: string | null) => {
     setStatusFilter(status);
     setPage(0);
+  };
+
+  const skipOne = async (runId: string) => {
+    const ok = await confirm({
+      title: t('intelligence.batches.skipOneTitle', 'Skip this document?'),
+      description: t(
+        'intelligence.batches.skipTypeDesc',
+        'They will be archived (not extracted). This cannot be undone.',
+      ),
+      confirmLabel: t('intelligence.batches.skip', 'Skip'),
+      variant: 'destructive',
+    });
+    if (ok) archive.mutate({ runId });
   };
 
   if (isLoading || !batch) {
@@ -239,152 +255,286 @@ export function BatchDetailPage() {
         </Card>
       )}
 
-      {/* Status filter chips (server-filtered) */}
-      <div className="flex flex-wrap gap-2">
-        <Chip active={!statusFilter} onClick={() => filterBy(null)}>
-          {t('common.all', 'All')} ({batch.total})
-        </Chip>
-        {RUN_STATUSES.map((status) => (
-          <Chip
-            key={status}
-            active={statusFilter === status}
-            onClick={() => filterBy(statusFilter === status ? null : status)}
-          >
-            {status}
-          </Chip>
-        ))}
-      </div>
-
-      {/* Run list */}
-      <Card>
-        <CardContent className="divide-y divide-border/60 p-0">
-          {runs.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm">{r.filename}</p>
-                <p className="text-xs text-foreground/50">
-                  {r.documentTypeKey ??
-                    t('intelligence.batches.unclassified', 'unclassified')}
-                  {r.status === 'archived' && r.archivedReason
-                    ? ` · ${r.archivedReason}`
-                    : ''}
-                </p>
+      {/* Runs table — search + sort + paginated, server-driven */}
+      {(() => {
+        const columns: DataTableColumn<BatchRun>[] = [
+          {
+            key: 'file',
+            header: t('intelligence.queue.file', 'File'),
+            sortValue: (r) => r.filename.toLowerCase(),
+            cell: (r) => (
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex size-8 flex-none items-center justify-center rounded-lg bg-secondary/60 text-foreground/70">
+                  <FileTextIcon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {r.filename}
+                  </p>
+                  <p className="truncate text-xs text-foreground/45">
+                    {r.documentTypeKey ??
+                      t('intelligence.batches.unclassified', 'unclassified')}
+                    {r.status === 'archived' && r.archivedReason
+                      ? ` · ${r.archivedReason}`
+                      : ''}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={RUN_VARIANT[r.status] ?? 'secondary'}>
-                  {r.status}
+            ),
+          },
+          {
+            key: 'type',
+            header: t('intelligence.queue.type', 'Type'),
+            sortValue: (r) => r.documentTypeKey ?? '',
+            cell: (r) =>
+              r.documentTypeKey ? (
+                <Badge variant="secondary" outline>
+                  {r.documentTypeKey}
                 </Badge>
-                {(r.status === 'needs_review' ||
-                  r.status === 'completed' ||
-                  r.status === 'approved') && (
-                  <Link
-                    to={`/review-queue?batch=${id}&doc=${r.sourceDocumentId}`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    {t('intelligence.batches.open', 'Open')}
-                  </Link>
-                )}
-                {r.status === 'needs_review' && (
-                  <Button
-                    size="sm"
-                    disabled={approve.isPending}
-                    onClick={() => approve.mutate(r.id)}
-                  >
-                    {t('intelligence.batches.approve', 'Approve')}
-                  </Button>
-                )}
-                {/* Manual type override — process/redo as a chosen type. Useful
-                    for archived / failed / generic / misclassified runs. */}
-                {r.status !== 'running' && r.status !== 'queued' && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={reprocess.isPending}
-                      >
-                        {t('intelligence.batches.reprocessAs', 'Process as…')}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="max-h-80 overflow-y-auto"
+              ) : (
+                <span className="text-foreground/40">—</span>
+              ),
+          },
+          {
+            key: 'status',
+            header: t('common.status', 'Status'),
+            width: 'w-32',
+            sortValue: (r) => r.status,
+            cell: (r) => (
+              <Badge variant={RUN_VARIANT[r.status] ?? 'secondary'}>
+                {r.status.replace(/_/g, ' ')}
+              </Badge>
+            ),
+          },
+          {
+            key: 'updated',
+            header: t('common.updated', 'Updated'),
+            width: 'w-32',
+            sortValue: (r) => r.updatedAt,
+            cell: (r) => (
+              <span className="text-foreground/55">
+                {new Date(r.updatedAt).toLocaleDateString()}
+              </span>
+            ),
+          },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            width: 'w-[180px]',
+            pinned: true,
+            cell: (r) => {
+              const openable =
+                r.status === 'needs_review' ||
+                r.status === 'completed' ||
+                r.status === 'approved';
+              const canReprocess =
+                r.status !== 'running' && r.status !== 'queued';
+              const canSkip = ARCHIVABLE.has(r.status);
+              return (
+                <div className="flex items-center justify-end gap-0.5">
+                  {/* Primary inline icons */}
+                  {openable && (
+                    <IconLink
+                      to={`/review-queue?batch=${id}&doc=${r.sourceDocumentId}`}
+                      title={t('intelligence.batches.open', 'Open')}
                     >
-                      <DropdownMenuLabel>
-                        {t(
-                          'intelligence.batches.reprocessAsLabel',
-                          'Re-extract as type',
-                        )}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {(schemaOptions.data ?? []).map((s) => (
-                        <DropdownMenuItem
-                          key={s.key}
-                          onSelect={() =>
-                            reprocess.mutate({
-                              sourceDocumentId: r.sourceDocumentId,
-                              schemaKey: s.key,
-                            })
-                          }
+                      <OpenIcon />
+                    </IconLink>
+                  )}
+                  {r.status === 'needs_review' && (
+                    <IconButton
+                      title={t('intelligence.batches.approve', 'Approve')}
+                      disabled={approve.isPending}
+                      onClick={() => approve.mutate(r.id)}
+                    >
+                      <CheckIcon />
+                    </IconButton>
+                  )}
+                  {/* Overflow: everything else in a ⋯ dropdown */}
+                  {(canReprocess || canSkip) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={t('common.actions', 'Actions')}
+                          className="rounded p-1.5 text-foreground/55 transition hover:bg-secondary hover:text-foreground"
                         >
-                          {s.name}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                {ARCHIVABLE.has(r.status) && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-error"
-                    disabled={archive.isPending}
-                    onClick={() => archive.mutate({ runId: r.id })}
-                  >
-                    {t('intelligence.batches.skip', 'Skip')}
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-          {runs.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-foreground/50">
-              {t('intelligence.batches.noRuns', 'No documents match this filter.')}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+                          ⋯
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="max-h-80 overflow-y-auto"
+                      >
+                        {canReprocess && (
+                          <>
+                            <DropdownMenuLabel>
+                              {t(
+                                'intelligence.batches.reprocessAsLabel',
+                                'Re-extract as type',
+                              )}
+                            </DropdownMenuLabel>
+                            {(schemaOptions.data ?? []).map((s) => (
+                              <DropdownMenuItem
+                                key={s.key}
+                                disabled={reprocess.isPending}
+                                onSelect={() =>
+                                  reprocess.mutate({
+                                    sourceDocumentId: r.sourceDocumentId,
+                                    schemaKey: s.key,
+                                  })
+                                }
+                              >
+                                {s.name}
+                              </DropdownMenuItem>
+                            ))}
+                            {canSkip && <DropdownMenuSeparator />}
+                          </>
+                        )}
+                        {canSkip && (
+                          <DropdownMenuItem
+                            className="text-error"
+                            disabled={archive.isPending}
+                            onSelect={() => skipOne(r.id)}
+                          >
+                            {t('intelligence.batches.skip', 'Skip document')}
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              );
+            },
+          },
+        ];
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-center gap-3 text-sm">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={page === 0 || runsQuery.isFetching}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            {t('common.prev', 'Prev')}
-          </Button>
-          <span className="text-foreground/60">
-            {t('search.pageOf', 'Page {{page}} of {{count}}', {
-              page: page + 1,
-              count: pageCount,
-            })}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={page + 1 >= pageCount || runsQuery.isFetching}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            {t('common.next', 'Next')}
-          </Button>
-        </div>
-      )}
+        return (
+          <DataTable
+            tableId="intelligence.batchDetail.runs"
+            data={runs}
+            columns={columns}
+            rowKey={(r) => r.id}
+            search={(r) => `${r.filename} ${r.documentTypeKey ?? ''}`}
+            searchPlaceholder={t(
+              'intelligence.batches.searchRuns',
+              'Search documents in this batch…',
+            )}
+            pageSizeOptions={[10, 25, 50, 100]}
+            server={{
+              page,
+              pageCount,
+              total: runsTotal,
+              onPageChange: setPage,
+              pageSize: RUNS_PAGE_SIZE,
+              loading: runsQuery.isFetching && runsQuery.isPlaceholderData,
+            }}
+            toolbar={
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip active={!statusFilter} onClick={() => filterBy(null)}>
+                  {t('common.all', 'All')} ({batch.total})
+                </Chip>
+                {RUN_STATUSES.map((status) => (
+                  <Chip
+                    key={status}
+                    active={statusFilter === status}
+                    onClick={() =>
+                      filterBy(statusFilter === status ? null : status)
+                    }
+                  >
+                    {status.replace(/_/g, ' ')}
+                  </Chip>
+                ))}
+              </div>
+            }
+            empty={t(
+              'intelligence.batches.noRuns',
+              'No documents match this filter.',
+            )}
+          />
+        );
+      })()}
     </div>
   );
 }
 
+function IconButton({
+  title,
+  disabled,
+  onClick,
+  children,
+}: {
+  title: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded p-1.5 text-foreground/60 transition hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconLink({
+  to,
+  title,
+  children,
+}: {
+  to: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      title={title}
+      aria-label={title}
+      className="rounded p-1.5 text-foreground/60 transition hover:bg-secondary hover:text-foreground"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function OpenIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      className="size-4 text-success"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}

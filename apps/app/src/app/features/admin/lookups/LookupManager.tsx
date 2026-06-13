@@ -1,5 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { LookupGroup, LookupValue } from '@org/api-client';
+import type {
+  LookupGroup,
+  LookupGroupSummary,
+  LookupValue,
+} from '@org/api-client';
 import {
   Badge,
   Button,
@@ -8,9 +12,10 @@ import {
   DataTable,
   FormField,
   Input,
+  Spinner,
   type DataTableColumn,
 } from '@org/ui';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -24,8 +29,10 @@ import {
   IconButton,
   TrashIcon,
 } from '../intelligence/icons';
+import { useLookupsService } from '../../documents/services-context';
 import {
   useAddValue,
+  useAdminGroup,
   useAdminLookups,
   useCreateGroup,
   useDeleteGroup,
@@ -54,55 +61,63 @@ type GroupForm = z.infer<typeof groupSchema>;
  */
 export function LookupManager() {
   const { t } = useTranslation();
-  const { data: groups, isLoading } = useAdminLookups();
+  const svc = useLookupsService();
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [query, setQuery] = useState('');
+  const { data, isLoading, isFetching, isPlaceholderData } = useAdminLookups({
+    q: query || undefined,
+    page,
+    pageSize,
+  });
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const confirm = useConfirm();
   const deleteGroup = useDeleteGroup();
   const duplicateGroup = useDuplicateGroup();
 
-  const selected = useMemo(
-    () => groups?.find((g) => g.id === selectedId) ?? null,
-    [groups, selectedId],
-  );
+  // The selected group's full record (with values) — fetched on select only.
+  const selectedQuery = useAdminGroup(selectedId);
 
-  // Pick a key not already taken (key, key_copy, key_copy_2, …).
-  const uniqueKey = (base: string) => {
-    const existing = new Set((groups ?? []).map((g) => g.key));
-    let candidate = `${base}_copy`;
-    let i = 2;
-    while (existing.has(candidate)) candidate = `${base}_copy_${i++}`;
-    return candidate;
-  };
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const onDuplicate = (g: LookupGroup) =>
+  // Duplicate: fetch the group's values on demand (not held in the list).
+  const onDuplicate = async (g: LookupGroupSummary) => {
+    const full = await svc.getAdminGroup(g.id);
     duplicateGroup.mutate({
-      key: uniqueKey(g.key),
+      key: `${g.key}_copy`,
       name: `${g.name} (copy)`,
       description: g.description,
       isPublic: g.isPublic,
-      values: g.values.map((v) => ({
+      values: full.values.map((v) => ({
         label: v.label,
         value: v.value,
         order: v.order,
       })),
     });
+  };
 
   if (creating) {
     return <CreateGroup onClose={() => setCreating(false)} />;
   }
   if (selectedId) {
-    if (!selected) {
+    if (selectedQuery.isLoading || !selectedQuery.data) {
       return (
-        <p className="text-sm text-foreground/60">
-          {t('common.loading', 'Loading…')}
-        </p>
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
       );
     }
-    return <GroupEditor group={selected} onClose={() => setSelectedId(null)} />;
+    return (
+      <GroupEditor
+        group={selectedQuery.data}
+        onClose={() => setSelectedId(null)}
+      />
+    );
   }
 
-  const onDelete = async (g: LookupGroup) => {
+  const onDelete = async (g: LookupGroupSummary) => {
     const ok = await confirm({
       title: t('adminLookups.deleteTitle', 'Delete lookup group?'),
       description: t(
@@ -115,17 +130,15 @@ export function LookupManager() {
     if (ok) deleteGroup.mutate(g.id);
   };
 
-  const columns: DataTableColumn<LookupGroup>[] = [
+  const columns: DataTableColumn<LookupGroupSummary>[] = [
     {
       key: 'name',
       header: t('adminLookups.name', 'Name'),
-      sortValue: (g) => g.name.toLowerCase(),
       cell: (g) => <span className="font-medium text-foreground">{g.name}</span>,
     },
     {
       key: 'key',
       header: t('adminLookups.key', 'Key'),
-      sortValue: (g) => g.key,
       cell: (g) => (
         <code className="text-foreground/55 text-xs">{g.key}</code>
       ),
@@ -134,8 +147,7 @@ export function LookupManager() {
       key: 'count',
       header: t('adminLookups.values', 'Values'),
       align: 'right',
-      sortValue: (g) => g.values.length,
-      cell: (g) => <span className="tabular-nums">{g.values.length}</span>,
+      cell: (g) => <span className="tabular-nums">{g.valueCount}</span>,
     },
     {
       key: 'public',
@@ -151,6 +163,8 @@ export function LookupManager() {
       key: 'actions',
       header: '',
       align: 'right',
+      width: 'w-28',
+      pinned: true,
       cell: (g) => (
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
@@ -199,18 +213,35 @@ export function LookupManager() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-foreground/60">
-          {t('common.loading', 'Loading…')}
-        </p>
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
       ) : (
         <DataTable
-          data={groups ?? []}
+          tableId="admin.lookups.groups"
+          data={data?.items ?? []}
           columns={columns}
           rowKey={(g) => g.id}
-          search={(g) => `${g.name} ${g.key}`}
           searchPlaceholder={t('adminLookups.search', 'Search lookups…')}
-          initialSort={{ key: 'name', dir: 'asc' }}
+          pageSizeOptions={[10, 25, 50, 100]}
           empty={t('adminLookups.empty', 'No lookup groups yet.')}
+          server={{
+            page,
+            pageCount,
+            total,
+            onPageChange: setPage,
+            query,
+            onQueryChange: (q) => {
+              setQuery(q);
+              setPage(0);
+            },
+            pageSize,
+            onPageSizeChange: (ps) => {
+              setPageSize(ps);
+              setPage(0);
+            },
+            loading: isFetching && isPlaceholderData,
+          }}
         />
       )}
     </div>

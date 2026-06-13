@@ -111,8 +111,35 @@
       doc upload/view/remove, delete) + `/vault` routes + sidebar nav + i18n. app typecheck/build ✓, lint 0.
 - [x] Builder **"Insert from vault" autofill** — per-section button in `BuilderForm` → `VaultAutofillDialog`
       → `mapToSection` (canonical key → section leaf-field synonyms) → batch `setMany`. app typecheck/build ✓, lint 0.
-- [ ] Later: OCR autofill (uploaded Aadhaar/PAN → intelligence extractor → prefill fields).
-- [ ] Follow-ups: freeform-editor autofill (structured builder done); overwrite-vs-fill-empty toggle; per-doc-type field maps for exact mapping.
+- [x] **Typed + grouped fields** — field defs gained `type` (text/date/select/textarea/number/tel/email) +
+      `group` + `options`; `VaultEntityPage` renders date pickers, dropdowns (states/gender/entity-type), etc., grouped.
+- [x] **Scan-autofill** — doc kinds (Aadhaar/PAN/…) declare which canonical fields they fill;
+      `POST …/documents/:docId/scan` vision-extracts via `AiService` → suggestions → merged into empty fields.
+      "Scan & autofill" button per scannable document. (Needs a vision AI provider; gated + audited.)
+- [x] **DB-backed configurable catalog + admin** — `VaultFieldConfig` + `VaultDocKindConfig` (org-scoped,
+      system default seeded from code, code = ultimate fallback); `VaultConfigService` resolves org→system→code;
+      admin API `/admin/vault/{fields,doc-kinds}` + `VaultConfigManager` UI (ConfigShell tab `/admin/intelligence/vault`).
+- [x] **UX + lifecycle:** shared `@org/ui` `DatePicker` (calendar) used by vault + builder; entity
+      **duplicate**, **enable/disable** (`isActive`, hidden from autofill when off), ⋯ actions menu (list +
+      detail), muted disabled cards.
+- [x] **Lookup-linked fields** — field `type: 'lookup'` + `lookupKey` pulls options from the Lookups system
+      (e.g. country/state), configurable in the admin form. Reuses `useLookupOptions`.
+- [ ] Later: OCR via the full intelligence pipeline (vs the direct vision call); org-override editing in the admin UI
+      (`?orgId=` API supports it); freeform-editor autofill; overwrite-vs-fill-empty toggle; copy-to-clipboard on revealed values.
+
+## Tier 10 — App-wide UI/UX consistency (standing rule: `feedback_ui_consistency`)
+
+- [x] Audit every feature page; app largely conformant (Dashboard/DocumentsList/BatchesPage exemplary).
+- [x] Native `<input type=checkbox>` → `@org/ui` `Checkbox` (BuilderForm boolean field, SearchSettingsManager kinds).
+- [x] Loading `Spinner` on Settings + AdminDashboard; single-run Skip confirm in BatchDetail.
+- [x] SearchPage pager → `Button`; TemplatesPage category filters → `Chip`.
+- [x] Container/header normalization (Search/Vault/VaultEntity/NewDocumentPicker) — rely on MainLayout `max-w-6xl`.
+- [ ] DraftWithAIPage: explicit Cancel/back; normalize Batch/Review detail container widths.
+- [ ] Pass over remaining dialogs/forms for consistent footer (Cancel + primary) + inline errors.
+- [x] **Jump-to-any-page** in the DataTable pager (client + server mode → all tables).
+- [x] **Lean lists + per-item CRUD** (memory `feedback_ui_consistency` §5): Lookups server-paginated with
+      summaries + `getOneAdmin(id)` (values on select); Vault list no longer decrypts fields (fields on select via get/reveal).
+- [ ] Apply lean-CRUD to **schemas + pipelines** admin (lists still embed nested fields/stages; add summary list + GET-by-key detail).
 
 ## Payments / GTM (gates expansion per `08`)
 

@@ -1,4 +1,11 @@
-import { Badge, Button, Spinner } from '@org/ui';
+import {
+  Badge,
+  Button,
+  Chip,
+  DataTable,
+  type DataTableColumn,
+  Spinner,
+} from '@org/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -21,6 +28,9 @@ interface QueueEntry {
   documentTypeKey: string | null;
   status: string;
   overallConfidence?: number | null;
+  updatedAt?: string;
+  batchId?: string | null;
+  batchName?: string | null;
 }
 
 // Runs that have something to review/inspect (an extraction exists).
@@ -67,6 +77,9 @@ export function ReviewQueuePage() {
           filename: r.filename,
           documentTypeKey: r.documentTypeKey,
           status: r.status,
+          updatedAt: r.updatedAt,
+          batchId,
+          batchName: batch?.name ?? null,
         }))
         .sort(
           (a, b) =>
@@ -81,14 +94,40 @@ export function ReviewQueuePage() {
       documentTypeKey: i.documentTypeKey,
       status: 'needs_review',
       overallConfidence: i.overallConfidence,
+      updatedAt: i.updatedAt,
+      batchId: i.batchId,
+      batchName: i.batchName,
     }));
-  }, [batchId, batchRuns.data?.items, reviewQueue.data?.items]);
+  }, [batchId, batch?.name, batchRuns.data?.items, reviewQueue.data?.items]);
 
   const count = items.length;
   const pendingCount = items.filter((i) => i.status === 'needs_review').length;
   // null = list view; a number = focused review at that index.
   const [current, setCurrent] = useState<number | null>(null);
   const [autoOpened, setAutoOpened] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const types = useMemo(
+    () =>
+      [...new Set(items.map((i) => i.documentTypeKey).filter(Boolean))] as string[],
+    [items],
+  );
+
+  const statuses = useMemo(
+    () => [...new Set(items.map((i) => i.status))] as string[],
+    [items],
+  );
+
+  const filtered = useMemo(
+    () =>
+      items.filter(
+        (i) =>
+          (!typeFilter || (i.documentTypeKey ?? '') === typeFilter) &&
+          (!statusFilter || i.status === statusFilter),
+      ),
+    [items, typeFilter, statusFilter],
+  );
 
   // Deep-link: `?doc=<sourceId>` opens that document focused (e.g. "Open" from
   // the batch detail), once, so it can still be navigated with Prev/Next.
@@ -110,11 +149,11 @@ export function ReviewQueuePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-3">
-        {[0, 1, 2].map((i) => (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="h-[68px] animate-pulse rounded-xl bg-secondary/40"
+            className="h-[60px] animate-pulse rounded-xl bg-secondary/40"
           />
         ))}
       </div>
@@ -137,10 +176,137 @@ export function ReviewQueuePage() {
     );
   }
 
+  const openReview = (pipelineRunId: string) =>
+    setCurrent(items.findIndex((x) => x.pipelineRunId === pipelineRunId));
+
+  const columns: DataTableColumn<QueueEntry>[] = [
+    {
+      key: 'file',
+      header: t('intelligence.queue.file', 'File'),
+      sortValue: (r) => r.filename.toLowerCase(),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => openReview(r.pipelineRunId)}
+          className="group flex min-w-0 items-center gap-2.5 text-left"
+        >
+          <span className="inline-flex size-8 flex-none items-center justify-center rounded-lg bg-secondary/60 text-foreground/70 group-hover:text-primary">
+            <FileTextIcon className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-foreground group-hover:text-primary">
+              {r.filename}
+            </span>
+            <span className="block text-xs text-foreground/45">
+              {r.documentTypeKey ??
+                t('intelligence.queue.unknownType', 'Unknown type')}
+            </span>
+          </span>
+        </button>
+      ),
+    },
+    {
+      key: 'type',
+      header: t('intelligence.queue.type', 'Type'),
+      sortValue: (r) => r.documentTypeKey ?? '',
+      cell: (r) =>
+        r.documentTypeKey ? (
+          <Badge variant="secondary" outline>
+            {r.documentTypeKey}
+          </Badge>
+        ) : (
+          <span className="text-foreground/45">
+            {t('intelligence.queue.unknownType', 'Unknown type')}
+          </span>
+        ),
+    },
+    ...(!batchId
+      ? [
+          {
+            key: 'batch',
+            header: t('intelligence.queue.batch', 'Batch'),
+            sortValue: (r: QueueEntry) => (r.batchName ?? '').toLowerCase(),
+            cell: (r: QueueEntry) =>
+              r.batchId ? (
+                <Link
+                  to={`/batches/${r.batchId}`}
+                  className="truncate text-foreground/75 hover:text-primary hover:underline"
+                >
+                  {r.batchName ??
+                    t('intelligence.queue.untitledBatch', 'Untitled batch')}
+                </Link>
+              ) : (
+                <span className="text-foreground/40">—</span>
+              ),
+          },
+        ]
+      : []),
+    {
+      key: 'status',
+      header: t('common.status', 'Status'),
+      width: 'w-32',
+      sortValue: (r: QueueEntry) => r.status,
+      cell: (r: QueueEntry) => (
+        <Badge variant={STATUS_VARIANT[r.status] ?? 'secondary'} outline>
+          {r.status.replace(/_/g, ' ')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'confidence',
+      header: t('intelligence.queue.confidence', 'Confidence'),
+      align: 'center',
+      width: 'w-28',
+      sortValue: (r) => r.overallConfidence ?? -1,
+      cell: (r) => {
+        const pct =
+          r.overallConfidence != null ? Math.round(r.overallConfidence * 100) : null;
+        return pct != null ? (
+          <Badge variant={pct >= 85 ? 'success' : 'warning'} outline>
+            {pct}%
+          </Badge>
+        ) : (
+          <span className="text-foreground/40">—</span>
+        );
+      },
+    },
+    {
+      key: 'updated',
+      header: t('common.updated', 'Updated'),
+      width: 'w-32',
+      sortValue: (r) => r.updatedAt ?? '',
+      cell: (r) =>
+        r.updatedAt ? (
+          <span className="text-foreground/55">
+            {new Date(r.updatedAt).toLocaleDateString()}
+          </span>
+        ) : (
+          <span className="text-foreground/40">—</span>
+        ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: 'w-28',
+      cell: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => openReview(r.pipelineRunId)}
+          className="gap-1.5"
+        >
+          {t('intelligence.queue.review', 'Review')}
+          <ArrowRightIcon className="size-3.5" />
+        </Button>
+      ),
+    },
+  ];
+
   // ─── List view ───────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="inline-flex size-10 items-center justify-center rounded-xl bg-warning/15 text-warning">
             <InboxIcon className="size-5" />
@@ -166,7 +332,7 @@ export function ReviewQueuePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {count > 0 && (
+          {pendingCount > 0 && (
             <Button size="sm" onClick={() => setCurrent(0)} className="gap-1.5">
               {batchId
                 ? t('intelligence.queue.reviewBatch', 'Review batch')
@@ -184,66 +350,71 @@ export function ReviewQueuePage() {
         </div>
       </div>
 
-      {count > 0 ? (
-        <div className="space-y-3">
-          {items.map((item, i) => {
-            const pct =
-              item.overallConfidence != null
-                ? Math.round(item.overallConfidence * 100)
-                : null;
-            return (
-              <button
-                type="button"
-                key={item.pipelineRunId}
-                onClick={() => setCurrent(i)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm"
-              >
-                <span className="inline-flex size-9 flex-none items-center justify-center rounded-lg bg-secondary/60 text-foreground/70">
-                  <FileTextIcon className="size-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {item.filename}
-                  </p>
-                  <p className="truncate text-xs text-foreground/50">
-                    {item.documentTypeKey ??
-                      t('intelligence.queue.unknownType', 'Unknown type')}
-                  </p>
-                </div>
-                {batchId && (
-                  <Badge
-                    variant={STATUS_VARIANT[item.status] ?? 'secondary'}
-                    outline
+      <DataTable
+        tableId={batchId ? 'intelligence.reviewQueue.batch' : 'intelligence.reviewQueue.global'}
+        data={filtered}
+        columns={columns}
+        rowKey={(r) => r.pipelineRunId}
+        search={(r) => `${r.filename} ${r.documentTypeKey ?? ''} ${r.batchName ?? ''}`}
+        searchPlaceholder={t('intelligence.queue.search', 'Search by file, type, or batch…')}
+        pageSize={25}
+        pageSizeOptions={[10, 25, 50, 100]}
+        initialSort={{ key: 'updated', dir: 'desc' }}
+        empty={t('intelligence.queue.empty', 'Nothing to review here.')}
+        toolbar={
+          (types.length > 1 || (batchId && statuses.length > 1)) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {batchId && statuses.length > 1 && (
+                <>
+                  <Chip
+                    active={!statusFilter}
+                    onClick={() => setStatusFilter(null)}
                   >
-                    {item.status.replace(/_/g, ' ')}
-                  </Badge>
-                )}
-                {pct != null && (
-                  <Badge variant={pct >= 85 ? 'success' : 'warning'} outline>
-                    {pct}%
-                  </Badge>
-                )}
-                <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-                  {t('intelligence.queue.review', 'Review')}
-                  <ArrowRightIcon className="size-3.5" />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center">
-          <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-success/15 text-success">
-            <CheckMark />
-          </span>
-          <p className="mt-3 font-medium text-foreground">
-            {t('intelligence.queue.emptyTitle', 'All caught up')}
-          </p>
-          <p className="mt-1 text-sm text-foreground/55">
-            {t('intelligence.queue.empty', 'Nothing to review here.')}
-          </p>
-        </div>
-      )}
+                    {t('common.all', 'All')}
+                  </Chip>
+                  {statuses.map((s) => (
+                    <Chip
+                      key={s}
+                      active={statusFilter === s}
+                      onClick={() =>
+                        setStatusFilter(statusFilter === s ? null : s)
+                      }
+                    >
+                      {s.replace(/_/g, ' ')}
+                    </Chip>
+                  ))}
+                  {types.length > 1 && (
+                    <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+                  )}
+                </>
+              )}
+              {types.length > 1 && (
+                <>
+                  {!batchId && (
+                    <Chip
+                      active={!typeFilter}
+                      onClick={() => setTypeFilter(null)}
+                    >
+                      {t('common.all', 'All')}
+                    </Chip>
+                  )}
+                  {types.map((ty) => (
+                    <Chip
+                      key={ty}
+                      active={typeFilter === ty}
+                      onClick={() =>
+                        setTypeFilter(typeFilter === ty ? null : ty)
+                      }
+                    >
+                      {ty}
+                    </Chip>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : undefined
+        }
+      />
     </div>
   );
 }
@@ -372,18 +543,3 @@ function FocusedReview({
   );
 }
 
-function CheckMark() {
-  return (
-    <svg
-      className="size-6"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m5 13 4 4L19 7" />
-    </svg>
-  );
-}

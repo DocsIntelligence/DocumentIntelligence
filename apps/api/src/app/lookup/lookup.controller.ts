@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -44,10 +45,24 @@ export class LookupController {
   // Declared BEFORE `:key` so the literal segment wins over the param route.
   @Get('admin')
   @ApiOperation({
-    summary: 'Get ALL lookup groups incl. non-public + inactive values',
+    summary: 'Get lookup groups (paginated) incl. non-public + inactive values',
   })
-  getAllAdmin() {
-    return this.lookupService.getAll();
+  getAllAdmin(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.lookupService.getAllPaginated({
+      q: q?.trim() || undefined,
+      page: page ? Math.max(0, Number(page)) : 0,
+      pageSize: pageSize ? Math.min(100, Math.max(1, Number(pageSize))) : 50,
+    });
+  }
+
+  @Get('admin/:id')
+  @ApiOperation({ summary: 'Get one lookup group WITH its values (admin)' })
+  getOneAdmin(@Param('id') id: string) {
+    return this.lookupService.getOneAdmin(id);
   }
 
   @Public()

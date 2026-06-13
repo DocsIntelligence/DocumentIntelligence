@@ -2,6 +2,236 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+### 2026-06-13 — VaultConfigManager row actions match the shared icon pattern
+
+User: "`/admin/intelligence/vault` use same icons".
+
+- `VaultConfigManager.tsx` (`Vault fields` + `Document kinds` tables): the previous
+  `<Button>Edit</Button> <Button>Delete</Button>` pair replaced with the standard `IconButton` row
+  (EditIcon + TrashIcon, shared from `../intelligence/icons`), `pinned: true` action column.
+- Delete now goes through `useConfirm()` (was a fire-and-forget mutate) — copy explains that field
+  removal keeps existing entity data and doc-kind removal keeps existing documents.
+- **app typecheck ✓ · app lint 0 errors.**
+
+### 2026-06-13 — Consistent pagination + row-action pattern
+
+User asks: "use page size in all tables, verify and make all similar… pagination same with custom
+page goto... icons in actions if there are too many then put non primary in dropdown" → followed by
+"put duplicate directly, and enable/disable instead of dropdown" → "show 4 options in icon then all
+other to dropdown, view/copy/delete/disable" → "put confirmation to all like delete disable".
+
+- **Pagination uniform across every table**: DataTable defaults `pageSizeOptions=[10,25,50,100,200]`
+  and `pageSize=25` so every consumer renders the same footer — rows-per-page dropdown +
+  Prev / "[page] of N" page-jump input / Next — with no per-call wiring.
+- **Row actions standardised** to a 4-icon row (View/Copy/Delete/Disable) with overflow `⋯` for the
+  rest:
+  - `DocumentsList`: Open (view) + Duplicate (copy) + Delete icons; Rename / Share / Version history
+    moved into the ⋯ dropdown. (Documents have no disable.)
+  - `VaultPage`: Open + Duplicate + Disable/Enable + Delete (4 inline icons, no overflow).
+  - `LookupManager`: Manage values (edit) + Duplicate + Delete (group-level disable doesn't exist).
+  - `PipelineManager`: Edit + Clone + Disable/Enable + Delete (4 icons).
+  - `SchemaManager`: Edit + Clone + Field-mapping (when applicable) + Disable/Enable + Delete.
+  - `BatchDetailPage`: Open + Approve icons; Process-as-type and Skip in ⋯ overflow (those are run-
+    specific extras, not part of the standard 4).
+  - Action columns are now `pinned: true` so the user can't drag them away from the right edge.
+- **Confirmations on destructive + state-changing actions**: every Disable/Enable now goes through
+  `useConfirm()` (Pipeline / Schema / Vault). Delete confirmations were already in place.
+- **app typecheck ✓ · app lint 0 errors · ui lint 0 errors (only pre-existing warnings).**
+
+### 2026-06-13 — DataTable rebuilt on @tanstack/react-table
+
+User: "column should not be overlapped, use a proper data table, if needed use some library."
+
+- Installed **`@tanstack/react-table@8.21.3`** (headless, ~14KB, same family as react-query already
+  in the repo).
+- Rebuilt `@org/ui::DataTable` internals on `useReactTable` while keeping the **public API
+  identical** (`DataTableColumn`, `DataTableServer`, `DataTableProps`, `rowKey`, `search`, `toolbar`,
+  `renderExpanded`, `tableId`, `resizableColumns`, `reorderableColumns` all unchanged).
+- Why the rebuild: my custom column-sizing model had the classic "content overflows neighbour column"
+  failure when cell content was wider than the column. react-table's column sizing model + a strict
+  `table-layout: fixed` + `overflow: hidden` per `<td>` give clean, library-grade clipping (with
+  internal `truncate` on text still working).
+- Tile-fixed math: every header/cell uses `header.getSize()` / `column.getSize()` for width, the
+  `<table>` width is `table.getTotalSize()` clamped to ≥100%, and the outer scroll wrapper takes
+  over horizontally when columns exceed the viewport.
+- Resize: `columnResizeMode: 'onChange'`, handles call `header.getResizeHandler()` (mouse + touch).
+  Double-click clears that one column's width. Persisted to `localStorage['dt:<tableId>'].widths`.
+- Reorder: HTML5 drag/drop on header cells (pinned columns are immovable). Persisted to
+  `.order`. Padding logic keeps newly-added columns visible if older saves predate them.
+- Backwards-compatible width: legacy `column.width: 'w-32'` now auto-parses (`tailwindWidthToPx`)
+  into a pixel `size`, so existing tables keep their intended narrow columns out of the box.
+- **app typecheck ✓ · app build ✓ · app lint 0 errors · ui lint 0 errors (only pre-existing).**
+
+### 2026-06-13 — DataTable upgrade: resize/reorder/scroll + wider layout
+
+User: "use full width available for table. and keep them scrollable and upgrade the table, so user
+can rearrange etc the table like column width etc..."
+
+- **MainLayout widened** (`apps/app/.../main-layout/MainLayout.tsx`): `max-w-6xl` (~1152 px) →
+  `max-w-screen-2xl` (~1536 px). All dashboard pages get more horizontal room without breaking the
+  reading-width guard for forms (which still cap themselves locally).
+- **`@org/ui::DataTable` rebuilt** as a power table while staying API-compatible:
+  - **Horizontal scroll**: inner `<div className="overflow-x-auto">` wraps the table — narrow
+    viewports / many columns scroll instead of squishing.
+  - **Column resize**: drag a handle on each header's right edge (visible on hover); `minWidth`
+    defaults to 60 px (overridable per-column via `column.minWidth`). Double-click the handle to
+    reset that column to default. Live-updates a `<colgroup><col style={width}>` model so widths
+    stay perfectly aligned in `table-auto`; switches to `table-fixed` once any user width is set
+    so resizes stick crisply.
+  - **Column reorder**: headers are HTML5-draggable; drop on another header to swap order (pinned
+    columns refuse to move/be displaced via new `column.pinned`). Drop targets ring-highlight.
+  - **Persistence**: new `tableId?: string` prop saves `{order, widths}` to
+    `localStorage['dt:<tableId>']` so each user's layout survives reloads/sessions per-table.
+    No `tableId` → resize/reorder still work, just in-memory.
+  - **"Reset columns" button** appears in the toolbar row once a layout is customized (clears
+    both order and widths for that table).
+  - Backwards-compatible: existing Tailwind `column.width` still applied as a fallback when no
+    user pixel width exists; `defaultWidth` (px) is the new pixel-first knob.
+- **Wired `tableId` on all major user-facing tables**: documents.list, intelligence.batches,
+  intelligence.batchDetail.runs, intelligence.reviewQueue.{global,batch}, vault.list,
+  admin.lookups.groups, admin.intelligence.{pipelines,schemas}, admin.vault.{fields,docKinds}.
+- **app typecheck ✓ · app lint 0 errors · ui lint 0 errors (only pre-existing warns).**
+
+### 2026-06-13 — Review queue full-width + batch column; BatchDetail runs → DataTable
+
+User: "review table is not similar and showing all details" + "fix review queue, add batch details and
+filter etc... keep them proper" + "review all tables for review and documents".
+
+- **Review queue full-width** (`ReviewQueuePage`): dropped `mx-auto max-w-3xl` — matches `BatchesPage` /
+  Documents list. Filename is a clickable row-opener (button → focused review) with the type as a
+  subline, BatchesPage-style icon+two-line cell.
+- **New columns:** Batch (global scope, links to `/batches/:id`), Updated (sortable, default desc).
+  Status was previously batch-only — now shown in both modes for consistency. Confidence still center
+  badge. Action column is an outline "Review →" button instead of an icon.
+- **Filters proper:** type-chip toolbar (already there) + **status-chip filter** in batch mode (separated
+  by a `|` divider when both visible). Both filter client-side over the loaded queue page.
+- **API enriched** (`pipeline-executor.service.ts::reviewQueue` + `batch.service.ts::listRuns`):
+  `ReviewQueueItem` now returns `batchName` + `updatedAt`; `BatchRun` returns `updatedAt`. So both
+  global and batch scopes get a real timestamp column.
+- **BatchDetail runs → `DataTable`** (`BatchDetailPage`): the Card/divider list became a server-driven
+  DataTable with the same look — search box, sortable columns (File / Type / Status / Updated /
+  Actions), status-chip toolbar (replaces the standalone chip row), page-size selector. Per-row actions
+  (Open / Approve / Process as… / Skip) preserved in a right-aligned cell. Custom Prev/Next pager
+  removed — DataTable now owns paging.
+- **app typecheck ✓ · app lint 0 errors · api lint 0 errors.**
+
+### 2026-06-13 — Review queue → DataTable + filter; icon row-actions rule
+
+- **Review queue list → `DataTable`** (`ReviewQueuePage` list mode): columns File / Type / Status (batch
+  scope) / Confidence / Review, with search + a **type-filter chip toolbar** + page-size. The focused
+  review **stepper is unchanged** — the Review action opens it at the right index (found by run id, so
+  it survives sort/filter). Empty state via the table's `empty`.
+- **Icon row-actions (new standing rule, memory `feedback_ui_consistency` §6):** basic actions are **icon
+  buttons**, overflow goes in a ⋯ dropdown *alongside* them. Applied: Review queue (icon Review button);
+  Vault list (Open + Delete as ghost icon buttons + ⋯ dropdown for Duplicate / Enable-Disable). LookupManager
+  already follows this.
+- **app typecheck/build ✓ · lint 0 errors.**
+
+### 2026-06-13 — Lean lists + per-item CRUD + jump-to-page (all tables)
+
+User directives: jump to any page in all tables; "use crud, instead of list for getting all data" — lists
+return lightweight summaries, fetch each item's detail on select. Saved as memory `feedback_ui_consistency` §5.
+**api build ✓ · app typecheck/build ✓ · lint 0 errors.**
+- **DataTable jump-to-page:** the pager's "1 / N" is now a number input (`PageJump`) — type a page + Enter to
+  jump. Works in client + server mode, so **every table** gets it.
+- **Lookups → lean server-side CRUD:** `getAllPaginated` returns **summaries** (`valueCount`, no nested
+  values) + `GET /lookups/admin/:id` (`getOneAdmin`) fetches a group's values **only when selected**.
+  `LookupManager` is server-paginated (search + page-size), the value editor + duplicate fetch the group's
+  values on demand. No more loading all groups×values up front.
+- **Vault → entity-first:** `list` no longer decrypts/returns fields (was per-row AES) — it returns lean
+  summaries; the masked fields load on select via `get(id)`, unmasked via `reveal(id)`. Dropped the list
+  "Details" column. So selecting an entity is what surfaces its fields.
+- Remaining (ledgered): apply the same lean-CRUD to schemas/pipelines admin (currently load nested fields/
+  stages in the list); they're small + now have jump-to-page.
+
+### 2026-06-13 — Vault list: server-side pagination (scales to many entities)
+
+Vault was already grid (DataTable) + dedicated edit pages, but the list fetched + **decrypted every entity**
+client-side. Made it server-paginated so only the current page is fetched/decrypted. **api build ✓ ·
+app typecheck/build ✓ · lint 0 errors.**
+- `VaultService.list(userId, query)` → `$transaction(findMany take/skip + count)` with label search, sort
+  (label/kind/updated/documents — `documents` via `orderBy: { documents: { _count } }`), returns
+  `{ items, total }`; decrypts only the page. `ListVaultEntitiesQueryDto` + `@Query`.
+- api-client `list(query)` → `{items,total}` + `ListVaultEntitiesQuery`; `useVaultEntities(params)` with
+  `keepPreviousData`.
+- `VaultPage` → `DataTable` **server mode** (page/pageSize/sort/query state + callbacks, page-size selector,
+  loading dim) — same pattern as Documents/Batches.
+- `VaultAutofillDialog` → paginated fetch (pageSize 50) + a **search box** so picking scales too.
+
+### 2026-06-13 — App-wide UI/UX audit + consistency pass (wave 1)
+
+Audited every feature page (fan-out) against the standing UI rule; app was already largely consistent
+(Dashboard/DocumentsList/BatchesPage exemplary). Fixed the concrete gaps. **app typecheck/build ✓ · lint 0.**
+- **Native elements → @org/ui:** structured-form boolean field + search-admin "searchable kinds" now use
+  `@org/ui` `Checkbox` (were raw `<input type=checkbox>`).
+- **Loading states:** Settings + AdminDashboard now show a `Spinner` (were text-only).
+- **Destructive confirm:** single-run "Skip" in BatchDetail now confirms (matched the bulk skip).
+- **@org/ui buttons:** SearchPage pager → `Button`; TemplatesPage category filters → `Chip` (were raw
+  `<button>`s with inline active styles).
+- **Container/header normalization:** MainLayout already centers at `max-w-6xl` + pads, so pages were
+  double-wrapping. Removed redundant `p-4 sm:p-6` from Search/Vault/VaultEntity; standardized page `<h1>`
+  to `text-2xl font-semibold tracking-tight` + `text-foreground/60` subtitle (Search/Vault/NewDocumentPicker).
+- Remaining (ledgered, lower impact): DraftWithAI explicit cancel; normalize Batch/Review detail widths;
+  unify a shared pagination control.
+
+### 2026-06-13 — UI consistency: Vault → DataTable, sidebar regrouped (standing rule)
+
+User directive: consistent table→edit pattern + dashboard-grade UI everywhere; rearrange the sidebar.
+Saved as memory `feedback_ui_consistency` (applies to all future UI). **app typecheck/build ✓ · lint 0.**
+- **Vault list → `DataTable`** (table → row link → detail/edit), replacing the card grid: columns
+  Type/Name/Details/Docs/Updated + a row ⋯ actions menu (Open/Duplicate/Enable-Disable/Delete), search +
+  sort + pagination — now consistent with `DocumentsList`/`SchemaManager`/`PipelineManager`/`LookupManager`
+  (which already use DataTable; vault was the outlier).
+- **Sidebar regrouped** (`MainLayout`): top-level Dashboard · Search · Vault; **Create** group; **Document
+  Intelligence** group = operational (Analyze moved in + Batches/New batch/Review queue); new
+  **Configuration** group = Document types/Pipelines/Lookups/Search settings/Vault fields (split admin/config
+  out of the operational group, per "batches vs lookup/config").
+
+### 2026-06-13 — Vault UX: duplicate, enable/disable, actions menu, lookup-linked fields
+
+Per request ("better field UX + proper duplicate + disable/enable + fields linked to lookups").
+**api build ✓ · app typecheck/build ✓ · lint 0 errors.**
+- **Duplicate** entity — `POST /vault/entities/:id/duplicate` (clones encrypted fields, label "Copy of …",
+  documents not copied, owner scope preserved) + `useDuplicateVaultEntity`.
+- **Enable/disable** — `VaultEntity.isActive` (migration `vault_entity_active`); `update` accepts `isActive`;
+  disabled entities are **hidden from the autofill picker** and muted in the list with a "Disabled" badge.
+- **UX:** list cards got a ⋯ **actions menu** (Open · Duplicate · Enable/Disable · Delete) and muted styling;
+  the detail page got an Actions menu (Duplicate / Enable-Disable) + disabled badge.
+- **Lookup-linked fields** — new field `type: 'lookup'` + `lookupKey` (migration `vault_field_lookup`):
+  a field like *country*/*state* pulls its options from the existing **Lookups** system
+  (`useLookupOptions()[lookupKey]`), reusing the DB-driven, admin-managed option-sets. Wired through the
+  config catalog, admin form (type=lookup → lookupKey input), and `FieldInput` renderer.
+
+### 2026-06-13 — Shared @org/ui DatePicker (calendar) — used by vault + builder
+
+There was no calendar in `@org/ui` (only Popover); the app used native `<input type="date">`. Built a
+**dependency-free** `Calendar` + `DatePicker` (`libs/shared/ui/src/components/date-picker.tsx`) on the
+existing Popover, styled like `SelectTrigger`, values as timezone-safe `YYYY-MM-DD` (no `toISOString`),
+with prev/next month nav + Today/Clear. Adopted it for vault date fields (`VaultEntityPage` `FieldInput`)
+**and** the document builder (`BuilderForm` `widget==='date'`, replacing the native input). app typecheck/
+build ✓ · lint 0 errors. (Chose a hand-rolled calendar over adding `react-day-picker` — no new dep,
+offline-safe, fully design-system styled.)
+
+### 2026-06-13 — Vault: typed/grouped fields, scan-autofill, and DB-configurable catalog + admin
+
+Made the vault "more detailed + configurable" per request. **api build ✓ · app typecheck/build ✓ · lint 0 errors.**
+- **Typed + grouped fields:** field defs gained `type` (text/textarea/date/number/tel/email/select), `group`
+  (Identity/Address/Bank/Contact), `options` (Indian states, gender, entity types). `VaultEntityPage` renders
+  the right input per type (date pickers, dropdowns) grouped under subheadings.
+- **Scan-autofill (the "Aadhaar section uploads and fills" ask):** `VAULT_DOC_KINDS` map each document kind →
+  the canonical fields it can fill. `POST /vault/entities/:id/documents/:docId/scan` reads the stored file and
+  **vision-extracts** those fields via `AiService.extract` + `sourcePart` (per-kind JSON schema + prompt;
+  audited), returning suggestions. A **"Scan & autofill"** button per scannable document merges suggestions
+  into empty fields (reveal→merge→update). Gated on a vision-capable provider.
+- **DB-configurable catalog + admin (the "move constants to DB + admin config" ask):** new
+  `VaultFieldConfig` + `VaultDocKindConfig` (org-scoped; `ownerOrgId=null` = system default, seeded from the
+  code constants on first use; code = ultimate fallback). `VaultConfigService` resolves org→system→code and
+  exposes admin CRUD. `VaultService` now reads the catalog from config (not hardcoded). Admin API
+  `/admin/vault/{fields,doc-kinds}` (`VaultAdminController`) + `VaultConfigManager` UI as a ConfigShell tab
+  (`/admin/intelligence/vault`, sidebar nav). Migration `vault_config` via the drift-safe wrapper.
+  **Caveat kept:** canonical `key`s are stable identifiers (autofill depends on them); admins edit
+  labels/types/sensitivity/order/options + add fields freely.
+
 ### 2026-06-13 — Vault → builder autofill ("Insert from vault")
 
 Closed the vault's headline value. **app typecheck/build ✓ · lint 0 errors.**
