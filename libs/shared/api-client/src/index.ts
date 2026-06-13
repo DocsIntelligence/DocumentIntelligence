@@ -7,3 +7,4 @@ export * from './lib/shares.service';
 export * from './lib/lookups.service';
 export * from './lib/intelligence.service';
 export * from './lib/intelligence-admin.service';
+export * from './lib/search.service';

@@ -37,6 +37,7 @@ import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
 import { InlineEditPopover } from './InlineEditPopover';
+import { DocumentInsights } from '../../intelligence/DocumentInsights';
 import { RisksPanel } from './RisksPanel';
 import { SectionsTree } from './SectionsTree';
 import { labelFor } from './sectionLabels';
@@ -386,6 +387,14 @@ export function BuilderShell({ documentId }: Props) {
           }}
         />
       </div>
+      <details className="border-t max-h-[50%] overflow-y-auto">
+        <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium">
+          {t('intelligence.insights.title', 'AI insights')}
+        </summary>
+        <div className="px-2 pb-3">
+          <DocumentInsights sourceId={documentId} scope="document" />
+        </div>
+      </details>
     </aside>
   );
 

@@ -2,6 +2,7 @@ import type {
   EngineMode,
   IntelligenceJob,
   ListBatchesQuery,
+  ListRunsQuery,
   SaveReviewPayload,
 } from '@org/api-client';
 import {
@@ -78,35 +79,45 @@ export function useExtraction(sourceId: string | undefined, enabled = true) {
   });
 }
 
-/** Latest analysis for a document (null until analyzed). */
-export function useAnalysis(sourceId: string | undefined) {
+/** Subject scope for analyse/ask: an uploaded source or a drafting document. */
+export type InsightScope = 'source' | 'document';
+
+const analysisKey = (scope: InsightScope, id: string) =>
+  ['intelligence', 'analysis', scope, id] as const;
+
+/** Latest analysis for a subject (null until analyzed). Works for both an
+ *  uploaded source and a drafting document (docs/09 #6). */
+export function useAnalysis(id: string | undefined, scope: InsightScope = 'source') {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: sourceId
-      ? intelligenceKeys.analysis(sourceId)
-      : ['intelligence', 'analysis', 'none'],
-    queryFn: () => svc.getAnalysis(sourceId as string),
-    enabled: !!sourceId,
+    queryKey: id ? analysisKey(scope, id) : ['intelligence', 'analysis', 'none'],
+    queryFn: () =>
+      scope === 'document'
+        ? svc.getDocumentAnalysis(id as string)
+        : svc.getAnalysis(id as string),
+    enabled: !!id,
   });
 }
 
-/** Run (or re-run) analysis for a document. */
-export function useRunAnalysis(sourceId: string) {
+/** Run (or re-run) analysis for a subject. */
+export function useRunAnalysis(id: string, scope: InsightScope = 'source') {
   const svc = useIntelligenceService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => svc.analyze(sourceId),
+    mutationFn: () =>
+      scope === 'document' ? svc.analyzeDocument(id) : svc.analyze(id),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: intelligenceKeys.analysis(sourceId) }),
+      qc.invalidateQueries({ queryKey: analysisKey(scope, id) }),
     onError: (err) => toast.error(extractMessage(err, 'Analysis failed')),
   });
 }
 
-/** Ask a question about a document (RAG, page-cited). */
-export function useAsk(sourceId: string) {
+/** Ask a question about a subject (RAG, page-cited). */
+export function useAsk(id: string, scope: InsightScope = 'source') {
   const svc = useIntelligenceService();
   return useMutation({
-    mutationFn: (question: string) => svc.ask(sourceId, question),
+    mutationFn: (question: string) =>
+      scope === 'document' ? svc.askDocument(id, question) : svc.ask(id, question),
     onError: (err) => toast.error(extractMessage(err, 'Could not answer')),
   });
 }
@@ -156,12 +167,42 @@ export function useBatch(batchId: string | undefined) {
   });
 }
 
-/** Review queue, optionally scoped to a single batch. */
-export function useReviewQueue(batchId?: string) {
+/** Review queue, optionally scoped to a single batch (server-paginated). */
+export function useReviewQueue(batchId?: string, page = 0, pageSize = 50) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: [...intelligenceKeys.reviewQueue, batchId ?? 'all'],
-    queryFn: () => svc.getReviewQueue(batchId),
+    queryKey: [...intelligenceKeys.reviewQueue, batchId ?? 'all', page, pageSize],
+    queryFn: () => svc.getReviewQueue(batchId, page, pageSize),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** A page of a batch's runs (server-side; docs/09 #9). */
+export function useBatchRuns(batchId: string | undefined, query: ListRunsQuery = {}) {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: batchId
+      ? ['intelligence', 'batch', batchId, 'runs', query]
+      : ['intelligence', 'batch', 'none', 'runs'],
+    queryFn: () => svc.getBatchRuns(batchId as string, query),
+    enabled: !!batchId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Skip (archive) all archivable runs of a type in a batch. */
+export function useArchiveType(batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { documentTypeKey: string; reason?: string }) =>
+      svc.archiveType(batchId as string, vars.documentTypeKey, vars.reason),
+    onSuccess: () => {
+      if (batchId) qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      qc.invalidateQueries({ queryKey: ['intelligence', 'batch', batchId, 'runs'] });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Could not skip documents')),
   });
 }
 

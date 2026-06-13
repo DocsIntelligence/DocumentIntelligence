@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   useApproveRun,
   useBatch,
+  useBatchRuns,
   useExtraction,
   useReviewQueue,
 } from './queries';
@@ -47,16 +48,18 @@ export function ReviewQueuePage() {
   const batchId = params.get('batch') ?? undefined;
   const docParam = params.get('doc') ?? undefined;
 
-  const reviewQueue = useReviewQueue(batchId);
-  const batchQuery = useBatch(batchId);
-  const batch = batchQuery.data;
-  const isLoading = batchId ? batchQuery.isLoading : reviewQueue.isLoading;
+  // Both scopes are server-paginated (docs/09 #9). The stepper walks one large
+  // page (up to 500) of openable runs (batch) / parked items (global).
+  const reviewQueue = useReviewQueue(batchId, 0, 500);
+  const batchRuns = useBatchRuns(batchId, { openable: true, pageSize: 500 });
+  const batch = useBatch(batchId).data; // summary only (name) — runs come above
+  const isLoading = batchId ? batchRuns.isLoading : reviewQueue.isLoading;
 
   // Batch scope walks every openable doc in the batch (needs_review first);
   // global scope walks the parked queue only.
   const items = useMemo<QueueEntry[]>(() => {
     if (batchId) {
-      return (batch?.runs ?? [])
+      return (batchRuns.data?.items ?? [])
         .filter((r) => OPENABLE.includes(r.status))
         .map((r) => ({
           pipelineRunId: r.id,
@@ -71,7 +74,7 @@ export function ReviewQueuePage() {
             (b.status === 'needs_review' ? 0 : 1),
         );
     }
-    return (reviewQueue.data ?? []).map((i) => ({
+    return (reviewQueue.data?.items ?? []).map((i) => ({
       pipelineRunId: i.pipelineRunId,
       sourceDocumentId: i.sourceDocumentId,
       filename: i.filename,
@@ -79,7 +82,7 @@ export function ReviewQueuePage() {
       status: 'needs_review',
       overallConfidence: i.overallConfidence,
     }));
-  }, [batchId, batch?.runs, reviewQueue.data]);
+  }, [batchId, batchRuns.data?.items, reviewQueue.data?.items]);
 
   const count = items.length;
   const pendingCount = items.filter((i) => i.status === 'needs_review').length;

@@ -20,6 +20,7 @@ import {
   createIntelligenceAdminService,
   createLegalAiService,
   createLookupsService,
+  createSearchService,
   createSharesService,
   createUsersService,
 } from '@org/api-client';
@@ -74,6 +75,7 @@ const shares = createSharesService(http);
 const lookups = createLookupsService(http);
 const intelligence = createIntelligenceService(http);
 const intelligenceAdmin = createIntelligenceAdminService(http);
+const search = createSearchService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -103,6 +105,7 @@ root.render(
             lookups={lookups}
             intelligence={intelligence}
             intelligenceAdmin={intelligenceAdmin}
+            search={search}
           >
             <BrowserRouter>
               <ConfirmProvider>

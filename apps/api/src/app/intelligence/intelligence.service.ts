@@ -22,6 +22,7 @@ import {
   type FieldValues,
 } from '@org/doc-intelligence';
 import { DatabaseService } from '../database/database.service';
+import { SearchIndexService } from '../search/search-index.service';
 import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
@@ -78,6 +79,7 @@ export class IntelligenceService {
     private readonly walletUsage: WalletUsageService,
     private readonly documents: DocumentsService,
     private readonly resolver: SchemaResolverService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   // ─── Ingest ────────────────────────────────────────────────────────────
@@ -178,6 +180,8 @@ export class IntelligenceService {
     });
 
     await this.enqueue({ jobId: job.id });
+    // Index immediately (filename now; parsed text/extraction follow on reindex).
+    this.searchIndex.enqueueSource(source.id);
     return { sourceDocumentId: source.id, jobId: job.id };
   }
 

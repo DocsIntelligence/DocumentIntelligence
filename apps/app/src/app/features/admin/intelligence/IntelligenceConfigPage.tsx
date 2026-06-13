@@ -2,6 +2,7 @@ import { Card } from '@org/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LookupManager } from '../lookups/LookupManager';
+import { SearchSettingsManager } from '../search/SearchSettingsManager';
 import { PipelineManager } from './PipelineManager';
 import { SchemaManager } from './SchemaManager';
 
@@ -78,6 +79,21 @@ export function LookupsPage() {
       )}
     >
       <LookupManager />
+    </ConfigShell>
+  );
+}
+
+export function SearchConfigPage() {
+  const { t } = useTranslation();
+  return (
+    <ConfigShell
+      title={t('searchAdmin.title', 'Search settings')}
+      subtitle={t(
+        'searchAdmin.subtitle',
+        'Tune hybrid keyword + semantic ranking, choose what is searchable, and rebuild the index.',
+      )}
+    >
+      <SearchSettingsManager />
     </ConfigShell>
   );
 }

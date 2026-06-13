@@ -12,6 +12,7 @@ import {
   DocTypesPage,
   LookupsPage,
   PipelinesPage,
+  SearchConfigPage,
 } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
@@ -36,6 +37,7 @@ import {
   NewBatchPage,
   ReviewQueuePage,
 } from './features/intelligence';
+import { SearchPage } from './features/search';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -76,6 +78,7 @@ export function App() {
       >
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/search" element={<SearchPage />} />
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/documents/templates" element={<TemplatesPage />} />
@@ -100,6 +103,10 @@ export function App() {
         <Route
           path="/admin/intelligence/lookups"
           element={<LookupsPage />}
+        />
+        <Route
+          path="/admin/intelligence/search"
+          element={<SearchConfigPage />}
         />
       </Route>
 

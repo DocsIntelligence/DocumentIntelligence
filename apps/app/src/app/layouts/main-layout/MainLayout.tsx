@@ -16,6 +16,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { APP_ENV } from '../../../config';
+import {
+  SearchCommandPalette,
+  openSearchPalette,
+} from '../../features/search';
 
 /**
  * Authenticated app shell: a fixed left sidebar on md+ screens, and a
@@ -42,6 +46,9 @@ export function MainLayout() {
 
   return (
     <div className="min-h-screen bg-secondary/10">
+      {/* Global ⌘K quick search (mounted once) */}
+      <SearchCommandPalette />
+
       {/* Mobile top bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 md:hidden">
         <button
@@ -132,6 +139,19 @@ function Sidebar({
           </Link>
         </div>
 
+        {/* Quick search trigger (opens the ⌘K palette) */}
+        <div className="px-3 pt-3">
+          <button
+            type="button"
+            onClick={openSearchPalette}
+            className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/50"
+          >
+            <SearchIcon />
+            <span className="flex-1 text-left">{t('search.title', 'Search')}…</span>
+            <kbd className="rounded border px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          </button>
+        </div>
+
         {/* Primary CTA */}
         <div className="p-3">
           <Button asChild className="w-full justify-center gap-1.5">
@@ -148,6 +168,11 @@ function Sidebar({
             to="/dashboard"
             label={t('nav.dashboard', 'Dashboard')}
             icon={<GridIcon />}
+          />
+          <NavItem
+            to="/search"
+            label={t('nav.search', 'Search')}
+            icon={<SearchIcon />}
           />
 
           <NavGroup
@@ -227,6 +252,11 @@ function Sidebar({
               to="/admin/intelligence/lookups"
               label={t('nav.lookups', 'Lookups')}
               icon={<ListIcon />}
+            />
+            <NavItem
+              to="/admin/intelligence/search"
+              label={t('nav.searchSettings', 'Search settings')}
+              icon={<SearchIcon />}
             />
           </NavGroup>
 
@@ -444,6 +474,15 @@ function ScanIcon() {
       <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
       <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
       <line x1="7" y1="12" x2="17" y2="12" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }

@@ -17,6 +17,7 @@ import {
 } from '@org/doc-intelligence';
 import { AiService } from '../ai/ai.service';
 import { DatabaseService } from '../database/database.service';
+import { SearchIndexService } from '../search/search-index.service';
 import { StorageService } from '../storage/storage.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import { errorMessage } from '../common/error.util';
@@ -62,6 +63,7 @@ export class PipelineService {
     private readonly walletUsage: WalletUsageService,
     private readonly parsing: ParsingService,
     private readonly resolver: SchemaResolverService,
+    private readonly searchIndex: SearchIndexService,
     config: ConfigService,
   ) {
     this.classifier = new ClassifierEngine(ai);
@@ -214,6 +216,9 @@ export class PipelineService {
           data: { status: 'processed' },
         });
       });
+
+      // Extraction fields are now searchable — (re)index the source.
+      this.searchIndex.enqueueSource(src.id);
 
       // ── meter spend (best-effort). Every run costs one ai_attempt; an agentic
       // run additionally consumes a premium_extraction unit (the paid tier).

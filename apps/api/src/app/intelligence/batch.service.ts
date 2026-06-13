@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { BatchStatus, PipelineRunStatus, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
+import { SearchIndexService } from '../search/search-index.service';
 import { StorageService } from '../storage/storage.service';
 import { bucketTotals, deriveBatchCounts, deriveBatchStatus } from './batch-status';
 import type { ListBatchesQueryDto } from './intelligence.dto';
@@ -36,6 +37,7 @@ export class BatchService {
     private readonly db: DatabaseService,
     private readonly storage: StorageService,
     private readonly executor: PipelineExecutorService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   /** Upload many files and start a run per file on the chosen pipeline. */
@@ -83,6 +85,7 @@ export class BatchService {
           status: 'uploaded',
         },
       });
+      this.searchIndex.enqueueSource(source.id);
       const { pipelineRunId } = await this.executor.startRun(
         userId,
         source.id,
@@ -141,63 +144,109 @@ export class BatchService {
   }
 
   async get(userId: string, batchId: string) {
-    const batch = await this.db.batch.findUnique({
-      where: { id: batchId },
-      include: {
-        runs: {
-          orderBy: { createdAt: 'asc' },
-          include: {
-            sourceDocument: { select: { id: true, filename: true } },
-          },
-        },
-      },
-    });
+    const batch = await this.db.batch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundException('Batch not found');
     await this.assertCanAccess(userId, batch);
 
-    const runs = batch.runs.map((r) => ({
-      id: r.id,
-      status: r.status,
-      sourceDocumentId: r.sourceDocumentId,
-      filename: r.sourceDocument.filename,
-      documentTypeKey: r.documentTypeKey,
-      archivedReason: r.archivedReason,
-    }));
+    // Aggregate via groupBy — NEVER load all runs (a batch can hold ~1000).
+    const byStatus = (await this.db.pipelineRun.groupBy({
+      by: ['status'],
+      where: { batchId },
+      _count: { _all: true },
+    })) as unknown as { status: PipelineRunStatus; _count: { _all: number } }[];
+    const statusCount = (s: PipelineRunStatus) =>
+      byStatus.find((g) => g.status === s)?._count._all ?? 0;
 
-    // Status funnel (cheap, derived from run.status — no per-stage queries).
-    const inProgress = batch.runs.filter((r) =>
-      r.status === 'queued' || r.status === 'running',
-    ).length;
     const funnel = {
-      inProgress,
-      needsReview: batch.runs.filter((r) => r.status === 'needs_review').length,
-      completed: batch.runs.filter(
-        (r) => r.status === 'completed' || r.status === 'approved',
-      ).length,
-      archived: batch.runs.filter((r) => r.status === 'archived').length,
-      failed: batch.runs.filter(
-        (r) => r.status === 'failed' || r.status === 'rejected',
-      ).length,
+      inProgress: statusCount('queued') + statusCount('running'),
+      needsReview: statusCount('needs_review'),
+      completed: statusCount('completed') + statusCount('approved'),
+      archived: statusCount('archived'),
+      failed: statusCount('failed') + statusCount('rejected'),
     };
 
-    // Classified-type histogram ("of N docs, how many of each type").
-    const histMap = new Map<string, number>();
-    for (const r of batch.runs) {
-      const key = r.documentTypeKey ?? 'unclassified';
-      histMap.set(key, (histMap.get(key) ?? 0) + 1);
-    }
-    const typeHistogram = [...histMap.entries()]
-      .map(([documentTypeKey, count]) => ({ documentTypeKey, count }))
+    // Classified-type histogram via groupBy (page-independent).
+    const byType = (await this.db.pipelineRun.groupBy({
+      by: ['documentTypeKey'],
+      where: { batchId },
+      _count: { _all: true },
+    })) as unknown as {
+      documentTypeKey: string | null;
+      _count: { _all: number };
+    }[];
+    const typeHistogram = byType
+      .map((g) => ({
+        documentTypeKey: g.documentTypeKey ?? 'unclassified',
+        count: g._count._all,
+      }))
       .sort((a, b) => b.count - a.count);
 
+    // Reconstruct the status array for the shared count helper (cheap — strings).
+    const statusRuns = byStatus.flatMap((g) =>
+      Array.from({ length: g._count._all }, () => ({ status: g.status })),
+    );
+
     return {
-      ...this.withCounts({
-        ...batch,
-        runs: batch.runs.map((r) => ({ status: r.status })),
-      }),
+      ...this.withCounts({ ...batch, runs: statusRuns }),
       funnel,
       typeHistogram,
-      runs,
+    };
+  }
+
+  /** A page of a batch's runs (docs/09 #9 — server-side, batches can be huge). */
+  async listRuns(
+    userId: string,
+    batchId: string,
+    query: {
+      status?: PipelineRunStatus;
+      documentTypeKey?: string;
+      openable?: boolean;
+      page: number;
+      pageSize: number;
+    },
+  ) {
+    const batch = await this.db.batch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException('Batch not found');
+    await this.assertCanAccess(userId, batch);
+
+    const where: Prisma.PipelineRunWhereInput = { batchId };
+    if (query.openable) {
+      where.status = { in: ['needs_review', 'completed', 'approved'] };
+    } else if (query.status) {
+      where.status = query.status;
+    }
+    if (query.documentTypeKey) {
+      where.documentTypeKey =
+        query.documentTypeKey === 'unclassified' ? null : query.documentTypeKey;
+    }
+
+    // Openable view drives the review stepper (client re-sorts needs_review
+    // first); otherwise chronological for the runs table.
+    const orderBy: Prisma.PipelineRunOrderByWithRelationInput[] = query.openable
+      ? [{ updatedAt: 'desc' }]
+      : [{ createdAt: 'asc' }];
+
+    const [rows, total] = await this.db.$transaction([
+      this.db.pipelineRun.findMany({
+        where,
+        orderBy,
+        take: query.pageSize,
+        skip: query.page * query.pageSize,
+        include: { sourceDocument: { select: { id: true, filename: true } } },
+      }),
+      this.db.pipelineRun.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        sourceDocumentId: r.sourceDocumentId,
+        filename: r.sourceDocument.filename,
+        documentTypeKey: r.documentTypeKey,
+        archivedReason: r.archivedReason,
+      })),
+      total,
     };
   }
 

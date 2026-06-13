@@ -10,7 +10,10 @@
     "cancel": "Cancel",
     "optional": "(optional)",
     "remove": "Remove",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "save": "Save",
+    "prev": "Prev",
+    "next": "Next"
   },
   "newDoc": {
     "subtitle": "Draft freely with AI, or pick a structured document type below.",
@@ -62,7 +65,10 @@
     "pipelines": "Pipelines",
     "quickEditor": "Quick editor",
     "settings": "Settings",
-    "admin": "Admin"
+    "admin": "Admin",
+    "lookups": "Lookups",
+    "search": "Search",
+    "searchSettings": "Search settings"
   },
   "greeting": {
     "morning": "Good morning",
@@ -191,7 +197,9 @@
       "counts": "{{c}}/{{t}} done · {{r}} to review · {{f}} failed",
       "empty": "No batches yet.",
       "open": "Open",
-      "goReview": "Review queue"
+      "goReview": "Review queue",
+      "skipType": "Skip type",
+      "skipTypeTitle2": "Skip all of this type?"
     },
     "queue": {
       "title": "Review queue",
@@ -201,5 +209,44 @@
       "unknownType": "unknown type",
       "empty": "Nothing to review. 🎉"
     }
+  },
+  "search": {
+    "title": "Search",
+    "subtitle": "Search across your drafts and uploaded documents — by title or anything inside.",
+    "placeholder": "Search documents…",
+    "allKinds": "All",
+    "drafts": "Drafts",
+    "uploads": "Uploads",
+    "draft": "Draft",
+    "upload": "Upload",
+    "semanticOn": "Semantic on",
+    "empty": "Type to search your documents.",
+    "noResults": "No matches found.",
+    "resultCount": "{{count}} result(s)",
+    "pageOf": "Page {{page}} of {{count}}",
+    "anyType": "Any type",
+    "anyStatus": "Any status",
+    "keyword": "Keyword",
+    "paletteHint": "Search your drafts and uploads. Use ↑ ↓ and Enter.",
+    "sortRelevance": "Relevance",
+    "sortRecent": "Most recent",
+    "sortTitle": "Title A–Z",
+    "showingRange": "Showing {{from}}–{{to}} of {{total}}",
+    "perPage": "{{n}} / page"
+  },
+  "searchAdmin": {
+    "title": "Search settings",
+    "subtitle": "Tune hybrid keyword + semantic ranking, choose what is searchable, and rebuild the index.",
+    "keywordWeight": "Keyword weight (0–1)",
+    "semanticWeight": "Semantic weight (0–1)",
+    "fuzzyThreshold": "Fuzzy threshold (0–1)",
+    "snippetWords": "Snippet length (words)",
+    "embeddingModel": "Embedding model",
+    "maxResults": "Max results",
+    "semanticEnabled": "Semantic search",
+    "semanticHint": "Use vector embeddings (pgvector) alongside keyword search. Requires an embedding-capable AI provider.",
+    "enabledKinds": "Searchable content",
+    "reindex": "Rebuild index",
+    "recencyWeight": "Recency weight (0–1)"
   }
 }

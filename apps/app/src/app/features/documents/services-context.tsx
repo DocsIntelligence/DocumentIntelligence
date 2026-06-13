@@ -4,6 +4,7 @@ import type {
   IntelligenceService,
   LegalAiService,
   LookupsService,
+  SearchService,
   SharesService,
 } from '@org/api-client';
 import { createContext, type ReactNode, useContext } from 'react';
@@ -21,6 +22,7 @@ interface Services {
   lookups: LookupsService;
   intelligence: IntelligenceService;
   intelligenceAdmin: IntelligenceAdminService;
+  search: SearchService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -36,6 +38,7 @@ export function ServicesProvider({
   lookups,
   intelligence,
   intelligenceAdmin,
+  search,
   children,
 }: ProviderProps) {
   return (
@@ -47,6 +50,7 @@ export function ServicesProvider({
         lookups,
         intelligence,
         intelligenceAdmin,
+        search,
       }}
     >
       {children}
@@ -90,4 +94,10 @@ export function useIntelligenceAdminService(): IntelligenceAdminService {
   if (!ctx)
     throw new Error('useIntelligenceAdminService outside <ServicesProvider>');
   return ctx.intelligenceAdmin;
+}
+
+export function useSearchService(): SearchService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx) throw new Error('useSearchService outside <ServicesProvider>');
+  return ctx.search;
 }

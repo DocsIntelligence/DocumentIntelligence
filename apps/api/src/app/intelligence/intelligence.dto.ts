@@ -83,3 +83,32 @@ const ListBatchesQuerySchema = z.object({
   dir: z.enum(['asc', 'desc']).default('desc'),
 });
 export class ListBatchesQueryDto extends createZodDto(ListBatchesQuerySchema) {}
+
+/** Server-side pagination/filter for a batch's runs (docs/09 #9). */
+const ListRunsQuerySchema = z.object({
+  status: z
+    .enum([
+      'queued',
+      'running',
+      'needs_review',
+      'completed',
+      'approved',
+      'archived',
+      'failed',
+      'rejected',
+    ])
+    .optional(),
+  documentTypeKey: z.string().max(120).optional(),
+  /** Restrict to reviewer-openable runs (needs_review + completed + approved). */
+  openable: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(0).default(0),
+  pageSize: z.coerce.number().int().min(1).max(1000).default(50),
+});
+export class ListRunsQueryDto extends createZodDto(ListRunsQuerySchema) {}
+
+/** Bulk-archive all archivable runs of a given classified type in a batch. */
+const ArchiveTypeSchema = z.object({
+  documentTypeKey: z.string().min(1).max(120),
+  reason: z.string().max(300).optional(),
+});
+export class ArchiveTypeDto extends createZodDto(ArchiveTypeSchema) {}

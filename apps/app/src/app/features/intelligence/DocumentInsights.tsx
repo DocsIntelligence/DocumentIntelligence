@@ -11,7 +11,7 @@ import {
 } from '@org/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAnalysis, useAsk, useRunAnalysis } from './queries';
+import { useAnalysis, useAsk, useRunAnalysis, type InsightScope } from './queries';
 
 const RISK_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
   low: 'success',
@@ -24,11 +24,18 @@ const RISK_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
  * obligations / key dates / risk flags + cited-law health) and a RAG
  * "ask this document" box with page-cited answers.
  */
-export function DocumentInsights({ sourceId }: { sourceId: string }) {
+export function DocumentInsights({
+  sourceId,
+  scope = 'source',
+}: {
+  /** Subject id — a SourceDocument id (scope 'source') or Document id ('document'). */
+  sourceId: string;
+  scope?: InsightScope;
+}) {
   const { t } = useTranslation();
-  const analysisQuery = useAnalysis(sourceId);
-  const runAnalysis = useRunAnalysis(sourceId);
-  const ask = useAsk(sourceId);
+  const analysisQuery = useAnalysis(sourceId, scope);
+  const runAnalysis = useRunAnalysis(sourceId, scope);
+  const ask = useAsk(sourceId, scope);
   const [question, setQuestion] = useState('');
 
   const analysis = analysisQuery.data?.analysis;

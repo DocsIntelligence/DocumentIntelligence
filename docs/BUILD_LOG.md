@@ -2,6 +2,141 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+### 2026-06-13 — Powerful search v2: scoring engine, facets, sort, pagination, ⌘K palette
+
+Upgraded search from "works" to product-grade. **app typecheck ✓ · app build ✓ · api build ✓ · lint 0
+errors · scoring SQL validated on live data.**
+- **Scoring overhaul** (`search.service.ts`): replaced the arbitrary `ts_rank*10` squash with
+  **`ts_rank_cd(tsv, query, 32)`** (normalized to [0,1)), folded a title-trgm score in for typo tolerance,
+  blended keyword/semantic by configured weights into a normalized relevance, then a **recency-decay**
+  factor (`1/(1+age_days/30)`) mixed via a new **configurable `recencyWeight`** (SearchConfig column,
+  migration `search_recency_weight` — applied via the new drift-safe wrapper, which correctly kept the
+  ADD COLUMN and stripped the SearchIndex index drift). Final score ∈ [0,1]. Verified on real data: scores
+  0.91/0.82…, sensible ranking.
+- **Facets**: one `GROUP BY kind` query returns per-kind match counts (drafts vs uploads) and doubles as
+  the total (replacing the separate count query). Chips show live counts.
+- **Sort modes**: relevance | recent | title (DTO + service ORDER BY).
+- **Title highlighting**: `ts_headline(..., HighlightAll=true)` on the title; client renders `«hl»` markers
+  as `<mark>` (shared `highlight.tsx`, used by page + palette).
+- **Timing**: `meta.tookMs` surfaced ("… · 12ms").
+- **⌘K command palette** (`SearchCommandPalette.tsx`): global hotkey + sidebar "Search ⌘K" button,
+  debounced, keyboard-driven (↑/↓/Enter/Esc), grouped, mounted once in MainLayout.
+- **Pagination**: page-size selector (10/20/50/100) + first/prev/next/last + "Showing X–Y of Z", URL-synced
+  (`?q&kind&type&status&sort&ps`).
+- **Runtime fix:** `pg_trgm` is in `public` but the Prisma connection's search_path is `starter` only →
+  qualified `public.similarity(...)` in the search SQL (was a 500 at runtime, `42883`).
+
+### 2026-06-13 — Drift-safe Prisma migrations for SearchIndex (no manual editing)
+
+User hit the documented drift the hard way: `pnpm prisma:migrate:dev` generated `ALTER COLUMN "tsv" DROP
+DEFAULT` → **P3018/P3006** (invalid on a generated column; crashes the shadow DB before any migration file
+is written, so post-hoc pruning is impossible). Recovered the failed/empty migration (rolled back, no data
+lost) and fixed the root cause two ways so migrations are now hands-off:
+- **`tsv` generated column → trigger-maintained** (migration `20260613071000_search_tsv_trigger`):
+  `ALTER COLUMN "tsv" DROP EXPRESSION` (keeps data) + `searchindex_tsv_update()` + `searchindex_tsv_trigger`
+  (BEFORE INSERT/UPDATE OF title,bodyText). Triggers are invisible to Prisma → the **invalid** `DROP
+  DEFAULT/EXPRESSION` drift is gone entirely. Verified: tsv `is_generated=NEVER`, trigger maintains the
+  vector, FTS still matches.
+- **Auto-prune wrapper** (`tools/scripts/prisma-migrate-dev.mjs`, wired as `prisma:migrate:dev`; old command
+  kept as `prisma:migrate:dev:raw`): `migrate dev --create-only` → strip the remaining *valid* spurious
+  `DROP INDEX "SearchIndex_(tsv_idx|title_trgm_idx|embedding_hnsw_idx)"` lines → if only drift remains,
+  discard the migration; else `migrate deploy` → `generate`. **Tested end-to-end:** a no-op run stripped the
+  drift, removed the empty migration, and left all 3 special indexes intact; `migrate status` clean.
+- Net: `pnpm prisma:migrate:dev` behaves normally, keeps HNSW/GIN performance, never needs hand-editing.
+  Docs updated (AGENT guide gotcha #11, docs/09).
+
+### 2026-06-13 — Server-side pagination for batch-detail runs + review queue (docs/09 #9)
+
+The last growth-prone tables. **api build ✓ · app typecheck ✓ · app build ✓ · lint 0 errors.** NOT
+browser-verified.
+
+- **batch.get → aggregates only:** funnel + type histogram now come from `pipelineRun.groupBy` (status +
+  documentTypeKey) — it no longer loads every run (a batch holds ~1000). `BatchDetail` dropped its `runs[]`.
+- **New `GET /intelligence/batches/:id/runs`** (`batch.listRuns`): `$transaction(findMany+count)`, filters
+  `status` / `documentTypeKey` / `openable` (needs_review+completed+approved, for the review stepper),
+  `{items,total}`. `BatchDetailPage` runs list is now server-paginated (page state + Prev/Next, `keepPreviousData`).
+- **Skip-by-type server-side:** new `POST /intelligence/batches/:id/archive-type` →
+  `executor.bulkArchiveByType` resolves the archivable run ids server-side, so the client never holds 1000
+  ids. `BatchDetailPage` "Skip type" + per-status filter chips drive the server query.
+- **Review queue paginated:** `reviewQueue` (was a silent `take:100`) → `$transaction(findMany+count)` with
+  `page`/`pageSize`, returns `{items,total}`. `ReviewQueuePage` stepper now pulls openable runs via
+  `useBatchRuns({openable:true,pageSize:500})` (batch scope) / `useReviewQueue(…,500)` (global) instead of
+  the full `batch.runs` payload. (Stepper walks one 500-row page — documented bound; old global cap was 100.)
+- api-client: `getBatchRuns`/`archiveType`/`getReviewQueue` (now `{items,total}`) + `ListRunsQuery`/result
+  types; hooks `useBatchRuns`/`useArchiveType` + paginated `useReviewQueue`.
+
+### 2026-06-13 — Search UI + configurable admin + analyse/ask on ANY document (docs/09 #6,#7,#8 UI)
+
+Frontend + the polymorphic analyse/ask backend. **app typecheck ✓ · api build ✓ · app build ✓ · lint 0
+errors** (16 pre-existing warnings, untouched files). NOT browser-verified; semantic + analyse/ask need an
+embedding/LLM provider running.
+
+- **api-client + wiring:** new `createSearchService` (`/search`, `/admin/search/config`, `/admin/search/
+  reindex`) + intelligence `analyzeDocument`/`getDocumentAnalysis`/`askDocument`. Wired through `main.tsx`
+  → `ServicesProvider` → `useSearchService()`. Aligned `getAnalysis`/`getDocumentAnalysis` on one
+  `AnalysisResult` shape.
+- **#7 Global search UI** (`features/search/SearchPage.tsx`, route `/search`, top-level sidebar item):
+  debounced box, kind chips (All/Drafts/Uploads), semantic-on badge, client pager, result cards with
+  **safe highlight rendering** — the server emits `«hl»…«/hl»` sentinels (NOT `<mark>`) and the client
+  renders highlights as real React `<mark>` nodes, never `dangerouslySetInnerHTML` over user content.
+- **#8 Admin config UI** (`features/admin/search/SearchSettingsManager.tsx` + `SearchConfigPage` in the
+  ConfigShell, route `/admin/intelligence/search`, sidebar item): RHF + `zodResolver(searchConfigSchema)`
+  (shared `@org/dto`) editing weights/threshold/snippet/model/maxResults, semantic toggle (`Switch`),
+  searchable-kinds checkboxes, + a **Rebuild index** button (`POST /admin/search/reindex`).
+- **#6 Analyse/Ask on ANY document** — `AnalysisRun` + `SourceChunk` made **polymorphic** (`subjectType`
+  source|document, `subjectId`; `sourceDocumentId` nullable + relation optional; migration
+  `analysis_polymorphic_subject` backfills `subjectId = sourceDocumentId`). `AnalysisService` refactored to
+  a subject core (`analyzeSubject`/`askSubject`/`getLatestForSubject`): documents derive text via
+  `SearchTextService.forDocument`, access-checked through `DocumentsService.getById`; **content-hash dedupe
+  cache** reuses an existing run when the analyzed text is unchanged. Endpoints `POST/GET /intelligence/
+  documents/:id/{analyze,analysis,ask}`. Frontend: `useAnalysis/useRunAnalysis/useAsk` gained a `scope`
+  arg; `DocumentInsights` reused with `scope="document"` in a collapsible "AI insights" section of the
+  builder side panel.
+- ⚠️ **Prisma drift gotcha:** the polymorphic migration's generator output tried to DROP the SearchIndex
+  GIN/trgm/HNSW indexes + the generated-column default (Prisma can't represent them). Those statements were
+  removed by hand and the migration applied via `migrate deploy`. **Every future migration must be pruned
+  the same way** (or `migrate dev` will propose dropping the vector indexes). Documented in AGENT guide.
+- **Remaining (docs/09):** #9 server-side pagination for batch-detail runs + review queue (independent).
+
+### 2026-06-13 — Unified search backend: pgvector + pg_trgm, SearchIndex, hybrid query, configurable (docs/09 #1–#5,#8 backend)
+
+Built the server side of the powerful cross-document search (docs/09). **API build ✓, SQL DB-validated**
+(keyword + fuzzy proven on a live row; semantic vector ops resolve). NOT browser-verified; needs the API
+running + an embedding-capable provider for the semantic leg.
+
+- **Infra check (docs/09 #10) PASSED:** local PostgreSQL 16, `pg_trgm` 1.6 already installed, `vector`
+  (pgvector) 0.5.0 available (ships HNSW). ⚠️ prod Postgres must also have the pgvector binary.
+- **#1 Schema + migration** (`20260612214709_add_search_index`): `SearchIndex` (kind/refId/owner scope/
+  title/bodyText/**generated `tsv` tsvector**/**`embedding vector(1536)`**/contentHash/type/status/
+  refUpdatedAt, `@@unique([kind,refId])`) + `SearchConfig` (org-scoped, process-as-data). Hand-authored SQL:
+  `CREATE EXTENSION pg_trgm/vector`, `SET search_path TO starter, public` (Prisma scopes to the app schema,
+  so `public` opclasses like `gin_trgm_ops` were invisible — root cause of the first failed apply), generated
+  tsvector (title 'A' + body 'B'), **GIN(tsv)**, **GIN(title gin_trgm_ops)**, **HNSW(embedding cosine)**.
+  Applied with **NO data reset** (cleared the stale failed `_prisma_migrations` row by hand to avoid Prisma's
+  reset prompt). `tsv` + `embedding` declared `Unsupported(...)` so Prisma leaves them alone.
+- **#2 Text extractors** (`search/search-text.service.ts`): `forDocument` (freeform = fill `{{tokens}}` from
+  `data.values` + strip HTML + fold field labels; structured = walk nested `data` resolving labels via
+  `getBundle(typeKey).formMetadata` from `@org/document-schema` — server-safe, no React templates), `forSource`
+  (normalizedText pages + latest AnalysisRun summary/parties/obligations + latest Extraction.fields).
+- **#3 Index maintenance** (`search-index.service.ts`): typed `upsert` for scalars (generated tsv recomputes
+  automatically) + raw `UPDATE … embedding = $1::vector` for the vector; **contentHash (sha256)** skips
+  re-embedding unchanged text. Async via BullMQ (`SEARCH_QUEUE`) with **inline `setImmediate` fallback** when
+  no `REDIS_URL`. `backfillAll()` reindexes every Document + SourceDocument. **Hooks** wired into
+  `DocumentsService` create/patch/duplicate/restore/remove and the intelligence write paths (source create in
+  intelligence+batch services, analysis create, all 3 extraction creates).
+- **#4 Search API** (`search.service.ts`, `GET /search`): hybrid `$queryRawUnsafe` — `websearch_to_tsquery`
+  + `ts_rank`, `ts_headline` snippets (`<mark>`), pg_trgm `similarity` fuzzy title, scoped to `ownerUserId=me
+  OR ownerOrgId IN my orgs`, kind/type/status filters, offset pagination + count, browse mode when `q` empty.
+- **#5 Semantic** blended into #4: embeds the query via `AiService.embed` (added non-throwing `canEmbed()`),
+  cosine `1-(embedding<=>q)` weighted with ts_rank + fuzzy per config; semantic floor 0.2; degrades to
+  keyword-only when no provider.
+- **#8 backend** — `SearchConfig` is a configurable product surface: `SearchConfigService` (org row → system
+  row → hardcoded defaults), shared `@org/dto` `searchConfigSchema`, admin endpoints `GET/PATCH /admin/search/
+  config` + `POST /admin/search/reindex`. Module is **global** (`SearchModule.forRootAsync()`) so write paths
+  inject `SearchIndexService` without import cycles.
+- **Remaining (docs/09):** #7 global search UI + #8 admin config UI, #6 analyse/ask on ANY document
+  (polymorphic AnalysisRun/SourceChunk + cache), #9 server pagination for batch-detail runs + review queue.
+
 ### 2026-06-12 — Platform-wide form validation: shared Zod (@org/dto) + react-hook-form, client+server field-level
 
 Standardised every hand-rolled `useState` form onto the platform's existing-but-underused stack (the
@@ -1090,3 +1225,13 @@ to. Fix: when scoped to a batch, the stepper now walks ALL openable docs in the 
 shows only on still-parked runs and advances on success. Global `/review-queue` unchanged (parked only).
 Added `?doc=<sourceId>` deep-link so the batch detail "Open" routes INTO the stepper (was → /analyze with
 no nav). Verified: @org/app typecheck ✓, lint 0 errors.
+
+## 2026-06-13 (cont.) — PLAN: powerful search + analyse/ask on any doc
+
+Planned (NOT started). Full resume doc: **docs/09-search-analysis-RESUME.md**. Saved as Task list #1–#10.
+Decisions: hybrid keyword (pg_trgm+tsvector) + semantic (pgvector) search from v1; unified `SearchIndex`
+table over both Documents + SourceDocuments; server-side pagination only for growth-prone tables
+(batch-detail runs + review queue). Biggest net-new piece: a server-side Document→text extractor
+(freeform/structured/source) — none exists today. Generalize AnalysisRun+SourceChunk to a polymorphic
+subject (source|document) + cache analysis (content hash). Open: confirm pgvector/pg_trgm available
+(Task #10) + user's "…also" message was cut off.

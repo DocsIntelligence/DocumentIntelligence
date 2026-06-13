@@ -159,15 +159,30 @@ export const createIntelligenceService = (http: HttpClient) => ({
   /** Get the latest analysis for a document (null if not analysed yet). */
   getAnalysis: (sourceId: string) =>
     http
-      .get<{ sourceDocumentId: string; analysis: AnalysisRun | null }>(
-        `/intelligence/sources/${sourceId}/analysis`,
-      )
+      .get<AnalysisResult>(`/intelligence/sources/${sourceId}/analysis`)
       .then((r) => r.data),
 
   /** Ask a question about a document — page-cited answer (RAG). */
   ask: (sourceId: string, question: string) =>
     http
       .post<AskAnswer>(`/intelligence/sources/${sourceId}/ask`, { question })
+      .then((r) => r.data),
+
+  // ─── Analyse / ask on a DRAFTING document (docs/09 #6) ───────────────────
+
+  analyzeDocument: (documentId: string) =>
+    http
+      .post<AnalysisRun>(`/intelligence/documents/${documentId}/analyze`, {})
+      .then((r) => r.data),
+
+  getDocumentAnalysis: (documentId: string) =>
+    http
+      .get<AnalysisResult>(`/intelligence/documents/${documentId}/analysis`)
+      .then((r) => r.data),
+
+  askDocument: (documentId: string, question: string) =>
+    http
+      .post<AskAnswer>(`/intelligence/documents/${documentId}/ask`, { question })
       .then((r) => r.data),
 
   // ─── Pipeline engine + batches + review queue ────────────────────────────
@@ -225,11 +240,28 @@ export const createIntelligenceService = (http: HttpClient) => ({
       .get<BatchDetail>(`/intelligence/batches/${batchId}`)
       .then((r) => r.data),
 
-  /** Pipeline runs awaiting human review. Scope to one batch when given. */
-  getReviewQueue: (batchId?: string) =>
+  /** A page of a batch's runs (server-side; docs/09 #9). */
+  getBatchRuns: (batchId: string, query?: ListRunsQuery) =>
     http
-      .get<ReviewQueueItem[]>('/intelligence/review-queue', {
-        params: batchId ? { batch: batchId } : undefined,
+      .get<BatchRunsResult>(`/intelligence/batches/${batchId}/runs`, {
+        params: query,
+      })
+      .then((r) => r.data),
+
+  /** Skip (archive) all archivable runs of a classified type in a batch. */
+  archiveType: (batchId: string, documentTypeKey: string, reason?: string) =>
+    http
+      .post<{ archived: number; total: number }>(
+        `/intelligence/batches/${batchId}/archive-type`,
+        { documentTypeKey, reason },
+      )
+      .then((r) => r.data),
+
+  /** Pipeline runs awaiting human review (paginated). Scope to one batch. */
+  getReviewQueue: (batchId?: string, page = 0, pageSize = 50) =>
+    http
+      .get<ReviewQueueResult>('/intelligence/review-queue', {
+        params: { ...(batchId ? { batch: batchId } : {}), page, pageSize },
       })
       .then((r) => r.data),
 
@@ -319,6 +351,15 @@ export interface AnalysisRun {
   createdAt: string;
 }
 
+/** Latest-analysis envelope. Same shape for sources and drafting documents
+ *  (docs/09 #6). `sourceDocumentId` equals `subjectId` for source subjects. */
+export interface AnalysisResult {
+  subjectType?: 'source' | 'document';
+  subjectId?: string;
+  sourceDocumentId: string;
+  analysis: AnalysisRun | null;
+}
+
 export interface AskAnswer {
   answer: string;
   citations: { page: number; snippet: string; score: number }[];
@@ -394,10 +435,22 @@ export interface BatchTypeCount {
   documentTypeKey: string;
   count: number;
 }
+/** Batch summary — funnel + type histogram. Runs are fetched separately,
+ *  server-paginated (docs/09 #9), so a 1000-doc batch isn't shipped at once. */
 export interface BatchDetail extends BatchSummary {
   funnel: BatchFunnel;
   typeHistogram: BatchTypeCount[];
-  runs: BatchRun[];
+}
+export interface ListRunsQuery {
+  status?: string;
+  documentTypeKey?: string;
+  openable?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+export interface BatchRunsResult {
+  items: BatchRun[];
+  total: number;
 }
 
 export interface ReviewQueueItem {
@@ -408,6 +461,10 @@ export interface ReviewQueueItem {
   extractionId: string | null;
   documentTypeKey: string | null;
   overallConfidence: number | null;
+}
+export interface ReviewQueueResult {
+  items: ReviewQueueItem[];
+  total: number;
 }
 
 export type IntelligenceService = ReturnType<typeof createIntelligenceService>;

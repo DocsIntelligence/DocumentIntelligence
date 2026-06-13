@@ -26,9 +26,11 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   ArchiveRunDto,
+  ArchiveTypeDto,
   AskDto,
   BulkArchiveDto,
   ListBatchesQueryDto,
+  ListRunsQueryDto,
   PresignUploadDto,
   RegisterSourceDto,
   ReprocessDto,
@@ -171,6 +173,30 @@ export class IntelligenceController {
     return this.analysis.ask(user.id, id, body.question);
   }
 
+  // ─── Analyse / ask on a DRAFTING document (docs/09 #6) ────────────────────
+
+  @Post('documents/:id/analyze')
+  @ApiOperation({ summary: 'Analyse a drafting document (cached by content).' })
+  analyzeDocument(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.analysis.analyzeDocument(user.id, id);
+  }
+
+  @Get('documents/:id/analysis')
+  @ApiOperation({ summary: 'Get the latest analysis for a drafting document.' })
+  getDocumentAnalysis(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.analysis.getLatestDocumentAnalysis(user.id, id);
+  }
+
+  @Post('documents/:id/ask')
+  @ApiOperation({ summary: 'Ask a question about a drafting document (RAG).' })
+  askDocument(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: AskDto,
+  ) {
+    return this.analysis.askDocument(user.id, id, body.question);
+  }
+
   // ─── Pipeline engine (docs/07 P4.1) ───────────────────────────────────────
 
   @Post('sources/:id/run-pipeline')
@@ -237,17 +263,52 @@ export class IntelligenceController {
   }
 
   @Get('batches/:id')
-  @ApiOperation({ summary: 'Get a batch with its runs' })
+  @ApiOperation({ summary: 'Get a batch summary (funnel + type histogram)' })
   getBatch(@CurrentUser() user: User, @Param('id') id: string) {
     return this.batches.get(user.id, id);
+  }
+
+  @Get('batches/:id/runs')
+  @ApiOperation({ summary: 'A page of a batch’s runs (server-side, docs/09 #9)' })
+  listBatchRuns(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query() query: ListRunsQueryDto,
+  ) {
+    return this.batches.listRuns(user.id, id, query);
+  }
+
+  @Post('batches/:id/archive-type')
+  @ApiOperation({ summary: 'Skip (archive) all archivable runs of a type' })
+  archiveType(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: ArchiveTypeDto,
+  ) {
+    return this.pipelines.bulkArchiveByType(
+      user.id,
+      id,
+      body.documentTypeKey,
+      body.reason,
+    );
   }
 
   // ─── Review queue (docs/07 P4.4) ───────────────────────────────────────────
 
   @Get('review-queue')
-  @ApiOperation({ summary: 'Pipeline runs awaiting human review' })
-  reviewQueue(@CurrentUser() user: User, @Query('batch') batchId?: string) {
-    return this.pipelines.reviewQueue(user.id, batchId);
+  @ApiOperation({ summary: 'Pipeline runs awaiting human review (paginated)' })
+  reviewQueue(
+    @CurrentUser() user: User,
+    @Query('batch') batchId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.pipelines.reviewQueue(
+      user.id,
+      batchId,
+      page ? Number(page) : 0,
+      pageSize ? Number(pageSize) : 50,
+    );
   }
 
   @Post('pipeline-runs/:id/approve')

@@ -17,14 +17,35 @@ import {
   type NormalizedDocument,
 } from '@org/doc-intelligence';
 import { validateCitations } from '@org/legal-reference';
+import { createHash } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
+import { DocumentsService } from '../documents/documents.service';
 import { StorageService } from '../storage/storage.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import { AiService } from '../ai/ai.service';
+import { SearchIndexService } from '../search/search-index.service';
+import { SearchTextService } from '../search/search-text.service';
 import { ParsingService } from './parsing.service';
 import { sourcePart } from './engines/vlm-extraction.engine';
 
 const MAX_ANALYSIS_CHARS = 60_000;
+
+type SubjectType = 'source' | 'document';
+
+/** A subject resolved to the text/bytes we can analyse + ask over. */
+interface ResolvedSubject {
+  subjectType: SubjectType;
+  subjectId: string;
+  ownerUserId: string | null;
+  /** Parsed/derived text, or null for a scanned source with no text layer. */
+  text: string | null;
+  normalized: NormalizedDocument | null;
+  /** Source-only: lets the analysis fall back to vision over the raw bytes. */
+  source?: {
+    contentType: string;
+    s3Key: string;
+  };
+}
 
 /**
  * Phase 2 (docs/05 §7): analysis + cited-law health + RAG "ask this document".
@@ -41,26 +62,80 @@ export class AnalysisService {
     private readonly storage: StorageService,
     private readonly parsing: ParsingService,
     private readonly walletUsage: WalletUsageService,
+    private readonly searchIndex: SearchIndexService,
+    private readonly searchText: SearchTextService,
+    private readonly documents: DocumentsService,
   ) {}
 
-  // ─── Analysis + citation health ─────────────────────────────────────────
+  // ─── Public API: sources (back-compat) ────────────────────────────────────
 
-  async analyze(userId: string, sourceId: string) {
-    const source = await this.loadSource(userId, sourceId);
-    const normalized = await this.getNormalized(source);
-    const text = normalized ? this.flatten(normalized) : null;
+  analyze(userId: string, sourceId: string) {
+    return this.analyzeSubject(userId, 'source', sourceId);
+  }
+
+  getLatestAnalysis(userId: string, sourceId: string) {
+    return this.getLatestForSubject(userId, 'source', sourceId);
+  }
+
+  ask(userId: string, sourceId: string, question: string) {
+    return this.askSubject(userId, 'source', sourceId, question);
+  }
+
+  // ─── Public API: drafting documents (docs/09 #6) ──────────────────────────
+
+  analyzeDocument(userId: string, documentId: string) {
+    return this.analyzeSubject(userId, 'document', documentId);
+  }
+
+  getLatestDocumentAnalysis(userId: string, documentId: string) {
+    return this.getLatestForSubject(userId, 'document', documentId);
+  }
+
+  askDocument(userId: string, documentId: string, question: string) {
+    return this.askSubject(userId, 'document', documentId, question);
+  }
+
+  // ─── Subject-polymorphic core ─────────────────────────────────────────────
+
+  private async analyzeSubject(
+    userId: string,
+    subjectType: SubjectType,
+    subjectId: string,
+  ) {
+    const subject = await this.resolveSubject(userId, subjectType, subjectId);
+    const { text } = subject;
+
+    // Cache: reuse an existing run if the analyzed text is unchanged (dedup by
+    // content hash). Only when we actually have text to hash.
+    const contentHash = text ? this.hash(text) : null;
+    if (contentHash) {
+      const cached = await this.db.analysisRun.findFirst({
+        where: { subjectType, subjectId, contentHash },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (cached) return cached;
+    }
 
     const { system, instruction } = buildAnalysisPrompt();
     const schema = buildAnalysisSchema();
 
-    // Prefer text (cheap, default provider); fall back to vision over bytes for
-    // scanned docs with no text layer.
+    // Prefer text (cheap); fall back to vision over bytes for scanned sources.
     const input = text
       ? [{ kind: 'text' as const, text: `${instruction}\n\nDocument:\n${text}` }]
-      : [
-          { kind: 'text' as const, text: instruction },
-          sourcePart(source.contentType, await this.base64(source.s3Key)),
-        ];
+      : subject.source
+        ? [
+            { kind: 'text' as const, text: instruction },
+            sourcePart(
+              subject.source.contentType,
+              await this.base64(subject.source.s3Key),
+            ),
+          ]
+        : null;
+    if (!input) {
+      throw new BadRequestException(
+        'Nothing to analyse — this document has no extractable text yet.',
+      );
+    }
 
     const { data } = await this.ai.extract<AnalysisData>(input, schema, {
       systemPrompt: system,
@@ -74,7 +149,10 @@ export class AnalysisService {
 
     const run = await this.db.analysisRun.create({
       data: {
-        sourceDocumentId: sourceId,
+        subjectType,
+        subjectId,
+        sourceDocumentId: subjectType === 'source' ? subjectId : null,
+        contentHash,
         summary: data.summary ?? null,
         parties: (data.parties ?? []) as unknown as Prisma.InputJsonValue,
         keyDates: (data.keyDates ?? []) as unknown as Prisma.InputJsonValue,
@@ -84,36 +162,45 @@ export class AnalysisService {
       },
     });
 
-    if (source.ownerUserId) {
-      await this.walletUsage.trackUsage(source.ownerUserId, Feature.ai_attempts, 1);
+    if (subject.ownerUserId) {
+      await this.walletUsage.trackUsage(subject.ownerUserId, Feature.ai_attempts, 1);
     }
     this.logger.log(
-      `Analyzed source ${sourceId}: ${data.parties?.length ?? 0} parties, ${citationFindings.length} citation flag(s)`,
+      `Analyzed ${subjectType} ${subjectId}: ${data.parties?.length ?? 0} parties, ${citationFindings.length} citation flag(s)`,
     );
+    if (subjectType === 'source') this.searchIndex.enqueueSource(subjectId);
     return run;
   }
 
-  async getLatestAnalysis(userId: string, sourceId: string) {
-    await this.loadSource(userId, sourceId);
+  private async getLatestForSubject(
+    userId: string,
+    subjectType: SubjectType,
+    subjectId: string,
+  ) {
+    await this.assertSubjectAccess(userId, subjectType, subjectId);
     const run = await this.db.analysisRun.findFirst({
-      where: { sourceDocumentId: sourceId },
+      where: { subjectType, subjectId },
       orderBy: { createdAt: 'desc' },
     });
-    return { sourceDocumentId: sourceId, analysis: run };
+    return { subjectType, subjectId, sourceDocumentId: subjectId, analysis: run };
   }
 
-  // ─── RAG: ask this document ──────────────────────────────────────────────
+  // ─── RAG: ask any subject ──────────────────────────────────────────────────
 
-  async ask(userId: string, sourceId: string, question: string) {
-    const source = await this.loadSource(userId, sourceId);
-    const normalized = await this.getNormalized(source);
-    if (!normalized || !this.flatten(normalized)) {
+  private async askSubject(
+    userId: string,
+    subjectType: SubjectType,
+    subjectId: string,
+    question: string,
+  ) {
+    const subject = await this.resolveSubject(userId, subjectType, subjectId);
+    if (!subject.normalized || !this.flatten(subject.normalized)) {
       throw new BadRequestException(
         'This document has no text layer yet — Q&A needs extractable text.',
       );
     }
 
-    const chunks = await this.ensureChunks(sourceId, normalized);
+    const chunks = await this.ensureChunks(subjectType, subjectId, subject.normalized);
     if (chunks.length === 0) {
       throw new BadRequestException('No content to search in this document.');
     }
@@ -123,8 +210,8 @@ export class AnalysisService {
     const { system, user } = buildAskPrompt(question, retrieved);
     const res = await this.ai.generate(user, { systemPrompt: system });
 
-    if (source.ownerUserId) {
-      await this.walletUsage.trackUsage(source.ownerUserId, Feature.ai_attempts, 1);
+    if (subject.ownerUserId) {
+      await this.walletUsage.trackUsage(subject.ownerUserId, Feature.ai_attempts, 1);
     }
 
     return {
@@ -137,13 +224,14 @@ export class AnalysisService {
     };
   }
 
-  /** Build + persist chunk embeddings once per document; reuse thereafter. */
+  /** Build + persist chunk embeddings once per subject; reuse thereafter. */
   private async ensureChunks(
-    sourceId: string,
+    subjectType: SubjectType,
+    subjectId: string,
     normalized: NormalizedDocument,
   ): Promise<EmbeddedChunk[]> {
     const existing = await this.db.sourceChunk.findMany({
-      where: { sourceDocumentId: sourceId },
+      where: { subjectType, subjectId },
     });
     if (existing.length > 0) {
       return existing.map((c) => ({
@@ -163,7 +251,9 @@ export class AnalysisService {
     }));
     await this.db.sourceChunk.createMany({
       data: embedded.map((c) => ({
-        sourceDocumentId: sourceId,
+        subjectType,
+        subjectId,
+        sourceDocumentId: subjectType === 'source' ? subjectId : null,
         page: c.page,
         ordinal: c.ordinal,
         text: c.text,
@@ -171,6 +261,58 @@ export class AnalysisService {
       })),
     });
     return embedded;
+  }
+
+  // ─── Subject resolution ─────────────────────────────────────────────────────
+
+  private hash(text: string): string {
+    return createHash('sha256').update(text).digest('hex');
+  }
+
+  /** Load + access-check a subject and derive its analysable text. */
+  private async resolveSubject(
+    userId: string,
+    subjectType: SubjectType,
+    subjectId: string,
+  ): Promise<ResolvedSubject> {
+    if (subjectType === 'source') {
+      const source = await this.loadSource(userId, subjectId);
+      const normalized = await this.getNormalized(source);
+      return {
+        subjectType,
+        subjectId,
+        ownerUserId: source.ownerUserId,
+        text: normalized ? this.flatten(normalized) : null,
+        normalized,
+        source: { contentType: source.contentType, s3Key: source.s3Key },
+      };
+    }
+    // 'document' — getById enforces access (throws if not allowed).
+    const doc = await this.documents.getById(userId, subjectId);
+    const extracted = await this.searchText.forDocument(subjectId);
+    const text = extracted?.bodyText?.trim() ? extracted.bodyText : null;
+    const normalized: NormalizedDocument | null = text
+      ? { pages: [{ page: 1, text }] }
+      : null;
+    return {
+      subjectType,
+      subjectId,
+      ownerUserId: (doc as { ownerUserId: string | null }).ownerUserId ?? null,
+      text,
+      normalized,
+    };
+  }
+
+  private async assertSubjectAccess(
+    userId: string,
+    subjectType: SubjectType,
+    subjectId: string,
+  ): Promise<void> {
+    if (subjectType === 'source') {
+      await this.loadSource(userId, subjectId);
+    } else {
+      await this.documents.getById(userId, subjectId);
+    }
   }
 
   // ─── Shared helpers ───────────────────────────────────────────────────────

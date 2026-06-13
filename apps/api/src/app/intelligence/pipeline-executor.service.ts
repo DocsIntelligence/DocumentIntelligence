@@ -21,6 +21,7 @@ import {
   type SourceInput,
 } from '@org/doc-intelligence';
 import { DatabaseService } from '../database/database.service';
+import { SearchIndexService } from '../search/search-index.service';
 import { errorMessage } from '../common/error.util';
 import { deriveBatchCounts, deriveBatchStatus } from './batch-status';
 import { IntelligenceService } from './intelligence.service';
@@ -85,6 +86,7 @@ export class PipelineExecutorService {
     private readonly pipeline: PipelineService,
     private readonly intelligence: IntelligenceService,
     private readonly resolver: SchemaResolverService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   /** Create a run for a source on a pipeline (default if unspecified) and start it. */
@@ -167,38 +169,58 @@ export class PipelineExecutorService {
    * when `batchId` is given, so one batch's documents aren't mixed with another's
    * (or with standalone, batch-less runs).
    */
-  async reviewQueue(userId: string, batchId?: string) {
-    const runs = await this.db.pipelineRun.findMany({
-      where: {
-        status: 'needs_review',
-        sourceDocument: { ownerUserId: userId },
-        ...(batchId ? { batchId } : {}),
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-      include: {
-        sourceDocument: {
-          select: {
-            id: true,
-            filename: true,
-            extractions: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { id: true, overallConfidence: true, documentTypeKey: true },
+  async reviewQueue(
+    userId: string,
+    batchId?: string,
+    page = 0,
+    pageSize = 50,
+  ) {
+    const where = {
+      status: 'needs_review' as const,
+      sourceDocument: { ownerUserId: userId },
+      ...(batchId ? { batchId } : {}),
+    };
+    // Server-side pagination (docs/09 #9) — the queue used to cap at 100 silently.
+    const [runs, total] = await this.db.$transaction([
+      this.db.pipelineRun.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        take: pageSize,
+        skip: page * pageSize,
+        include: {
+          sourceDocument: {
+            select: {
+              id: true,
+              filename: true,
+              extractions: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: {
+                  id: true,
+                  overallConfidence: true,
+                  documentTypeKey: true,
+                },
+              },
             },
           },
         },
-      },
-    });
-    return runs.map((r) => ({
-      pipelineRunId: r.id,
-      sourceDocumentId: r.sourceDocumentId,
-      filename: r.sourceDocument.filename,
-      batchId: r.batchId,
-      extractionId: r.sourceDocument.extractions[0]?.id ?? null,
-      documentTypeKey: r.sourceDocument.extractions[0]?.documentTypeKey ?? null,
-      overallConfidence: r.sourceDocument.extractions[0]?.overallConfidence ?? null,
-    }));
+      }),
+      this.db.pipelineRun.count({ where }),
+    ]);
+    return {
+      items: runs.map((r) => ({
+        pipelineRunId: r.id,
+        sourceDocumentId: r.sourceDocumentId,
+        filename: r.sourceDocument.filename,
+        batchId: r.batchId,
+        extractionId: r.sourceDocument.extractions[0]?.id ?? null,
+        documentTypeKey:
+          r.sourceDocument.extractions[0]?.documentTypeKey ?? null,
+        overallConfidence:
+          r.sourceDocument.extractions[0]?.overallConfidence ?? null,
+      })),
+      total,
+    };
   }
 
   /**
@@ -351,6 +373,29 @@ export class PipelineExecutorService {
   }
 
   /**
+   * Archive all *archivable* runs of a classified type in a batch (the "skip
+   * all of this type" action) — resolved server-side so the client never has to
+   * hold every run id (docs/09 #9). `unclassified` targets runs with no type.
+   */
+  async bulkArchiveByType(
+    userId: string,
+    batchId: string,
+    documentTypeKey: string,
+    reason?: string,
+  ) {
+    const runs = await this.db.pipelineRun.findMany({
+      where: {
+        batchId,
+        status: { in: ['queued', 'running', 'needs_review', 'failed'] },
+        documentTypeKey:
+          documentTypeKey === 'unclassified' ? null : documentTypeKey,
+      },
+      select: { id: true },
+    });
+    return this.bulkArchive(userId, runs.map((r) => r.id), reason);
+  }
+
+  /**
    * Manual type override: re-extract a source document as a reviewer-chosen
    * schema (forced type, NO classification — the same forced-type path the
    * extract stage's `config.schemaKey` uses), then re-park its latest run for
@@ -401,6 +446,7 @@ export class PipelineExecutorService {
         overallConfidence: result.overallConfidence,
       },
     });
+    this.searchIndex.enqueueSource(sourceDocumentId);
 
     // Re-park the latest run (if any) at the pre-export stage so approve →
     // export uses this new (now-latest) extraction. Clears prior archive/error.
@@ -696,6 +742,7 @@ export class PipelineExecutorService {
           },
         });
         ctx.extractionId = created.id;
+        this.searchIndex.enqueueSource(ctx.sourceDocumentId);
         return {
           score: result.overallConfidence,
           output: { extractionId: created.id, overallConfidence: result.overallConfidence },

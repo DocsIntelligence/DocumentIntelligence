@@ -12,19 +12,33 @@ import {
   DropdownMenuTrigger,
   Spinner,
 } from '@org/ui';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import {
   useApproveRun,
   useArchiveRun,
+  useArchiveType,
   useBatch,
-  useBulkArchive,
+  useBatchRuns,
   useReprocessRun,
   useSchemaOptions,
 } from './queries';
 import { InboxIcon } from './icons';
+
+const RUNS_PAGE_SIZE = 50;
+/** Raw run statuses, for the filter chips (counts come from the server). */
+const RUN_STATUSES = [
+  'queued',
+  'running',
+  'needs_review',
+  'completed',
+  'approved',
+  'archived',
+  'failed',
+  'rejected',
+];
 
 const RUN_VARIANT: Record<
   string,
@@ -65,19 +79,27 @@ export function BatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: batch, isLoading } = useBatch(id);
   const archive = useArchiveRun(id);
-  const bulk = useBulkArchive(id);
+  const bulk = useArchiveType(id);
   const approve = useApproveRun(id);
   const reprocess = useReprocessRun(id);
   const schemaOptions = useSchemaOptions();
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
-  const runs = useMemo(
-    () =>
-      (batch?.runs ?? []).filter((r) =>
-        statusFilter ? r.status === statusFilter : true,
-      ),
-    [batch?.runs, statusFilter],
-  );
+  // Runs are server-paginated (docs/09 #9) — a batch can hold ~1000 docs.
+  const runsQuery = useBatchRuns(id, {
+    status: statusFilter ?? undefined,
+    page,
+    pageSize: RUNS_PAGE_SIZE,
+  });
+  const runs = runsQuery.data?.items ?? [];
+  const runsTotal = runsQuery.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(runsTotal / RUNS_PAGE_SIZE));
+
+  const filterBy = (status: string | null) => {
+    setStatusFilter(status);
+    setPage(0);
+  };
 
   if (isLoading || !batch) {
     return (
@@ -98,18 +120,8 @@ export function BatchDetailPage() {
   const typeHistogram = batch.typeHistogram ?? [];
 
   const skipType = async (documentTypeKey: string) => {
-    const ids = batch.runs
-      .filter(
-        (r) =>
-          (r.documentTypeKey ?? 'unclassified') === documentTypeKey &&
-          ARCHIVABLE.has(r.status),
-      )
-      .map((r) => r.id);
-    if (!ids.length) return;
     const ok = await confirm({
-      title: t('intelligence.batches.skipTypeTitle', 'Skip {{n}} documents?', {
-        n: ids.length,
-      }),
+      title: t('intelligence.batches.skipTypeTitle2', 'Skip all of this type?'),
       description: t(
         'intelligence.batches.skipTypeDesc',
         'They will be archived (not extracted). This cannot be undone.',
@@ -117,7 +129,8 @@ export function BatchDetailPage() {
       confirmLabel: t('intelligence.batches.skip', 'Skip'),
       variant: 'destructive',
     });
-    if (ok) bulk.mutate({ runIds: ids, reason: `Skipped type ${documentTypeKey}` });
+    // Archivable runs are resolved server-side (no need to hold every id here).
+    if (ok) bulk.mutate({ documentTypeKey, reason: `Skipped type ${documentTypeKey}` });
   };
 
   const maxCount = Math.max(1, ...typeHistogram.map((h) => h.count));
@@ -196,64 +209,48 @@ export function BatchDetailPage() {
             <p className="text-sm font-medium">
               {t('intelligence.batches.byType', 'By classified type')}
             </p>
-            {typeHistogram.map((h) => {
-              const archivable = batch.runs.filter(
-                (r) =>
-                  (r.documentTypeKey ?? 'unclassified') === h.documentTypeKey &&
-                  ARCHIVABLE.has(r.status),
-              ).length;
-              return (
-                <div
-                  key={h.documentTypeKey}
-                  className="flex items-center gap-3 text-sm"
-                >
-                  <span className="w-56 truncate" title={h.documentTypeKey}>
-                    {h.documentTypeKey}
-                  </span>
-                  <div className="flex-1">
-                    <div
-                      className="h-2 rounded-full bg-primary/60"
-                      style={{ width: `${(h.count / maxCount) * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-10 text-right tabular-nums">{h.count}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-error"
-                    disabled={!archivable || bulk.isPending}
-                    onClick={() => skipType(h.documentTypeKey)}
-                  >
-                    {t('intelligence.batches.skipN', 'Skip {{n}}', {
-                      n: archivable,
-                    })}
-                  </Button>
+            {typeHistogram.map((h) => (
+              <div
+                key={h.documentTypeKey}
+                className="flex items-center gap-3 text-sm"
+              >
+                <span className="w-56 truncate" title={h.documentTypeKey}>
+                  {h.documentTypeKey}
+                </span>
+                <div className="flex-1">
+                  <div
+                    className="h-2 rounded-full bg-primary/60"
+                    style={{ width: `${(h.count / maxCount) * 100}%` }}
+                  />
                 </div>
-              );
-            })}
+                <span className="w-10 text-right tabular-nums">{h.count}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-error"
+                  disabled={bulk.isPending}
+                  onClick={() => skipType(h.documentTypeKey)}
+                >
+                  {t('intelligence.batches.skipType', 'Skip type')}
+                </Button>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Status filter chips */}
+      {/* Status filter chips (server-filtered) */}
       <div className="flex flex-wrap gap-2">
-        <Chip active={!statusFilter} onClick={() => setStatusFilter(null)}>
+        <Chip active={!statusFilter} onClick={() => filterBy(null)}>
           {t('common.all', 'All')} ({batch.total})
         </Chip>
-        {Object.entries(
-          batch.runs.reduce<Record<string, number>>((acc, r) => {
-            acc[r.status] = (acc[r.status] ?? 0) + 1;
-            return acc;
-          }, {}),
-        ).map(([status, n]) => (
+        {RUN_STATUSES.map((status) => (
           <Chip
             key={status}
             active={statusFilter === status}
-            onClick={() =>
-              setStatusFilter(statusFilter === status ? null : status)
-            }
+            onClick={() => filterBy(statusFilter === status ? null : status)}
           >
-            {status} ({n})
+            {status}
           </Chip>
         ))}
       </div>
@@ -360,6 +357,33 @@ export function BatchDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-center gap-3 text-sm">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page === 0 || runsQuery.isFetching}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            {t('common.prev', 'Prev')}
+          </Button>
+          <span className="text-foreground/60">
+            {t('search.pageOf', 'Page {{page}} of {{count}}', {
+              page: page + 1,
+              count: pageCount,
+            })}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page + 1 >= pageCount || runsQuery.isFetching}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            {t('common.next', 'Next')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

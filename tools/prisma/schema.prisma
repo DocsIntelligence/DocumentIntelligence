@@ -934,8 +934,16 @@ model FieldMapEntry {
 /// against @org/legal-reference — the AI never asserts citations itself). All
 /// structured output is jsonb.
 model AnalysisRun {
+  /// Polymorphic subject (docs/09 #6): analyse/ask works on uploaded sources
+  /// AND drafting documents. subjectType ∈ {'source','document'}; subjectId is
+  /// the SourceDocument.id or Document.id. `sourceDocumentId` is retained (now
+  /// nullable) for the SourceDocument relation + back-compat on existing rows.
   id               String   @id @default(cuid())
-  sourceDocumentId String
+  subjectType      String   @default("source")
+  subjectId        String?
+  sourceDocumentId String?
+  /// sha256 of the analyzed text — dedupe cache (reuse instead of recompute).
+  contentHash      String?
   summary          String?
   /// [{ name, role }]
   parties          Json?
@@ -949,9 +957,10 @@ model AnalysisRun {
   citationFindings Json?
   createdAt        DateTime @default(now())
 
-  sourceDocument SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  sourceDocument SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
 
   @@index([sourceDocumentId, createdAt])
+  @@index([subjectType, subjectId, createdAt])
 }
 
 /// Phase 2 RAG (docs/05 §7): per-page text chunks + embeddings for "ask this
@@ -960,16 +969,20 @@ model AnalysisRun {
 /// embedding is stored as a float array.
 model SourceChunk {
   id               String   @id @default(cuid())
-  sourceDocumentId String
+  /// Polymorphic subject — see AnalysisRun. For documents `page` is 1.
+  subjectType      String   @default("source")
+  subjectId        String?
+  sourceDocumentId String?
   page             Int
   ordinal          Int // chunk order within the page
   text             String
   embedding        Float[]
   createdAt        DateTime @default(now())
 
-  sourceDocument SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  sourceDocument SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
 
   @@index([sourceDocumentId])
+  @@index([subjectType, subjectId])
 }
 
 /// One processing run over a SourceDocument. Idempotent + stage-guarded; the
@@ -1032,4 +1045,76 @@ model Extraction {
 
   @@index([sourceDocumentId])
   @@index([schemaKey])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SEARCH (docs/09) — unified full-text + semantic index across both worlds
+// ═══════════════════════════════════════════════════════════════════
+
+/// One row per searchable entity, spanning the drafting world (`Document`) and
+/// the intelligence world (`SourceDocument`). Keyword search uses the generated
+/// `tsv` (tsvector, GIN-indexed); semantic search uses `embedding` (pgvector,
+/// HNSW-indexed). The `tsv` column + both GIN indexes + the `vector` column are
+/// created via raw SQL in the migration (Prisma can't express generated columns
+/// or pgvector indexes). Maintained asynchronously (SEARCH_QUEUE) with an inline
+/// fallback when Redis is absent. `contentHash` lets the indexer skip
+/// re-embedding when the extracted text has not changed. See SearchIndexService.
+model SearchIndex {
+  id           String                       @id @default(cuid())
+  /// 'document' (drafting) | 'source' (uploaded/intelligence)
+  kind         String
+  /// Document.id or SourceDocument.id
+  refId        String
+  ownerUserId  String?
+  ownerOrgId   String?
+  title        String                       @default("")
+  bodyText     String                       @default("")
+  /// Generated tsvector(setweight(title,'A') || setweight(bodyText,'B')). GIN.
+  tsv          Unsupported("tsvector")?
+  /// pgvector embedding of bodyText (text-embedding-3-small ⇒ 1536). HNSW. Null until embedded.
+  embedding    Unsupported("vector(1536)")?
+  /// sha256(title + '\n' + bodyText) — skip re-embedding unchanged text.
+  contentHash  String                       @default("")
+  /// documentTypeKey / schemaKey for filtering.
+  type         String?
+  status       String?
+  /// updatedAt of the indexed row (for recency ranking / display).
+  refUpdatedAt DateTime?
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  @@unique([kind, refId])
+  @@index([ownerUserId])
+  @@index([ownerOrgId])
+  @@index([kind])
+}
+
+/// Per-organisation search configuration (process-as-data, mirrors Pipeline).
+/// `ownerOrgId = null` is the single system-default row (managed by
+/// SearchConfigService); org rows override it field-by-field. Lets search be a
+/// configurable product surface (admin UI) rather than hardcoded constants.
+model SearchConfig {
+  id              String   @id @default(cuid())
+  /// null = system default; otherwise the owning org. One row per org.
+  ownerOrgId      String?  @unique
+  /// Hybrid blend weights: score = keywordWeight*kwNorm + semanticWeight*cosNorm.
+  keywordWeight   Float    @default(0.5)
+  semanticWeight  Float    @default(0.5)
+  /// Enable the semantic (pgvector) leg; false ⇒ keyword-only.
+  semanticEnabled Boolean  @default(true)
+  /// Searchable kinds: subset of ['document','source'].
+  enabledKinds    String[] @default(["document", "source"])
+  /// pg_trgm similarity threshold for the fuzzy title fallback (0..1).
+  fuzzyThreshold  Float    @default(0.3)
+  /// How much fresher documents rank above older ones (0 = ignore recency,
+  /// 1 = rank purely by recency). Blended after the keyword/semantic relevance.
+  recencyWeight   Float    @default(0.2)
+  /// ts_headline snippet length, in words.
+  snippetWords    Int      @default(30)
+  /// Embedding model id (must match a configured AI provider embedding model).
+  embeddingModel  String   @default("text-embedding-3-small")
+  /// Hard cap on results regardless of the page request.
+  maxResults      Int      @default(200)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

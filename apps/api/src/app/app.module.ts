@@ -16,6 +16,7 @@ import { HealthModule } from './health/health.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { IntelligenceAdminModule } from './intelligence-admin/intelligence-admin.module';
 import { LegalAiModule } from './legal-ai/legal-ai.module';
+import { SearchModule } from './search/search.module';
 import { SharesModule } from './shares/shares.module';
 import { SignersModule } from './signers/signers.module';
 import { AppLoggerModule } from './logger/logger.module';
@@ -45,6 +46,7 @@ import { UsersModule } from './users/users.module';
     LegalAiModule,
     IntelligenceModule.forRootAsync(),
     IntelligenceAdminModule,
+    SearchModule.forRootAsync(),
     SharesModule,
     CommentsModule,
     SignersModule,

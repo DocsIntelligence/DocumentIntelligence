@@ -177,6 +177,14 @@ export class AiService {
     return provider.extract<T>(input, schema, options);
   }
 
+  /** True when at least one available provider can produce embeddings. Lets
+   *  callers (e.g. the search indexer) degrade to keyword-only without catching. */
+  canEmbed(): boolean {
+    return this.providers.some(
+      (p) => p.isAvailable() && p.supportsEmbedding?.() && !!p.embed,
+    );
+  }
+
   /** Embed texts for RAG. Wired in Phase 2; throws until a provider supports it. */
   async embed(texts: string[]): Promise<number[][]> {
     const provider = this.providers.find(

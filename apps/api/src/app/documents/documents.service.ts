@@ -12,6 +12,7 @@ import {
 } from '@org/legal-reference';
 import { DatabaseService } from '../database/database.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
+import { SearchIndexService } from '../search/search-index.service';
 import {
   CreateDocumentDto,
   ListDocumentsQueryDto,
@@ -42,6 +43,7 @@ export class DocumentsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly walletUsage: WalletUsageService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   // ─── Read ──────────────────────────────────────────────────────────────
@@ -174,6 +176,7 @@ export class DocumentsService {
 
     await this.walletUsage.trackUsage(userId, Feature.documents, 1);
 
+    this.searchIndex.enqueueDocument(doc.id);
     return doc;
   }
 
@@ -209,6 +212,7 @@ export class DocumentsService {
     });
 
     await this.walletUsage.trackUsage(userId, Feature.documents, 1);
+    this.searchIndex.enqueueDocument(copy.id);
     this.logger.log(`Duplicated document ${id} → ${copy.id}`);
     return copy;
   }
@@ -239,7 +243,7 @@ export class DocumentsService {
       templateId = t.id;
     }
 
-    return this.db.document.update({
+    const updated = await this.db.document.update({
       where: { id },
       data: {
         title: dto.title ?? undefined,
@@ -261,6 +265,11 @@ export class DocumentsService {
         signers: { orderBy: { order: 'asc' } },
       },
     });
+
+    // Re-index (title/content/status may have changed). Fire-and-forget; the
+    // indexer skips re-embedding when the extracted text is unchanged.
+    this.searchIndex.enqueueDocument(id);
+    return updated;
   }
 
   // ─── Snapshot ──────────────────────────────────────────────────────────
@@ -326,7 +335,7 @@ export class DocumentsService {
         createdById: userId,
       },
     });
-    return this.db.document.update({
+    const restored = await this.db.document.update({
       where: { id },
       data: {
         data: version.data as Prisma.InputJsonValue,
@@ -339,6 +348,8 @@ export class DocumentsService {
         signers: { orderBy: { order: 'asc' } },
       },
     });
+    this.searchIndex.enqueueDocument(id);
+    return restored;
   }
 
   // ─── Delete ────────────────────────────────────────────────────────────
@@ -347,7 +358,9 @@ export class DocumentsService {
     const doc = await this.db.document.findUnique({ where: { id } });
     if (!doc) throw new NotFoundException('Document not found');
     await this.assertCanAccess(userId, doc, { requireOwner: true });
-    return this.db.document.delete({ where: { id } });
+    const deleted = await this.db.document.delete({ where: { id } });
+    this.searchIndex.enqueueDocument(id, 'remove');
+    return deleted;
   }
 
   // ─── Catalog (public read-only) ────────────────────────────────────────
