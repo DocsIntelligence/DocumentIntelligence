@@ -2,6 +2,104 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+### 2026-06-14 — Every admin CRUD is a real route, not in-page state
+
+User: "use specific page for edit etc. with proper separate crud api … fix this for all the
+modules. recheck".
+
+The remaining admin managers held create/edit/clone in `useState`; refresh discarded the work,
+URLs didn't change, and the form's own Cancel/Save fought with the page chrome. All four modules
+are now route-based with separate URLs per CRUD action:
+
+- **Document types (`SchemaManager`)** — `useState` removed; toolbar + Map / Edit / Clone icons
+  navigate. New routes wired in `app.tsx` → `IntelligenceConfigPage`:
+  - `/admin/intelligence/types/new` → `NewDocTypePage`
+  - `/admin/intelligence/types/:schemaKey/edit` → `EditDocTypePage`
+  - `/admin/intelligence/types/:schemaKey/clone` → `CloneDocTypePage`
+  - (existing) `/admin/intelligence/types/:schemaKey/mapping` → `FieldMappingPage`
+  Each page wraps `SchemaEditor` / `FieldMapEditor` in the same `ConfigShell` (so the page title +
+  subtitle live in the chrome). `SchemaEditor`'s duplicate h3 + Cancel/Save dropped; replaced
+  with a single "Back to types" + "Save" toolbar.
+- **Pipelines (`PipelineManager`)** — same pattern:
+  - `/admin/intelligence/pipelines/new` / `:pipelineKey/edit` / `:pipelineKey/clone`
+  - Editor exported, `pipelineDetailToForm()` extracted so the clone page can pre-fill from the
+    loaded summary with `_copy` suffixes.
+- **Lookups (`LookupManager`)** — `creating` + `selectedId` state replaced by routes:
+  - `/admin/intelligence/lookups/new` → `NewLookupGroupPage` (`CreateGroup` inside `ConfigShell`)
+  - `/admin/intelligence/lookups/:groupId` → `EditLookupGroupPage` (loads via `useAdminGroup` then
+    renders `GroupEditor`)
+- **Vault config (`VaultConfigManager`)** — both modal dialogs converted to inline forms:
+  - `VaultFieldForm` + `VaultDocKindForm` exported (no more `Dialog` wrappers); the in-page
+    `editField` / `editDocKind` state is gone. Toolbar buttons use the standard "Back / Save"
+    bordered toolbar.
+  - Routes: `/admin/intelligence/vault/{fields/new, fields/:fieldId/edit, doc-kinds/new,
+    doc-kinds/:kindId/edit}`. New-field page reads the active entity-kind from `?kind=…` so the
+    "Add field" button in a person/company/other section pre-selects correctly.
+
+All editors use the **existing separate CRUD endpoints** (`createSchema/updateSchema/deleteSchema`,
+`createPipeline/updatePipeline/deletePipeline`, `createGroup/updateGroup/deleteGroup`,
+`upsertVaultField/deleteVaultField`, etc.) — refresh works, deep-linking works, back/forward works.
+
+**app typecheck ✓ · app build ✓ · app lint 0 errors (only pre-existing warnings).**
+
+### 2026-06-13 — Field-mapping is a proper route, not in-page state
+
+User: "Field mapping — Legal Notice / amendment_or_addendum_to_master_agreement … 2 buttons … url
+is not changing and refresh sends to table".
+
+- New route **`/admin/intelligence/types/:schemaKey/mapping`** rendering a new `FieldMappingPage`
+  (wraps `FieldMapEditor` in the same `ConfigShell` as the rest of the admin pages, so the URL
+  shows the schema key and refresh stays on the mapping screen).
+- `SchemaManager` no longer holds `mappingKey` state — the Map icon button now `navigate(...)`s
+  to the URL above.
+- `FieldMapEditor` cleaned up:
+  - Title inconsistency fixed: now shows `schema.name` if present, else `humanise(schemaKey)`
+    (`amendment_or_addendum…` → `Amendment Or Addendum…`), with the raw key shown as `font-mono`
+    next to it so it's never ambiguous.
+  - The form's own `<h3>` + duplicate Cancel/Save buttons are gone; the page header now owns the
+    title/subtitle, and the form's action row is a single "Back to types" + "Save mapping"
+    bordered toolbar (matches BatchDetail/Builder header pattern).
+  - Drafting-doctype + field-count badges added to the context strip.
+  - Loading is skeleton rows; empty (no fields yet) gets a dashed empty card instead of dropping
+    silently.
+- **app typecheck ✓ · app lint 0 errors.**
+
+### 2026-06-13 — Pinned columns always anchored to the right edge
+
+User: "why action column is in between, they will b in last always".
+
+Root cause: the persisted `dt:<tableId>.order` from a previous schema (e.g. pre-rename) didn't
+include columns that were added later. The old logic was: walk persisted order → append unseen
+columns at the end. With actions persisted before the newly-added columns, actions ended up in the
+middle.
+
+- `@org/ui::DataTable`: new `effectiveOrder` memo always re-flushes pinned columns to the right at
+  render time, regardless of what's in localStorage. Persisted state now stores **only non-pinned
+  ids**; `reorderColumns` and `onColumnOrderChange` both strip pinned ids before writing.
+- Net effect: an action column with `pinned: true` is permanently last; users can drag/persist the
+  rest however they like and we'll still anchor `actions` to the right edge on next mount.
+- **app typecheck ✓ · ui lint 0 errors.**
+
+### 2026-06-13 — DocTypes admin (`/admin/intelligence/types`) UI polish
+
+User: "ui is not looking good".
+
+- 4-tile KPI strip across the top of the manager — Total / Active / Disabled / Read-only — matches
+  the BatchesPage pattern; instantly gives the admin a system-state snapshot.
+- "Type" cell is now the standard icon + two-line cell (DocIcon + name + `font-mono` key beneath),
+  same shape as Documents / Batches / Review queue.
+- Replaced the implicit "read-only / disabled inline badges" with two real columns:
+  - **Drafting type** column: doc-type-key as a `Badge`, or a `read-only` info-badge when null.
+  - **Status** column: explicit `Active` (success) / `Disabled` (secondary) badge instead of an
+    inline flag — sortable.
+- Removed the redundant intro paragraph (`ConfigShell` already shows the page subtitle); the in-card
+  section now carries a small "All document types" sub-heading + a tighter hint, with the **+ New
+  type** as a full-sized button (was `size="sm"`).
+- Loading state replaced with skeleton rows (matched to the BatchesPage list skeleton); empty state
+  now offers a `+ New type` CTA inside the table card instead of dead text.
+- Every column has a `defaultWidth` so the table-fixed layout doesn't reflow on first paint.
+- **app typecheck ✓ · app lint 0 errors.**
+
 ### 2026-06-13 — VaultConfigManager row actions match the shared icon pattern
 
 User: "`/admin/intelligence/vault` use same icons".

@@ -36,9 +36,9 @@ import {
   type Resolver,
 } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { applyServerFieldErrors } from '../../../lib/server-errors';
-import { FieldMapEditor } from './FieldMapEditor';
 import {
   CopyIcon,
   EditIcon,
@@ -81,7 +81,7 @@ const blankField = (): FieldValue => ({
   enumValues: [],
 });
 
-const blankSchema = (): ExtractionSchemaDto => ({
+export const blankSchema = (): ExtractionSchemaDto => ({
   key: '',
   name: '',
   documentTypeKey: '',
@@ -91,7 +91,10 @@ const blankSchema = (): ExtractionSchemaDto => ({
 });
 
 /** DB detail → form values (null → '' / [] so inputs stay controlled). */
-function detailToForm(d: AdminSchemaDetail, clone: boolean): ExtractionSchemaDto {
+export function detailToForm(
+  d: AdminSchemaDetail,
+  clone: boolean,
+): ExtractionSchemaDto {
   return {
     key: clone ? `${d.key}_copy` : d.key,
     name: clone ? `${d.name} (copy)` : d.name,
@@ -149,70 +152,20 @@ function toPayload(v: ExtractionSchemaDto): UpsertSchemaPayload {
  */
 export function SchemaManager() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const confirm = useConfirm();
   const [showDisabled, setShowDisabled] = useState(false);
   const { data: schemas, isLoading } = useSchemas(showDisabled);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [cloning, setCloning] = useState(false);
-  const [mappingKey, setMappingKey] = useState<string | null>(null);
-  const { data: loaded } = useSchema(editingKey);
   const purge = usePurgeSchema();
   const setActive = useSetSchemaActive();
 
-  const startCreate = () => {
-    setCloning(false);
-    setEditingKey(null);
-    setMappingKey(null);
-    setCreating(true);
-  };
-
-  const startEdit = (key: string) => {
-    setCloning(false);
-    setCreating(false);
-    setMappingKey(null);
-    setEditingKey(key);
-  };
-
-  const startClone = (key: string) => {
-    setCloning(true);
-    setCreating(true);
-    setMappingKey(null);
-    setEditingKey(key);
-  };
-
-  const close = () => {
-    setEditingKey(null);
-    setCreating(false);
-    setCloning(false);
-  };
-
-  if (mappingKey) {
-    return (
-      <FieldMapEditor schemaKey={mappingKey} onClose={() => setMappingKey(null)} />
-    );
-  }
-
-  const editing = creating || Boolean(editingKey);
-  if (editing) {
-    if (editingKey && !loaded) {
-      return (
-        <p className="text-foreground/60 text-sm">
-          {t('common.loading', 'Loading…')}
-        </p>
-      );
-    }
-    const initial =
-      editingKey && loaded ? detailToForm(loaded, cloning) : blankSchema();
-    return (
-      <SchemaEditor
-        key={editingKey ?? 'new'}
-        initial={initial}
-        creating={creating}
-        onClose={close}
-      />
-    );
-  }
+  const startCreate = () => navigate('/admin/intelligence/types/new');
+  const startEdit = (key: string) =>
+    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/edit`);
+  const startClone = (key: string) =>
+    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/clone`);
+  const openMapping = (key: string) =>
+    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/mapping`);
 
   const onDelete = async (key: string) => {
     const ok = await confirm({
@@ -252,55 +205,83 @@ export function SchemaManager() {
     {
       key: 'name',
       header: t('adminIntel.schema.colName', 'Type'),
+      defaultWidth: 320,
       sortValue: (s) => s.name.toLowerCase(),
       cell: (s) => (
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'font-medium text-foreground',
-              s.isActive === false && 'text-foreground/50',
-            )}
-          >
-            {s.name}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="inline-flex size-8 flex-none items-center justify-center rounded-lg bg-secondary/60 text-foreground/70">
+            <DocIcon />
           </span>
-          {!s.documentTypeKey && (
-            <Badge variant="info">
-              {t('adminIntel.schema.readOnly', 'read-only')}
-            </Badge>
-          )}
-          {s.isActive === false && (
-            <Badge variant="secondary">
-              {t('adminIntel.schema.disabled', 'disabled')}
-            </Badge>
-          )}
+          <div className="min-w-0">
+            <p
+              className={cn(
+                'truncate font-medium text-foreground',
+                s.isActive === false && 'text-foreground/50',
+              )}
+            >
+              {s.name}
+            </p>
+            <p className="truncate font-mono text-xs text-foreground/45">
+              {s.key}
+            </p>
+          </div>
         </div>
       ),
     },
     {
-      key: 'key',
-      header: t('adminIntel.schema.colKey', 'Key'),
-      sortValue: (s) => s.key,
-      cell: (s) => <span className="text-foreground/55">{s.key}</span>,
+      key: 'docType',
+      header: t('adminIntel.schema.colDocType', 'Drafting type'),
+      defaultWidth: 180,
+      sortValue: (s) => s.documentTypeKey ?? '',
+      cell: (s) =>
+        s.documentTypeKey ? (
+          <Badge variant="secondary" outline>
+            {s.documentTypeKey}
+          </Badge>
+        ) : (
+          <Badge variant="info" outline>
+            {t('adminIntel.schema.readOnly', 'read-only')}
+          </Badge>
+        ),
+    },
+    {
+      key: 'status',
+      header: t('common.status', 'Status'),
+      defaultWidth: 110,
+      sortValue: (s) => (s.isActive === false ? 0 : 1),
+      cell: (s) =>
+        s.isActive === false ? (
+          <Badge variant="secondary">
+            {t('adminIntel.schema.disabled', 'Disabled')}
+          </Badge>
+        ) : (
+          <Badge variant="success">
+            {t('adminIntel.schema.enabled', 'Active')}
+          </Badge>
+        ),
+    },
+    {
+      key: 'fields',
+      header: t('adminIntel.schema.colFields', 'Fields'),
+      align: 'right',
+      defaultWidth: 80,
+      sortValue: (s) => s.fieldCount,
+      cell: (s) => <span className="tabular-nums">{s.fieldCount}</span>,
     },
     {
       key: 'version',
       header: t('adminIntel.schema.colVersion', 'Ver'),
       align: 'right',
+      defaultWidth: 70,
       sortValue: (s) => s.version,
       cell: (s) => (
         <span className="tabular-nums text-foreground/60">v{s.version}</span>
       ),
     },
     {
-      key: 'fields',
-      header: t('adminIntel.schema.colFields', 'Fields'),
-      align: 'right',
-      sortValue: (s) => s.fieldCount,
-      cell: (s) => <span className="tabular-nums">{s.fieldCount}</span>,
-    },
-    {
       key: 'updated',
       header: t('common.updated', 'Updated'),
+      defaultWidth: 110,
       sortValue: (s) => s.updatedAt,
       cell: (s) => (
         <span className="text-foreground/55">
@@ -331,7 +312,7 @@ export function SchemaManager() {
           {s.documentTypeKey && (
             <IconButton
               title={t('adminIntel.schema.mapping', 'Field mapping')}
-              onClick={() => setMappingKey(s.key)}
+              onClick={() => openMapping(s.key)}
             >
               <MapIcon />
             </IconButton>
@@ -366,32 +347,71 @@ export function SchemaManager() {
     },
   ];
 
+  const total = schemas?.length ?? 0;
+  const activeCount = schemas?.filter((s) => s.isActive !== false).length ?? 0;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-foreground/60 text-sm">
-          {t(
-            'adminIntel.schema.intro',
-            'Document types and the fields the AI extracts from each. Read-only types (no drafting key) are still classified and extracted.',
-          )}
-        </p>
-        <Button size="sm" onClick={startCreate}>
+    <div className="space-y-5">
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile
+          label={t('adminIntel.schema.totalTypes', 'Total types')}
+          value={total}
+        />
+        <StatTile
+          label={t('adminIntel.schema.active', 'Active')}
+          value={activeCount}
+          tone="success"
+        />
+        <StatTile
+          label={t('adminIntel.schema.disabledCount', 'Disabled')}
+          value={total - activeCount}
+          tone="muted"
+        />
+        <StatTile
+          label={t('adminIntel.schema.readOnlyCount', 'Read-only')}
+          value={schemas?.filter((s) => !s.documentTypeKey).length ?? 0}
+          tone="info"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">
+            {t('adminIntel.schema.listTitle', 'All document types')}
+          </h3>
+          <p className="mt-0.5 text-xs text-foreground/55">
+            {t(
+              'adminIntel.schema.listHint',
+              'Read-only types are still classified and extracted, just not draftable.',
+            )}
+          </p>
+        </div>
+        <Button onClick={startCreate}>
           {t('adminIntel.schema.create', '+ New type')}
         </Button>
       </div>
 
       {isLoading ? (
-        <p className="text-foreground/60 text-sm">
-          {t('common.loading', 'Loading…')}
-        </p>
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-14 animate-pulse rounded-lg bg-secondary/40"
+            />
+          ))}
+        </div>
       ) : (
         <DataTable
           tableId="admin.intelligence.schemas"
           data={schemas ?? []}
           columns={columns}
           rowKey={(s) => s.key}
-          search={(s) => `${s.name} ${s.key}`}
-          searchPlaceholder={t('adminIntel.schema.search', 'Search types…')}
+          search={(s) => `${s.name} ${s.key} ${s.documentTypeKey ?? ''}`}
+          searchPlaceholder={t(
+            'adminIntel.schema.search',
+            'Search types by name, key, or drafting type…',
+          )}
           initialSort={{ key: 'name', dir: 'asc' }}
           renderExpanded={(s) => <ExpandedSchema schemaKey={s.key} />}
           toolbar={
@@ -403,15 +423,71 @@ export function SchemaManager() {
               {t('adminIntel.schema.showDisabled', 'Show disabled')}
             </label>
           }
-          empty={t('adminIntel.schema.empty', 'No document types yet.')}
+          empty={
+            <div className="space-y-3 py-6">
+              <p className="text-sm text-foreground/60">
+                {t(
+                  'adminIntel.schema.empty',
+                  'No document types yet.',
+                )}
+              </p>
+              <Button size="sm" onClick={startCreate}>
+                {t('adminIntel.schema.create', '+ New type')}
+              </Button>
+            </div>
+          }
         />
       )}
     </div>
   );
 }
 
+function StatTile({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  tone?: 'default' | 'success' | 'muted' | 'info';
+}) {
+  const toneClass: Record<string, string> = {
+    default: 'text-foreground',
+    success: 'text-success',
+    muted: 'text-foreground/50',
+    info: 'text-info',
+  };
+  return (
+    <div className="rounded-xl border border-border bg-background/60 p-3">
+      <p className={cn('text-2xl font-semibold leading-none tabular-nums', toneClass[tone])}>
+        {value}
+      </p>
+      <p className="mt-1.5 text-xs text-foreground/55">{label}</p>
+    </div>
+  );
+}
+
+function DocIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  );
+}
+
 /** The create/edit form — its own `useForm` so defaults init per edit session. */
-function SchemaEditor({
+export function SchemaEditor({
   initial,
   creating,
   onClose,
@@ -454,23 +530,18 @@ function SchemaEditor({
 
   return (
     <FormProvider {...form}>
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="flex items-center justify-between">
-          <h3 className="font-medium text-foreground">
-            {creating
-              ? t('adminIntel.schema.createTitle', 'New document type')
-              : t('adminIntel.schema.editTitle', 'Edit document type')}
-          </h3>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" size="sm" disabled={save.isPending}>
-              {save.isPending
-                ? t('common.saving', 'Saving…')
-                : t('adminIntel.schema.saveVersion', 'Save (new version)')}
-            </Button>
-          </div>
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            {t('common.back', 'Back to types')}
+          </Button>
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending
+              ? t('common.saving', 'Saving…')
+              : creating
+              ? t('adminIntel.schema.create', '+ New type')
+              : t('adminIntel.schema.saveVersion', 'Save (new version)')}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -5,10 +5,6 @@ import {
   Chip,
   DataTable,
   type DataTableColumn,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
   FormField,
   Input,
   Select,
@@ -21,6 +17,7 @@ import {
 } from '@org/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { EditIcon, IconButton, TrashIcon } from '../intelligence/icons';
 import {
@@ -39,14 +36,24 @@ const TYPES = ['text', 'textarea', 'date', 'number', 'tel', 'email', 'select', '
  *  entity kind + document kinds. Edits the system defaults. */
 export function VaultConfigManager() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const confirm = useConfirm();
   const fields = useVaultFields();
   const docKinds = useVaultDocKinds();
   const [kind, setKind] = useState<(typeof KINDS)[number]>('person');
-  const [editField, setEditField] = useState<Partial<VaultFieldConfig> | null>(null);
-  const [editDocKind, setEditDocKind] = useState<Partial<VaultDocKindConfig> | null>(null);
   const delField = useDeleteVaultField();
   const delDocKind = useDeleteVaultDocKind();
+
+  const openField = (id: string) =>
+    navigate(`/admin/intelligence/vault/fields/${encodeURIComponent(id)}/edit`);
+  const newField = () =>
+    navigate(`/admin/intelligence/vault/fields/new?kind=${encodeURIComponent(kind)}`);
+  const openDocKind = (id: string) =>
+    navigate(
+      `/admin/intelligence/vault/doc-kinds/${encodeURIComponent(id)}/edit`,
+    );
+  const newDocKind = () =>
+    navigate('/admin/intelligence/vault/doc-kinds/new');
 
   const onDeleteField = async (r: VaultFieldConfig) => {
     const ok = await confirm({
@@ -130,7 +137,7 @@ export function VaultConfigManager() {
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
             title={t('common.edit', 'Edit')}
-            onClick={() => setEditField(r)}
+            onClick={() => openField(r.id)}
           >
             <EditIcon />
           </IconButton>
@@ -191,7 +198,7 @@ export function VaultConfigManager() {
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
             title={t('common.edit', 'Edit')}
-            onClick={() => setEditDocKind(r)}
+            onClick={() => openDocKind(r.id)}
           >
             <EditIcon />
           </IconButton>
@@ -214,7 +221,7 @@ export function VaultConfigManager() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">{t('vaultAdmin.fields', 'Fields')}</h3>
-          <Button size="sm" onClick={() => setEditField({ entityKind: kind, type: 'text' })}>
+          <Button size="sm" onClick={newField}>
             {t('vaultAdmin.addField', 'Add field')}
           </Button>
         </div>
@@ -249,7 +256,7 @@ export function VaultConfigManager() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">{t('vaultAdmin.docKinds', 'Document kinds')}</h3>
-          <Button size="sm" onClick={() => setEditDocKind({ scannable: true })}>
+          <Button size="sm" onClick={newDocKind}>
             {t('vaultAdmin.addDocKind', 'Add document kind')}
           </Button>
         </div>
@@ -271,24 +278,12 @@ export function VaultConfigManager() {
         )}
       </section>
 
-      {editField && (
-        <FieldDialog
-          initial={editField}
-          onClose={() => setEditField(null)}
-        />
-      )}
-      {editDocKind && (
-        <DocKindDialog
-          initial={editDocKind}
-          allFields={fields.data ?? []}
-          onClose={() => setEditDocKind(null)}
-        />
-      )}
     </div>
   );
 }
 
-function FieldDialog({
+/** Field editor — used by both new/edit routed pages. */
+export function VaultFieldForm({
   initial,
   onClose,
 }: {
@@ -334,12 +329,17 @@ function FieldDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{initial.id ? t('vaultAdmin.editField', 'Edit field') : t('vaultAdmin.addField', 'Add field')}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          {t('common.back', 'Back to vault config')}
+        </Button>
+        <Button onClick={save} disabled={upsert.isPending || !f.key.trim() || !f.label.trim()}>
+          {upsert.isPending && <Spinner className="mr-2 h-4 w-4" />}
+          {t('common.save', 'Save')}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label={t('vaultAdmin.entityKind', 'Entity kind')}>
             <Select value={f.entityKind} onValueChange={(v) => setF((s) => ({ ...s, entityKind: v as VaultFieldConfig['entityKind'] }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -378,24 +378,17 @@ function FieldDialog({
               <Input value={f.lookupKey} onChange={(e) => setF((s) => ({ ...s, lookupKey: e.target.value }))} placeholder="country" />
             </FormField>
           )}
-          <label className="col-span-2 flex items-center justify-between rounded-md border p-2 text-sm">
-            <span>{t('vaultAdmin.sensitive', 'Sensitive (encrypted + masked)')}</span>
-            <Switch checked={f.sensitive} onCheckedChange={(v) => setF((s) => ({ ...s, sensitive: v }))} />
-          </label>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-          <Button onClick={save} disabled={upsert.isPending || !f.key.trim() || !f.label.trim()}>
-            {upsert.isPending && <Spinner className="mr-2 h-4 w-4" />}
-            {t('common.save', 'Save')}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        <label className="sm:col-span-2 flex items-center justify-between rounded-md border p-2 text-sm">
+          <span>{t('vaultAdmin.sensitive', 'Sensitive (encrypted + masked)')}</span>
+          <Switch checked={f.sensitive} onCheckedChange={(v) => setF((s) => ({ ...s, sensitive: v }))} />
+        </label>
+      </div>
+    </div>
   );
 }
 
-function DocKindDialog({
+/** Doc-kind editor — used by both new/edit routed pages. */
+export function VaultDocKindForm({
   initial,
   allFields,
   onClose,
@@ -432,13 +425,18 @@ function DocKindDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{initial.id ? t('vaultAdmin.editDocKind', 'Edit document kind') : t('vaultAdmin.addDocKind', 'Add document kind')}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          {t('common.back', 'Back to vault config')}
+        </Button>
+        <Button onClick={save} disabled={upsert.isPending || !d.kind.trim() || !d.label.trim()}>
+          {upsert.isPending && <Spinner className="mr-2 h-4 w-4" />}
+          {t('common.save', 'Save')}
+        </Button>
+      </div>
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label={t('vaultAdmin.key', 'Key (stable)')}>
               <Input value={d.kind} disabled={!!initial.id} onChange={(e) => setD((s) => ({ ...s, kind: e.target.value }))} placeholder="aadhaar" />
             </FormField>
@@ -452,19 +450,11 @@ function DocKindDialog({
           <p className="text-xs text-muted-foreground">
             {t('vaultAdmin.knownKeys', 'Known keys')}: {knownKeys.join(', ')}
           </p>
-          <label className="flex items-center justify-between rounded-md border p-2 text-sm">
-            <span>{t('vaultAdmin.scannableLabel', 'Scannable (OCR autofill)')}</span>
-            <Switch checked={d.scannable} onCheckedChange={(v) => setD((s) => ({ ...s, scannable: v }))} />
-          </label>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-          <Button onClick={save} disabled={upsert.isPending || !d.kind.trim() || !d.label.trim()}>
-            {upsert.isPending && <Spinner className="mr-2 h-4 w-4" />}
-            {t('common.save', 'Save')}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        <label className="flex items-center justify-between rounded-md border p-2 text-sm">
+          <span>{t('vaultAdmin.scannableLabel', 'Scannable (OCR autofill)')}</span>
+          <Switch checked={d.scannable} onCheckedChange={(v) => setD((s) => ({ ...s, scannable: v }))} />
+        </label>
+      </div>
+    </div>
   );
 }

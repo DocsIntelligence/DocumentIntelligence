@@ -37,6 +37,7 @@ import {
   type Resolver,
 } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { applyServerFieldErrors } from '../../../lib/server-errors';
 import {
@@ -104,7 +105,7 @@ const defaultStage = (type: StageType): StageValue => ({
             : {},
 });
 
-const blankPipeline = (): PipelineDto => ({
+export const blankPipeline = (): PipelineDto => ({
   key: '',
   name: '',
   stages: [
@@ -135,72 +136,36 @@ function toPayload(v: PipelineDto): { key: string; name: string; stages: StageVa
  * Validation is shared with the API via the `@org/dto` Zod schema
  * (react-hook-form + zodResolver). Saving mints a new immutable version.
  */
+/** Build a form value from a loaded pipeline (used for edit + clone). */
+export function pipelineDetailToForm(
+  loaded: { key: string; name: string; stages: StageValue[] },
+  clone: boolean,
+): PipelineDto {
+  return {
+    key: clone ? `${loaded.key}_copy` : loaded.key,
+    name: clone ? `${loaded.name} (copy)` : loaded.name,
+    stages: loaded.stages.map((s) => ({
+      type: s.type,
+      name: s.name,
+      config: { ...s.config },
+    })),
+  };
+}
+
 export function PipelineManager() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const confirm = useConfirm();
   const [showDisabled, setShowDisabled] = useState(false);
   const { data: pipelines, isLoading } = usePipelines(showDisabled);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [cloning, setCloning] = useState(false);
-  const { data: loaded } = usePipeline(editingKey);
   const setActive = useSetPipelineActive();
   const purge = usePurgePipeline();
 
-  const close = () => {
-    setEditingKey(null);
-    setCreating(false);
-    setCloning(false);
-  };
-
-  const startEdit = (key: string) => {
-    setCloning(false);
-    setCreating(false);
-    setEditingKey(key);
-  };
-
-  const startClone = (key: string) => {
-    setCloning(true);
-    setCreating(true);
-    setEditingKey(key);
-  };
-
-  const startCreate = () => {
-    setCloning(false);
-    setEditingKey(null);
-    setCreating(true);
-  };
-
-  const editing = creating || Boolean(editingKey);
-  if (editing) {
-    if (editingKey && !loaded) {
-      return (
-        <p className="text-foreground/60 text-sm">
-          {t('common.loading', 'Loading…')}
-        </p>
-      );
-    }
-    const initial: PipelineDto =
-      editingKey && loaded
-        ? {
-            key: cloning ? `${loaded.key}_copy` : loaded.key,
-            name: cloning ? `${loaded.name} (copy)` : loaded.name,
-            stages: loaded.stages.map((s) => ({
-              type: s.type,
-              name: s.name,
-              config: { ...s.config },
-            })),
-          }
-        : blankPipeline();
-    return (
-      <PipelineEditor
-        key={editingKey ?? 'new'}
-        initial={initial}
-        creating={creating}
-        onClose={close}
-      />
-    );
-  }
+  const startCreate = () => navigate('/admin/intelligence/pipelines/new');
+  const startEdit = (key: string) =>
+    navigate(`/admin/intelligence/pipelines/${encodeURIComponent(key)}/edit`);
+  const startClone = (key: string) =>
+    navigate(`/admin/intelligence/pipelines/${encodeURIComponent(key)}/clone`);
 
   const onDelete = async (key: string) => {
     const ok = await confirm({
@@ -389,7 +354,7 @@ export function PipelineManager() {
 }
 
 /** The create/edit pipeline form. Its own `useForm` per edit session. */
-function PipelineEditor({
+export function PipelineEditor({
   initial,
   creating,
   onClose,
@@ -477,23 +442,18 @@ function PipelineEditor({
 
   return (
     <FormProvider {...form}>
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="flex items-center justify-between">
-          <h3 className="font-medium text-foreground">
-            {creating
-              ? t('adminIntel.pipeline.createTitle', 'New pipeline')
-              : t('adminIntel.pipeline.editTitle', 'Edit pipeline')}
-          </h3>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" size="sm" disabled={save.isPending}>
-              {save.isPending
-                ? t('common.saving', 'Saving…')
-                : t('adminIntel.pipeline.saveVersion', 'Save (new version)')}
-            </Button>
-          </div>
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            {t('common.back', 'Back to pipelines')}
+          </Button>
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending
+              ? t('common.saving', 'Saving…')
+              : creating
+              ? t('adminIntel.pipeline.create', '+ New pipeline')
+              : t('adminIntel.pipeline.saveVersion', 'Save (new version)')}
+          </Button>
         </div>
 
         {warnings.length > 0 && (

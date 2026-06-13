@@ -1,5 +1,5 @@
 import type { AdminFieldMap, AdminSchemaDetail } from '@org/api-client';
-import { Button, Card, Input } from '@org/ui';
+import { Badge, Button, Card, Input } from '@org/ui';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { applyServerFieldErrors } from '../../../lib/server-errors';
@@ -10,6 +10,14 @@ interface Props {
   onClose: () => void;
 }
 
+/** Title-case a snake_case / kebab-case key into a human label. */
+const humanise = (key: string) =>
+  key
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 /**
  * Field-map editor (docs/05 §11.4): map each extraction field key → a dot-path
  * in the drafting `DocumentTypeBundle`, so the export/convert step can prefill a
@@ -18,18 +26,28 @@ interface Props {
  */
 export function FieldMapEditor({ schemaKey, onClose }: Props) {
   const { t } = useTranslation();
-  const { data: schema } = useSchema(schemaKey);
-  const { data: fieldMap, isLoading } = useFieldMap(schemaKey);
+  const { data: schema, isLoading: schemaLoading } = useSchema(schemaKey);
+  const { data: fieldMap, isLoading: mapLoading } = useFieldMap(schemaKey);
 
-  // Wait for the schema (the field-map 404s when none exists yet — expected).
-  if (isLoading && !schema) {
+  if ((schemaLoading || mapLoading) && !schema) {
     return (
-      <p className="text-foreground/60 text-sm">
-        {t('common.loading', 'Loading…')}
+      <div className="space-y-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-12 animate-pulse rounded-lg bg-secondary/40"
+          />
+        ))}
+      </div>
+    );
+  }
+  if (!schema) {
+    return (
+      <p className="text-sm text-foreground/60">
+        {t('adminIntel.map.notFound', 'Schema not found.')}
       </p>
     );
   }
-  if (!schema) return null;
 
   return (
     <MapForm
@@ -83,25 +101,35 @@ function MapForm({
     );
   });
 
+  const typeLabel = (schema.name?.trim() || humanise(schemaKey)).trim();
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-medium text-foreground">
-            {t('adminIntel.map.title', 'Field mapping')} — {schema.name}
-          </h3>
-          <p className="text-xs text-foreground/50">
-            {t(
-              'adminIntel.map.hint',
-              'extraction field → document path (dot-notation, e.g. parties.landlord.name). Blank = not mapped.',
-            )}
-          </p>
+    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+      {/* Context strip — the page header already shows the page title. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-foreground">{typeLabel}</span>
+          <span className="font-mono text-xs text-foreground/45">{schemaKey}</span>
+          {docTypeKey ? (
+            <Badge variant="secondary" outline>
+              {docTypeKey}
+            </Badge>
+          ) : (
+            <Badge variant="info" outline>
+              {t('adminIntel.schema.readOnly', 'read-only')}
+            </Badge>
+          )}
+          <span className="text-xs text-foreground/55">
+            {t('adminIntel.map.fieldCount', '{{n}} fields', {
+              n: schema.fields.length,
+            })}
+          </span>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            {t('common.cancel', 'Cancel')}
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            {t('common.back', 'Back to types')}
           </Button>
-          <Button type="submit" size="sm" disabled={!docTypeKey || save.isPending}>
+          <Button type="submit" disabled={!docTypeKey || save.isPending}>
             {save.isPending
               ? t('common.saving', 'Saving…')
               : t('adminIntel.map.save', 'Save mapping')}
@@ -116,18 +144,32 @@ function MapForm({
             'This is a read-only type (no drafting key), so there is nothing to map — extractions are reviewed but not converted to a structured document.',
           )}
         </p>
+      ) : schema.fields.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-foreground/55">
+          {t(
+            'adminIntel.map.noFields',
+            'This type has no extraction fields to map yet.',
+          )}
+        </p>
       ) : (
         <div className="space-y-2">
           {schema.fields.map((f) => (
-            <Card key={f.key} className="flex items-center gap-3 p-2">
-              <span className="w-1/2 truncate text-sm" title={f.key}>
-                <span className="font-medium">{f.label}</span>
-                <span className="text-foreground/40"> · {f.key}</span>
+            <Card
+              key={f.key}
+              className="flex flex-wrap items-center gap-3 px-3 py-2"
+            >
+              <span className="min-w-0 flex-1 text-sm" title={f.key}>
+                <span className="block truncate font-medium text-foreground">
+                  {f.label}
+                </span>
+                <span className="block truncate font-mono text-xs text-foreground/45">
+                  {f.key}
+                </span>
               </span>
               <span className="text-foreground/30">→</span>
               <Input
-                className="flex-1"
-                placeholder={t('adminIntel.map.path', 'document.path')}
+                className="flex-1 font-mono text-xs"
+                placeholder={t('adminIntel.map.path', 'parties.landlord.name')}
                 {...register(`mapping.${f.key}`)}
               />
             </Card>

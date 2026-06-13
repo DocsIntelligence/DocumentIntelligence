@@ -18,6 +18,7 @@ import {
 import { useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { applyServerFieldErrors } from '../../../lib/server-errors';
@@ -61,6 +62,7 @@ type GroupForm = z.infer<typeof groupSchema>;
  */
 export function LookupManager() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const svc = useLookupsService();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
@@ -70,17 +72,16 @@ export function LookupManager() {
     page,
     pageSize,
   });
-  const [creating, setCreating] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const confirm = useConfirm();
   const deleteGroup = useDeleteGroup();
   const duplicateGroup = useDuplicateGroup();
 
-  // The selected group's full record (with values) — fetched on select only.
-  const selectedQuery = useAdminGroup(selectedId);
-
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  const startCreate = () => navigate('/admin/intelligence/lookups/new');
+  const openGroup = (id: string) =>
+    navigate(`/admin/intelligence/lookups/${encodeURIComponent(id)}`);
 
   // Duplicate: fetch the group's values on demand (not held in the list).
   const onDuplicate = async (g: LookupGroupSummary) => {
@@ -97,25 +98,6 @@ export function LookupManager() {
       })),
     });
   };
-
-  if (creating) {
-    return <CreateGroup onClose={() => setCreating(false)} />;
-  }
-  if (selectedId) {
-    if (selectedQuery.isLoading || !selectedQuery.data) {
-      return (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      );
-    }
-    return (
-      <GroupEditor
-        group={selectedQuery.data}
-        onClose={() => setSelectedId(null)}
-      />
-    );
-  }
 
   const onDelete = async (g: LookupGroupSummary) => {
     const ok = await confirm({
@@ -169,7 +151,7 @@ export function LookupManager() {
         <div className="flex items-center justify-end gap-0.5">
           <IconButton
             title={t('adminLookups.manage', 'Manage values')}
-            onClick={() => setSelectedId(g.id)}
+            onClick={() => openGroup(g.id)}
           >
             <EditIcon />
           </IconButton>
@@ -207,7 +189,7 @@ export function LookupManager() {
             )}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={startCreate}>
           {t('adminLookups.new', 'New group')}
         </Button>
       </div>
@@ -248,7 +230,7 @@ export function LookupManager() {
   );
 }
 
-function CreateGroup({ onClose }: { onClose: () => void }) {
+export function CreateGroup({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const create = useCreateGroup();
   const {
@@ -323,7 +305,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GroupEditor({
+export function GroupEditor({
   group,
   onClose,
 }: {

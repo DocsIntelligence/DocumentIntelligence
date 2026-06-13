@@ -244,6 +244,21 @@ export function DataTable<T>({
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
+  // Effective column order. Pinned columns are always flushed to the right edge
+  // regardless of what's in persisted state — `actions` columns shouldn't drift
+  // into the middle when the column set changes between releases.
+  const effectiveOrder = useMemo(() => {
+    const allIds = userColumns.map((c) => c.key);
+    const pinnedIds = userColumns.filter((c) => c.pinned).map((c) => c.key);
+    const isPinned = new Set(pinnedIds);
+    const persistedNonPinned = persisted.order.filter(
+      (k) => allIds.includes(k) && !isPinned.has(k),
+    );
+    const seen = new Set(persistedNonPinned);
+    const trailing = allIds.filter((k) => !seen.has(k) && !isPinned.has(k));
+    return [...persistedNonPinned, ...trailing, ...pinnedIds];
+  }, [userColumns, persisted.order]);
+
   const table = useReactTable<T>({
     data,
     columns: columnDefs,
@@ -253,7 +268,7 @@ export function DataTable<T>({
       pagination: effectivePagination,
       expanded,
       columnSizing: persisted.widths,
-      columnOrder: persisted.order,
+      columnOrder: effectiveOrder,
     },
     columnResizeMode: 'onChange',
     enableColumnResizing: resizableColumns,
@@ -305,7 +320,15 @@ export function DataTable<T>({
     onColumnOrderChange: (updater) => {
       const next =
         typeof updater === 'function' ? updater(persisted.order) : updater;
-      writeState({ ...persisted, order: next });
+      // Never store pinned columns in persisted order — they're appended at
+      // render time so they always live at the right edge.
+      const pinnedIds = new Set(
+        userColumns.filter((c) => c.pinned).map((c) => c.key),
+      );
+      writeState({
+        ...persisted,
+        order: next.filter((k) => !pinnedIds.has(k)),
+      });
     },
     globalFilterFn: (row, _columnId, filterValue) => {
       if (!search || !filterValue) return true;
@@ -329,23 +352,25 @@ export function DataTable<T>({
   // ── Reorder columns via HTML5 drag-and-drop on header cells ─────────────
   const reorderColumns = (fromKey: string, toKey: string) => {
     if (fromKey === toKey) return;
-    const allIds = columnDefs
-      .map((c) => c.id)
-      .filter((id): id is string => typeof id === 'string');
-    const base = persisted.order.length
-      ? persisted.order.filter((k) => allIds.includes(k))
-      : allIds;
     const pinned = new Set(
       userColumns.filter((c) => c.pinned).map((c) => c.key),
     );
     if (pinned.has(fromKey) || pinned.has(toKey)) return;
+    // Persisted order tracks ONLY non-pinned columns — pinned ones are always
+    // appended at render time so they stay at the right edge.
+    const nonPinnedIds = userColumns
+      .filter((c) => !c.pinned)
+      .map((c) => c.key);
+    const base = persisted.order.length
+      ? persisted.order.filter((k) => nonPinnedIds.includes(k))
+      : nonPinnedIds;
     const from = base.indexOf(fromKey);
     const to = base.indexOf(toKey);
     if (from < 0 || to < 0) return;
     const next = [...base];
     next.splice(from, 1);
     next.splice(to, 0, fromKey);
-    for (const id of allIds) if (!next.includes(id)) next.push(id);
+    for (const id of nonPinnedIds) if (!next.includes(id)) next.push(id);
     writeState({ ...persisted, order: next });
   };
 

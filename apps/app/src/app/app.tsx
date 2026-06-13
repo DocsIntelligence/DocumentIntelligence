@@ -9,8 +9,21 @@ import {
 import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
 import {
+  CloneDocTypePage,
+  ClonePipelinePage,
   DocTypesPage,
+  EditDocTypePage,
+  EditLookupGroupPage,
+  EditPipelinePage,
+  EditVaultDocKindPage,
+  EditVaultFieldPage,
+  FieldMappingPage,
   LookupsPage,
+  NewDocTypePage,
+  NewLookupGroupPage,
+  NewPipelinePage,
+  NewVaultDocKindPage,
+  NewVaultFieldPage,
   PipelinesPage,
   SearchConfigPage,
   VaultConfigPage,
@@ -101,12 +114,48 @@ export function App() {
         />
         <Route path="/admin/intelligence/types" element={<DocTypesPage />} />
         <Route
+          path="/admin/intelligence/types/new"
+          element={<NewDocTypePage />}
+        />
+        <Route
+          path="/admin/intelligence/types/:schemaKey/edit"
+          element={<EditDocTypePage />}
+        />
+        <Route
+          path="/admin/intelligence/types/:schemaKey/clone"
+          element={<CloneDocTypePage />}
+        />
+        <Route
+          path="/admin/intelligence/types/:schemaKey/mapping"
+          element={<FieldMappingPage />}
+        />
+        <Route
           path="/admin/intelligence/pipelines"
           element={<PipelinesPage />}
         />
         <Route
+          path="/admin/intelligence/pipelines/new"
+          element={<NewPipelinePage />}
+        />
+        <Route
+          path="/admin/intelligence/pipelines/:pipelineKey/edit"
+          element={<EditPipelinePage />}
+        />
+        <Route
+          path="/admin/intelligence/pipelines/:pipelineKey/clone"
+          element={<ClonePipelinePage />}
+        />
+        <Route
           path="/admin/intelligence/lookups"
           element={<LookupsPage />}
+        />
+        <Route
+          path="/admin/intelligence/lookups/new"
+          element={<NewLookupGroupPage />}
+        />
+        <Route
+          path="/admin/intelligence/lookups/:groupId"
+          element={<EditLookupGroupPage />}
         />
         <Route
           path="/admin/intelligence/search"
@@ -115,6 +164,22 @@ export function App() {
         <Route
           path="/admin/intelligence/vault"
           element={<VaultConfigPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/fields/new"
+          element={<NewVaultFieldPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/fields/:fieldId/edit"
+          element={<EditVaultFieldPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/doc-kinds/new"
+          element={<NewVaultDocKindPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/doc-kinds/:kindId/edit"
+          element={<EditVaultDocKindPage />}
         />
       </Route>
 
