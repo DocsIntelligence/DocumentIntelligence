@@ -76,6 +76,11 @@ export const envSchema = z.object({
   // ── Redis (optional — for queue, falls back to in-memory)
   REDIS_URL: z.string().min(1).optional(),
 
+  // ── Document Vault: AES-256-GCM key for encrypting entity field data at rest.
+  // base64-encoded 32 bytes (`openssl rand -base64 32`). REQUIRED in production;
+  // in dev a deterministic key is derived with a loud warning if unset.
+  VAULT_ENCRYPTION_KEY: z.string().min(1).optional(),
+
   // ── AI Providers (optional — warn if missing)
   // Default provider for AiService priority/fallback (Document Intelligence
   // extraction + legal-ai). Default: openai.

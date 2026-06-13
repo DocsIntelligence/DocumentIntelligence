@@ -38,6 +38,7 @@ import {
   ReviewQueuePage,
 } from './features/intelligence';
 import { SearchPage } from './features/search';
+import { VaultPage, VaultEntityPage } from './features/vault';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -79,6 +80,8 @@ export function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/vault" element={<VaultPage />} />
+        <Route path="/vault/:id" element={<VaultEntityPage />} />
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/documents/templates" element={<TemplatesPage />} />

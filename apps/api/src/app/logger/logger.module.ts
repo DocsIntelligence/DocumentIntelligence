@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+import { scrubLogObject } from '../common/redact';
 
 @Module({
   imports: [
@@ -20,7 +21,21 @@ import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
                   },
                 }
               : undefined,
-          redact: ['req.headers.authorization', 'req.headers.cookie'],
+          // Drop credential headers + common secret body fields entirely.
+          redact: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers["set-cookie"]',
+            'req.body.password',
+            'req.body.currentPassword',
+            'req.body.newPassword',
+            'req.body.token',
+            'req.body.otp',
+          ],
+          // Mask PII (email/phone/Aadhaar/PAN) that leaks into URLs/queries/messages.
+          formatters: {
+            log: (obj: Record<string, unknown>) => scrubLogObject(obj),
+          },
           customProps: () => ({ context: 'HTTP' }),
         },
       }),

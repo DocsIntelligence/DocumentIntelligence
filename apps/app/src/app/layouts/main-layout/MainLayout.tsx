@@ -174,6 +174,11 @@ function Sidebar({
             label={t('nav.search', 'Search')}
             icon={<SearchIcon />}
           />
+          <NavItem
+            to="/vault"
+            label={t('nav.vault', 'Vault')}
+            icon={<VaultIcon />}
+          />
 
           <NavGroup
             label={t('nav.create', 'Create')}
@@ -483,6 +488,17 @@ function SearchIcon() {
     <svg {...iconProps}>
       <circle cx="11" cy="11" r="7" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function VaultIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="12" y1="9" x2="12" y2="9.01" />
+      <line x1="14.5" y1="13.5" x2="16" y2="15" />
     </svg>
   );
 }

@@ -6,6 +6,7 @@ import type {
   LookupsService,
   SearchService,
   SharesService,
+  VaultService,
 } from '@org/api-client';
 import { createContext, type ReactNode, useContext } from 'react';
 
@@ -23,6 +24,7 @@ interface Services {
   intelligence: IntelligenceService;
   intelligenceAdmin: IntelligenceAdminService;
   search: SearchService;
+  vault: VaultService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -39,6 +41,7 @@ export function ServicesProvider({
   intelligence,
   intelligenceAdmin,
   search,
+  vault,
   children,
 }: ProviderProps) {
   return (
@@ -51,6 +54,7 @@ export function ServicesProvider({
         intelligence,
         intelligenceAdmin,
         search,
+        vault,
       }}
     >
       {children}
@@ -100,4 +104,10 @@ export function useSearchService(): SearchService {
   const ctx = useContext(ServicesContext);
   if (!ctx) throw new Error('useSearchService outside <ServicesProvider>');
   return ctx.search;
+}
+
+export function useVaultService(): VaultService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx) throw new Error('useVaultService outside <ServicesProvider>');
+  return ctx.vault;
 }

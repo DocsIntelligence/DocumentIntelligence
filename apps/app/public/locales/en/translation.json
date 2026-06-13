@@ -13,7 +13,8 @@
     "loading": "Loading…",
     "save": "Save",
     "prev": "Prev",
-    "next": "Next"
+    "next": "Next",
+    "delete": "Delete"
   },
   "newDoc": {
     "subtitle": "Draft freely with AI, or pick a structured document type below.",
@@ -68,7 +69,8 @@
     "admin": "Admin",
     "lookups": "Lookups",
     "search": "Search",
-    "searchSettings": "Search settings"
+    "searchSettings": "Search settings",
+    "vault": "Vault"
   },
   "greeting": {
     "morning": "Good morning",
@@ -248,5 +250,34 @@
     "enabledKinds": "Searchable content",
     "reindex": "Rebuild index",
     "recencyWeight": "Recency weight (0–1)"
+  },
+  "vault": {
+    "title": "Document Vault",
+    "subtitle": "Save people & companies once — their details and ID documents — then autofill any document. Sensitive fields are encrypted and masked.",
+    "new": "New entity",
+    "newTitle": "New vault entity",
+    "create": "Create",
+    "kind": "Type",
+    "label": "Name / label",
+    "labelPlaceholder": "e.g. Myself, Acme Pvt Ltd, Landlord Ramesh",
+    "person": "Person",
+    "company": "Company",
+    "other": "Other",
+    "empty": "No saved entities yet. Add yourself, a company, or a counterparty.",
+    "noFields": "No details yet",
+    "docCount": "{{n}} document(s)",
+    "details": "Details",
+    "revealEdit": "Reveal & edit",
+    "maskedNote": "Sensitive values are masked. Reveal & edit to view or change them.",
+    "documents": "Documents",
+    "upload": "Upload",
+    "noDocs": "No documents attached.",
+    "view": "View",
+    "deleteEntity": "Delete entity",
+    "deleteTitle": "Delete this entity?",
+    "deleteDesc": "Its details and all attached documents are permanently removed.",
+    "insert": "Insert from vault",
+    "insertTitle": "Insert from vault",
+    "insertEmpty": "No saved entities yet. Add one in the Vault first."
   }
 }

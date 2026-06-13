@@ -2,6 +2,50 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+### 2026-06-13 — Vault → builder autofill ("Insert from vault")
+
+Closed the vault's headline value. **app typecheck/build ✓ · lint 0 errors.**
+- `BuilderForm`: each section header gets an **"Insert from vault"** button → `VaultAutofillDialog` (lists
+  entities, fetches the audited `/autofill` canonical fields on pick) → `mapToSection` maps canonical keys to
+  the section's form-field leaf names via a synonym table (`name←full_name/legal_name`, `address←address_line1`,
+  `aadhaar←aadhaar_number`, `pan`, `gstin`, `cin`, `pincode`, `phone`, …) → batch `setMany` applies them in one
+  `onChange`. So one saved entity fills landlord, tenant, deponent, etc.
+- Files: `features/vault/autofill-map.ts` (`mapToSection`) + `VaultAutofillDialog.tsx`; wired into the
+  structured builder. (Freeform-editor autofill + per-doc-type exact maps + OCR-prefill are ledgered follow-ups.)
+
+### 2026-06-13 — Document Vault (docs/10): secure entity + document store with autofill (Tier 9)
+
+Full-stack, encrypted-at-rest vault for entities (person/company/other) + their documents, to autofill
+document forms. **api build ✓ · app typecheck/build ✓ · lint 0 errors · crypto roundtrip + migration verified.**
+- **Security (the emphasis):** `VaultCryptoService` AES-256-GCM (key `VAULT_ENCRYPTION_KEY`, 32-byte base64;
+  prod-required, dev-derived-with-warning). The whole canonical-fields JSON is encrypted at rest
+  (`VaultEntity.dataEncrypted = iv:tag:ciphertext`) — no plaintext PII column. Sensitive keys
+  (aadhaar/pan/passport/phone/bank…) **masked by default** (`••••1234`); full values only via an **audited**
+  `GET …/reveal`. `VaultAccessLog` records create/update/reveal/download/delete. Docs in S3, private,
+  short-lived presigned URLs only. Owner/org-scoped. Reused `redactPii` keeps values out of logs.
+- **Models** (`document_vault` migration via the drift-safe wrapper): `VaultEntity` + `VaultDocument` +
+  `VaultAccessLog`. Canonical field registry per kind in `vault.fields.ts` (drives the form + masking + autofill).
+- **API** (`/vault`, JwtAuthGuard): entities CRUD + `reveal` + `autofill` + document upload/presigned-url/delete.
+- **Frontend:** api-client `vault.service` (wired through ServicesProvider) + hooks + `VaultPage`
+  (list/create) + `VaultEntityPage` (masked detail → reveal-&-edit dynamic fields form, document
+  upload/view/remove, delete) + `/vault` + sidebar nav + i18n.
+- **Plan:** `docs/10-document-vault-RESUME.md`. **Next:** builder "Insert from vault" autofill (endpoint
+  ready); later OCR autofill (uploaded Aadhaar/PAN → intelligence extractor → prefill).
+
+### 2026-06-13 — Durable task ledger (docs/TASKS.md) + gap burn-down wave 1
+
+User wants a checked-in backlog that survives logout / a different account, and all roadmap gaps closed.
+- **`docs/TASKS.md`** created — the canonical, git-tracked ledger of every remaining gap (Tiers 0–8 +
+  payments/GTM), with a resume protocol and checkboxes. Future sessions read it first. Memory
+  `feedback_durable_task_ledger` records the standing practice.
+- **Gap-analysis correction:** the planning docs (`04`, `08`) badly understate the build — e.g. the
+  "writ petition ⬜" gap is already shipped (preset `writ-petition` + `COURT_SCAFFOLDS` entry; 66 freeform
+  presets exist). Marked done in TASKS.md. Refreshing `04`/`08` is itself a Tier-0 task.
+- **Wave 1 — PII log-stripping (Tier 1):** `apps/api/src/app/common/redact.ts` (`redactPii` masks
+  email / Indian phone / Aadhaar / PAN; `scrubLogObject` for pino). Wired into `logger.module` via
+  `formatters.log` (scrubs req url/query/msg/err) + expanded `redact` paths (password/newPassword/otp/token/
+  set-cookie). Verified: `GET /api/search?q=rohit@perceptiv.co` logs as `?q=[email]`. api build ✓ · lint 0.
+
 ### 2026-06-13 — Powerful search v2: scoring engine, facets, sort, pagination, ⌘K palette
 
 Upgraded search from "works" to product-grade. **app typecheck ✓ · app build ✓ · api build ✓ · lint 0

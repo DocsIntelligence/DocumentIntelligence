@@ -17,8 +17,11 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
   type ChangeEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import { VaultAutofillDialog, mapToSection } from '../../vault';
 import { labelFor } from './sectionLabels';
 
 interface Props {
@@ -59,6 +62,9 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
     ref,
   ) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
+    const { t } = useTranslation();
+    // Which section's "Insert from vault" picker is open (null = none).
+    const [vaultSection, setVaultSection] = useState<string | null>(null);
 
     useImperativeHandle(ref, () => ({
       scrollToSection(sectionKey: string) {
@@ -91,6 +97,14 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
       onChange(next);
     }
 
+    // Apply many path/value pairs in one update (vault autofill).
+    function setMany(entries: [string, string][]) {
+      if (entries.length === 0) return;
+      let next = structuredClone(data);
+      for (const [path, value] of entries) next = deepSet(next, path, value);
+      onChange(next);
+    }
+
     return (
       <div
         ref={scrollRef}
@@ -105,9 +119,20 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
               data-section={sectionKey}
               className="space-y-3 scroll-mt-4"
             >
-              <h3 className="text-base font-semibold text-foreground border-b pb-2">
-                {labelFor(sectionKey)}
-              </h3>
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="text-base font-semibold text-foreground">
+                  {labelFor(sectionKey)}
+                </h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setVaultSection(sectionKey)}
+                >
+                  {t('vault.insert', 'Insert from vault')}
+                </Button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {fields.map(([path, meta]) => {
                   if (meta.showIf && !evalShowIf(meta.showIf, data)) {
@@ -153,6 +178,17 @@ export const BuilderForm = forwardRef<BuilderFormHandle, Props>(
             </section>
           );
         })}
+
+        <VaultAutofillDialog
+          open={vaultSection !== null}
+          onClose={() => setVaultSection(null)}
+          onPick={(fields) => {
+            const paths = (fieldsBySection.get(vaultSection ?? '') ?? []).map(
+              ([path]) => path,
+            );
+            setMany(mapToSection(fields, paths));
+          }}
+        />
       </div>
     );
   },

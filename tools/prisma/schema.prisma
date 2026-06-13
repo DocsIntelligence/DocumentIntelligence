@@ -1118,3 +1118,65 @@ model SearchConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// DOCUMENT VAULT (docs/10) — entities + their documents, encrypted at rest
+// ═══════════════════════════════════════════════════════════════════
+
+/// A party the user manages (themself, spouse, a company, a landlord, …). Its
+/// structured fields (Aadhaar/PAN/address/…) are stored encrypted in
+/// `dataEncrypted` (AES-256-GCM) — plaintext field values never hit a column.
+/// Feeds document autofill. Owner/org-scoped like Document.
+model VaultEntity {
+  id          String   @id @default(cuid())
+  ownerUserId String?
+  ownerOrgId  String?
+  /// 'person' | 'company' | 'other'
+  kind        String   @default("person")
+  /// Display label (user-chosen, e.g. "Myself", "Acme Pvt Ltd"). Not a secret.
+  label       String
+  /// AES-256-GCM ciphertext of the canonical fields JSON: "iv:tag:ciphertext" (base64). Null = no fields yet.
+  dataEncrypted String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  documents  VaultDocument[]
+  accessLogs VaultAccessLog[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerOrgId, updatedAt])
+}
+
+/// An original document attached to an entity (Aadhaar card scan, PAN, etc.).
+/// Bytes live in S3 (private); only short-lived presigned URLs are issued.
+model VaultDocument {
+  id          String   @id @default(cuid())
+  entityId    String
+  /// 'aadhaar' | 'pan' | 'passport' | 'incorporation' | 'gst' | 'other'
+  kind        String   @default("other")
+  filename    String
+  contentType String
+  byteSize    Int?
+  s3Key       String
+  checksum    String?
+  createdAt   DateTime @default(now())
+
+  entity VaultEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+}
+
+/// Security audit trail — who revealed / downloaded / changed an entity's data.
+model VaultAccessLog {
+  id        String   @id @default(cuid())
+  entityId  String
+  userId    String
+  /// 'create' | 'update' | 'reveal' | 'download' | 'delete'
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  entity VaultEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId, createdAt])
+}
