@@ -677,21 +677,21 @@ enum ExtractionEngineMode {
 /// An uploaded file to be understood. Stored privately (StorageService key);
 /// `normalizedText` holds per-page text/layout once OCR/parse completes.
 model SourceDocument {
-  id          String          @id @default(cuid())
-  ownerUserId String?
-  ownerOrgId  String?
-  filename    String
-  contentType String
-  byteSize    Int?
-  checksum    String?
-  s3Key       String // private storage key
-  pageCount   Int?
-  language    String? // detected primary language, e.g. "hi" / "en"
-  status      SourceDocStatus @default(uploaded)
+  id             String          @id @default(cuid())
+  ownerUserId    String?
+  ownerOrgId     String?
+  filename       String
+  contentType    String
+  byteSize       Int?
+  checksum       String?
+  s3Key          String // private storage key
+  pageCount      Int?
+  language       String? // detected primary language, e.g. "hi" / "en"
+  status         SourceDocStatus @default(uploaded)
   /// Per-page normalized text/layout: [{ page, text, blocks? }]. jsonb.
   normalizedText Json?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   ownerUser User?         @relation("SourceDocOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
   ownerOrg  Organisation? @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
@@ -825,19 +825,19 @@ model PipelineRun {
 }
 
 model StageExecution {
-  id            String    @id @default(cuid())
+  id            String            @id @default(cuid())
   pipelineRunId String
   stageId       String
   stageType     PipelineStageType
-  status        String    @default("queued") // queued|running|passed|parked|failed
+  status        String            @default("queued") // queued|running|passed|parked|failed
   score         Float? // the stage's computed score (auto-advance audit)
   output        Json? // stage result (classification/extraction/etc.)
   error         String?
-  attempts      Int       @default(0)
+  attempts      Int               @default(0)
   heartbeatAt   DateTime? // reconciler watches this
   startedAt     DateTime?
   finishedAt    DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime          @default(now())
 
   pipelineRun PipelineRun @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
 
@@ -1128,19 +1128,19 @@ model SearchConfig {
 /// `dataEncrypted` (AES-256-GCM) — plaintext field values never hit a column.
 /// Feeds document autofill. Owner/org-scoped like Document.
 model VaultEntity {
-  id          String   @id @default(cuid())
-  ownerUserId String?
-  ownerOrgId  String?
+  id            String   @id @default(cuid())
+  ownerUserId   String?
+  ownerOrgId    String?
   /// 'person' | 'company' | 'other'
-  kind        String   @default("person")
+  kind          String   @default("person")
   /// Display label (user-chosen, e.g. "Myself", "Acme Pvt Ltd"). Not a secret.
-  label       String
+  label         String
   /// Disabled entities are hidden from autofill + muted in the list (soft state).
-  isActive    Boolean  @default(true)
+  isActive      Boolean  @default(true)
   /// AES-256-GCM ciphertext of the canonical fields JSON: "iv:tag:ciphertext" (base64). Null = no fields yet.
   dataEncrypted String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   documents  VaultDocument[]
   accessLogs VaultAccessLog[]
@@ -1228,4 +1228,283 @@ model VaultAccessLog {
   entity VaultEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AI USAGE LEDGER — one row per LLM/vendor call (success or failure)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Append-only audit ledger of every AI / LLM / vendor-AI invocation across
+/// the system. Modelled after Langfuse "generations" + Helicone "requests" +
+/// OpenLLMetry `gen_ai.*` semantic conventions: every dimension a rollup might
+/// need is denormalised onto the row so a single well-indexed table powers
+/// user / org / document / source / run / extraction / batch / session /
+/// trace / per-model / per-day dashboards — no extra rollup tables, no joins
+/// at query time. Written by `AiUsageRecorderService` from the chokepoint in
+/// `AiService.{generate,stream,extract,embed}` (and vendor adapters such as
+/// LlamaParse / Reducto whose "tokens" unit is pages, not tokens).
+model AiUsage {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+  /// When the AI call returned (success or error). Null on still-streaming rows.
+  finishedAt DateTime?
+
+  // ── Who ─────────────────────────────────────────────────────────
+  /// Acting user (null for system/cron jobs like a backfill reindex).
+  userId    String?
+  /// Tenant. Denormalised so org-level rollups don't need to join through user.
+  orgId     String?
+  /// Group N calls in one user "session" (chat conversation, drafting session,
+  /// review session). Free-form id minted by the caller.
+  sessionId String?
+
+  // ── Trace hierarchy (Langfuse-style) ────────────────────────────
+  /// Parent trace id. An "extract" trace might fan out into classify + extract +
+  /// critique sub-calls — same `traceId` on all three, with `parentSpanId`
+  /// linking children to their parent within the trace.
+  traceId      String?
+  parentSpanId String?
+
+  // ── What ────────────────────────────────────────────────────────
+  /// Logical operation. Keep in sync with `AI_OPERATIONS` in code.
+  /// 'classify' | 'extract' | 'critique' | 'generate' | 'revise' | 'analyse'
+  /// | 'ask' | 'embed' | 'parse' | 'rerank' | 'moderate' | 'vision' | 'tts'
+  /// | 'stt' | 'tool_call'.
+  operation   String
+  /// Product-feature attribution for per-feature billing dashboards.
+  /// 'doc.draft.legal_notice' | 'intel.classify' | 'intel.extract.invoice'
+  /// | 'intel.analyse' | 'intel.ask' | 'search.embed' | …
+  featureCode String?
+
+  // ── Model identity ─────────────────────────────────────────────
+  /// 'openai' | 'anthropic' | 'google' | 'llamaparse' | 'reducto' | …
+  provider     String
+  /// e.g. 'claude-haiku-4-5-20251001', 'gpt-5o', 'text-embedding-3-small'.
+  model        String
+  /// Surface-pinned snapshot when the provider exposes one (e.g. dated alias).
+  modelVersion String?
+
+  // ── Related entities (any combo set; all indexed) ──────────────
+  /// Drafting document (Documents world).
+  documentId       String?
+  /// Uploaded source (Intelligence world).
+  sourceDocumentId String?
+  /// Pipeline run (one per uploaded doc through a pipeline).
+  pipelineRunId    String?
+  /// Extraction record (one per successful extract).
+  extractionId     String?
+  /// Analysis run (analyse / ask).
+  analysisRunId    String?
+  /// Batch (groups N pipeline runs from a single multi-file upload).
+  batchId          String?
+
+  // ── Token measurements ─────────────────────────────────────────
+  inputTokens       Int @default(0)
+  outputTokens      Int @default(0)
+  /// Anthropic cache-read input tokens (charged at a discount).
+  cachedInputTokens Int @default(0)
+  /// Anthropic cache-write input tokens (charged at a premium).
+  cacheWriteTokens  Int @default(0)
+  /// Reasoning / "thinking" tokens (OpenAI o-series, Anthropic extended
+  /// thinking, Gemini "thoughts") — separate billing tier on some models.
+  reasoningTokens   Int @default(0)
+  totalTokens       Int @default(0)
+
+  // ── Alternate billable units (pages, requests, characters, seconds) ──
+  /// LlamaParse / Reducto bill per page; image OCR per image; TTS per char.
+  /// Use this when `unitType != 'tokens'`. Cost engine multiplies by the
+  /// matching pricing row.
+  unitsUsed Int    @default(0)
+  unitType  String @default("tokens")
+
+  // ── File / payload sizes (debugging, not billing) ──────────────
+  inputBytes  Int?
+  outputBytes Int?
+
+  // ── Cost ───────────────────────────────────────────────────────
+  /// Cost in USD computed at call time from the pricing row in effect.
+  estimatedCostUsd Decimal @default(0) @db.Decimal(12, 6)
+  /// FK into `AiModelPricing.id` so finance can reconcile against the exact
+  /// rate-card row that was applied (rate cards change; rows are immutable).
+  pricingId        String?
+
+  // ── Latency ────────────────────────────────────────────────────
+  durationMs            Int  @default(0)
+  /// Time-to-first-token for streaming calls (null for non-streaming).
+  latencyToFirstTokenMs Int?
+  /// Time spent queued before the request started (provider rate-limit waits).
+  queuedMs              Int?
+
+  // ── Outcome ────────────────────────────────────────────────────
+  /// 'success' | 'error' | 'timeout' | 'rate_limited' | 'cancelled' | 'partial'.
+  status       String  @default("success")
+  /// 1 = first try; >1 = retry / fallback to next provider.
+  attempt      Int     @default(1)
+  /// When this row is a retry of an earlier failed call, link back so the UI
+  /// can collapse retry chains under the original attempt.
+  retryOfId    String?
+  /// Provider's reason for stopping: 'stop' | 'length' | 'tool_calls'
+  /// | 'content_filter' | 'error' | 'cancelled'.
+  finishReason String?
+  errorCode    String?
+  errorMessage String?
+
+  // ── Provider request identity (debugging + dedupe) ────────────
+  /// Provider's request id (Anthropic `x-request-id`, OpenAI `request-id`).
+  requestId      String?
+  /// Caller-supplied idempotency key (dedupe identical retries).
+  idempotencyKey String?
+
+  // ── Sampling knobs (for reproducibility / cost analysis) ──────
+  temperature Float?
+  maxTokens   Int?
+  /// True when the response was streamed.
+  streamed    Boolean @default(false)
+
+  // ── Filtering + retention ─────────────────────────────────────
+  /// Free-form labels for search / cost tagging (`feature:invoice`,
+  /// `experiment:v2`, `customer:acme`, …).
+  tags          String[]
+  /// GDPR / compliance: how long this row should live. A nightly job purges
+  /// rows whose `createdAt + retentionDays` is in the past.
+  retentionDays Int      @default(365)
+
+  /// Provider-specific extras + caller hints. Keep small (<8 KB) — anything
+  /// big belongs as a column or external blob.
+  metadata Json?
+
+  // Indexes — one composite per major rollup axis. Postgres can answer
+  // `GROUP BY model SUM(tokens)` against tens of millions of rows in ms when
+  // (provider, model, createdAt) is indexed in that order.
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([orgId, createdAt])
+  @@index([sessionId])
+  @@index([traceId])
+  @@index([documentId])
+  @@index([sourceDocumentId])
+  @@index([pipelineRunId])
+  @@index([extractionId])
+  @@index([analysisRunId])
+  @@index([batchId])
+  @@index([operation, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([featureCode, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Editable per-model rate card. Cost is computed at write-time from the
+/// active row (one per provider + model + unit). New prices ⇒ insert a fresh
+/// row with `effectiveFrom = now()`; the previous row is closed (`effectiveTo
+/// = now()`). Historical AiUsage rows reference the exact pricing row via
+/// `AiUsage.pricingId` so finance can reconcile against past rate cards.
+model AiModelPricing {
+  id           String  @id @default(cuid())
+  provider     String
+  model        String
+  modelVersion String?
+  currency     String  @default("USD")
+
+  /// What `unitsUsed` measures for the matching AiUsage rows.
+  /// 'tokens' (LLMs) | 'pages' (LlamaParse) | 'characters' (TTS)
+  /// | 'requests' (per-call flat) | 'seconds' (STT) | 'images' (vision).
+  unitType String @default("tokens")
+
+  // Per-1M-unit rates. Set the lanes that apply for this model; null = N/A.
+  inputPer1M       Decimal? @db.Decimal(12, 6)
+  outputPer1M      Decimal? @db.Decimal(12, 6)
+  /// Anthropic cache-read input — usually a fraction of inputPer1M.
+  cachedInputPer1M Decimal? @db.Decimal(12, 6)
+  /// Anthropic cache-write input — usually a premium over inputPer1M.
+  cacheWritePer1M  Decimal? @db.Decimal(12, 6)
+  /// Reasoning / thinking tokens (o-series, Anthropic ext-thinking).
+  reasoningPer1M   Decimal? @db.Decimal(12, 6)
+  /// Flat fee per call (overrides per-unit math when set; or stacked on top).
+  perCallUsd       Decimal? @db.Decimal(12, 6)
+
+  /// Active rate-card validity window. Multiple rows per model are normal
+  /// (price history); exactly one is active (`effectiveTo IS NULL`) at a time.
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  active        Boolean   @default(true)
+  /// 'official' | 'manual' | 'imported' — provenance for the rate card.
+  source        String    @default("manual")
+  /// Admin notes — promo discounts, contract pricing, "to validate", …
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider, model, active])
+  @@index([provider, model, effectiveFrom])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS — generic scoped key/value store (system / org / user)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Generic configuration registry. One row per (scope, scopeId, key). Lookup
+/// resolves narrowest-wins: `user → org → system → built-in default in code`.
+/// Used by `SettingsService.get<T>(key, { userId, orgId })` everywhere a
+/// toggle / threshold / feature flag is needed — AI usage tracking, budget
+/// enforcement, retention, future module switches. Add a new key by
+/// registering it in `SETTING_KEYS` in code; the storage shape never
+/// changes, so future phases can extend without migrations.
+model Setting {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Dotted hierarchical key (e.g. `ai.usage.tracking.enabled`,
+  /// `ai.usage.retention.days`, `intelligence.classify.confidence_threshold`).
+  key String
+
+  /// 'system' | 'org' | 'user'. Narrower scope wins on lookup.
+  scope   String
+  /// Required for org/user scope; empty string sentinel for system. Non-null
+  /// so the compound unique `(scope, scopeId, key)` enforces "one override
+  /// per scope+key" (Postgres treats NULL as distinct in unique indexes).
+  scopeId String  @default("")
+
+  /// JSON value — booleans, numbers, strings, arrays, objects all fit here.
+  value Json
+
+  /// Optional admin note explaining why the override exists ("disabled for
+  /// EU customers", "raised retention to 730d for compliance", …).
+  notes String?
+
+  @@unique([scope, scopeId, key])
+  @@index([key])
+  @@index([scope, scopeId])
+}
+
+/// Soft / hard budgets per user, org, or feature. Checked before every AI call
+/// by `AiUsageRecorderService.assertWithinBudget()`. Soft = warn; hard = block.
+model AiBudget {
+  id String @id @default(cuid())
+
+  /// Scope: exactly one of these is set.
+  userId      String?
+  orgId       String?
+  /// Optional feature-scoped budget (e.g. cap 'intel.extract.invoice' at $50/mo
+  /// regardless of overall org budget).
+  featureCode String?
+
+  /// 'daily' | 'weekly' | 'monthly' | 'lifetime'.
+  period   String  @default("monthly")
+  /// Limit in USD for the period.
+  limitUsd Decimal @db.Decimal(12, 2)
+  /// Warn at this fraction of the limit (0..1). Sends a toast / email; doesn't block.
+  warnAt   Float   @default(0.8)
+  /// If true, exceeding `limitUsd` returns 402 PaymentRequired (hard cap).
+  /// If false, calls are still allowed but flagged as over budget.
+  hardCap  Boolean @default(false)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, active])
+  @@index([orgId, active])
+  @@index([featureCode, active])
 }

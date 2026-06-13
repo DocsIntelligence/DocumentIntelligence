@@ -273,6 +273,16 @@ function Sidebar({
               label={t('nav.vaultConfig', 'Vault fields')}
               icon={<VaultIcon />}
             />
+            <NavItem
+              to="/admin/ai-usage"
+              label={t('nav.aiUsage', 'AI usage')}
+              icon={<ChartIcon />}
+            />
+            <NavItem
+              to="/admin/settings"
+              label={t('nav.platformSettings', 'Platform settings')}
+              icon={<GearIcon />}
+            />
           </NavGroup>
 
           <NavItem
@@ -285,13 +295,11 @@ function Sidebar({
             label={t('nav.settings', 'Settings')}
             icon={<GearIcon />}
           />
-          {isAdmin && (
-            <NavItem
-              to="/admin"
-              label={t('nav.admin', 'Admin')}
-              icon={<ShieldIcon />}
-            />
-          )}
+          <NavItem
+            to="/admin"
+            label={t('nav.admin', 'Admin')}
+            icon={<ShieldIcon />}
+          />
         </nav>
 
         {/* User footer */}
@@ -614,6 +622,16 @@ function ShieldIcon() {
   return (
     <svg {...iconProps}>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+function ChartIcon() {
+  return (
+    <svg {...iconProps}>
+      <line x1="3" y1="20" x2="21" y2="20" />
+      <rect x="6" y="10" width="3" height="9" />
+      <rect x="11" y="6" width="3" height="13" />
+      <rect x="16" y="13" width="3" height="6" />
     </svg>
   );
 }

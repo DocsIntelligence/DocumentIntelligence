@@ -5,6 +5,7 @@ import { useExtraction, useIntelligenceJob } from './queries';
 import { DocumentInsights } from './DocumentInsights';
 import { ReviewExtraction } from './ReviewExtraction';
 import { ViewOriginalButton } from './ViewOriginalButton';
+import { AiUsageSummary } from '../admin/ai-usage/AiUsageSummary';
 
 const STAGE_LABELS: Record<string, string> = {
   uploaded: 'Queued',
@@ -120,6 +121,7 @@ export function AnalyzePage() {
         sourceId={sourceId as string}
       />
       <DocumentInsights sourceId={sourceId as string} />
+      <AiUsageSummary scope={{ kind: 'source', id: sourceId as string }} />
     </div>
   );
 }

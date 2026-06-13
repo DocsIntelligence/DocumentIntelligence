@@ -29,6 +29,7 @@ import {
   useSchemaOptions,
 } from './queries';
 import { FileTextIcon, InboxIcon } from './icons';
+import { AiUsageSummary } from '../admin/ai-usage/AiUsageSummary';
 
 const RUNS_PAGE_SIZE = 50;
 /** Raw run statuses, for the filter chips (counts come from the server). */
@@ -254,6 +255,9 @@ export function BatchDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI usage attributed to this batch */}
+      {id && <AiUsageSummary scope={{ kind: 'batch', id }} />}
 
       {/* Runs table — search + sort + paginated, server-driven */}
       {(() => {

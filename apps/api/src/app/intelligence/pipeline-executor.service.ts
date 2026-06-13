@@ -554,6 +554,7 @@ export class PipelineExecutorService {
       where: { id: runId },
       data: { status: 'running' },
     });
+    await this.recomputeBatchStatus(run.batchId);
 
     for (const stage of run.pipeline.stages) {
       const exec = await this.db.stageExecution.create({

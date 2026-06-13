@@ -1607,3 +1607,103 @@ table over both Documents + SourceDocuments; server-side pagination only for gro
 (freeform/structured/source) — none exists today. Generalize AnalysisRun+SourceChunk to a polymorphic
 subject (source|document) + cache analysis (content hash). Open: confirm pgvector/pg_trgm available
 (Task #10) + user's "…also" message was cut off.
+
+## 2026-06-14 — AI usage tracking + scoped Settings registry
+
+User: "add the proper AI usage tracking, can we add over all tracking … document level, user level,
+org level … total usage per model+token … make it proper, do research, build like a product … also a
+config so it can be enabled/disabled on any level, on UI, common way to set some config, could be
+used in next phases or modules reused."
+
+Net result: every LLM/vendor-AI call now writes one row to an append-only `AiUsage` ledger; rollups for
+user / org / document / source / pipeline-run / batch / per-model / per-day come out of a single
+indexed table. A generic `Setting` table powers system / org / user-scoped toggles for any future
+module (first user = `ai.usage.tracking.enabled` and three siblings).
+
+**Schema (`tools/prisma/schema.prisma`)** — three new models + one migration
+`20260613193103_ai_usage_settings`:
+- **`AiUsage`** (one row per call). Langfuse/Helicone/OpenLLMetry-inspired columns: who (userId, orgId,
+  sessionId), trace hierarchy (traceId, parentSpanId), what (operation, featureCode, provider, model,
+  modelVersion), related entity (documentId, sourceDocumentId, pipelineRunId, extractionId,
+  analysisRunId, batchId), tokens (inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens,
+  reasoningTokens, totalTokens), alt billable units (unitsUsed/unitType for LlamaParse pages, TTS
+  chars, STT seconds, vision images, flat per-call), cost (estimatedCostUsd Decimal + pricingId FK so
+  finance reconciles against the exact rate-card row), latency (durationMs, latencyToFirstTokenMs,
+  queuedMs), outcome (status, attempt, retryOfId, finishReason, errorCode, errorMessage), provider
+  identity (requestId, idempotencyKey), sampling knobs (temperature, maxTokens, streamed), retention +
+  filtering (tags[], retentionDays default 365), and free-form metadata Json. Composite indexes on every
+  rollup axis (createdAt; userId; orgId; sessionId; traceId; documentId; sourceDocumentId;
+  pipelineRunId; extractionId; analysisRunId; batchId; operation+createdAt; provider+model+createdAt;
+  featureCode+createdAt; status+createdAt) so `GROUP BY model SUM(tokens)` is millisecond-fast on tens
+  of millions of rows without rollup tables.
+- **`AiModelPricing`** (editable rate-card; provider + model + unitType, with effectiveFrom/effectiveTo
+  windows so prior `AiUsage` rows keep pointing at the rate that was active when they were written).
+  Lanes: inputPer1M, outputPer1M, cachedInputPer1M, cacheWritePer1M, reasoningPer1M, perCallUsd.
+- **`AiBudget`** (soft/hard per-user / per-org / per-feature, daily/weekly/monthly/lifetime, warnAt
+  fraction, hardCap flag — hooks for `assertWithinBudget()` to return 402).
+- **`Setting`** — generic scoped key/value (`scope` ∈ system|org|user, `scopeId` non-null with `''`
+  sentinel for system, JSON `value`, optional `notes`). Compound unique `(scope, scopeId, key)`. Built
+  to be reused for any future module toggle — storage shape never changes; new keys are registered in
+  code, no migration needed.
+
+**Settings module** (`apps/api/src/app/settings/`):
+- `settings.keys.ts` — `SETTINGS` registry + `findSetting()`. Seeded with `AI_USAGE_TRACKING_ENABLED`
+  (user-overridable, default on), `AI_USAGE_BUDGET_ENFORCED` (org, default on),
+  `AI_USAGE_RETENTION_DAYS` (org, default 365), `AI_USAGE_REDACT_PROMPTS` (org, default on).
+- `settings.service.ts` — `get<T>(def, ctx)` resolves narrowest-wins (user → org → system → in-code
+  default), `set` / `clear` mutate per scope, `listForScope` returns every key + its override + the
+  resolved effective value (admin UI). 30-second in-memory cache so hot paths (every AI call) don't
+  thrash the DB; cache is invalidated on write.
+- `settings.controller.ts` — `GET/PATCH/DELETE /admin/settings[/:key]` (admin-only).
+
+**AI usage module** (`apps/api/src/app/ai-usage/`):
+- `pricing.ts` — built-in `MODEL_PRICING` seed (per-1M-unit rates for openai, anthropic, google,
+  llamaparse, reducto) used as fallback when no DB row matches. `computeCost(provider, model, usage)`
+  is the single place to convert tokens → USD.
+- `ai-usage.context.ts` — `AsyncLocalStorage`-based per-request attribution. Callers (controllers /
+  engine / services) wrap work in `aiUsageContext.run({ userId, orgId, documentId, … }, …)`; the
+  recorder picks those up automatically so no AI method signature has to change.
+- `ai-usage.recorder.ts` — `AiUsageRecorderService.record({ … })`. Reads the active context,
+  normalises tokens to `TokenUsage`, computes cost via the pricing engine, writes one row, never
+  throws (a ledger failure must NEVER break the user's actual AI call). Checks
+  `AI_USAGE_TRACKING_ENABLED` per-call to honour user/org opt-outs.
+- `ai-usage.service.ts` — read side: `list()` (paginated + sortable + filterable on every dimension),
+  `summary()` (totals + per-day series + perOperation/perModel/perProvider rollups + p50/p95/p99
+  latency via Postgres `percentile_cont`).
+- `ai-usage.controller.ts` — `/me/ai-usage[/summary]` (self-service), `/admin/ai-usage[/summary]`
+  (workspace-wide), plus `/admin/ai-usage/by-{document,source,pipeline-run,batch,user,org}/:id`
+  one-liners that delegate to `summary()` with a single filter.
+
+**AiService instrumentation** (`apps/api/src/app/ai/ai.service.ts`): every `generate` / `stream` /
+`extract` / `embed` call site is wrapped in start-time + try/catch — successful + failed attempts both
+emit a `record()` row with provider, model, duration, token usage, finishReason, requestId,
+temperature/maxTokens, prompt/output byte sizes, streamed flag, latencyToFirstTokenMs (streaming).
+Fallback retries are recorded as separate rows with incrementing `attempt`. Embedding cost is
+approximated via 1 token / 4 chars when the underlying LangChain wrapper doesn't return token counts.
+`AiResponse` + `Structured<T>` now carry an optional granular `TokenUsage` block (inputTokens,
+outputTokens, cachedInputTokens, cacheWriteTokens, reasoningTokens, totalTokens) + requestId +
+finishReason so per-provider adapters can surface what they know without API changes.
+
+**Admin UI**:
+- `AdminDashboard.tsx` — added two new section cards linking to **AI usage & cost** and **Platform
+  settings**.
+- `apps/app/src/app/features/admin/ai-usage/AiUsagePage.tsx` (route `/admin/ai-usage`) — KPI strip
+  (calls / cost / input / output / avg + p95/p99 latency / error rate), daily-volume sparkline with an
+  error-rate overlay, per-provider/per-model/per-operation breakdown cards, and a server-paginated
+  DataTable of recent calls with op/provider/model + free-text filters and a workspace ↔ "my calls
+  only" scope toggle. Each row deep-links to the related document / source / batch.
+- `apps/app/src/app/features/admin/settings/AdminSettingsPage.tsx` (route `/admin/settings`) —
+  scope picker (system / org / user) + optional scopeId input, then one card per registered setting
+  with: label, key, max-scope, override state, current effective value, default, and a per-type
+  editor (Switch / number / string / JSON Textarea). "Save override" upserts; "Remove override" clears
+  back to the next layer. Per-setting notes field for audit context.
+
+**Verified**: `pnpm prisma migrate dev` applied `20260613193103_ai_usage_settings`; `nx run @org/api:build` ✓;
+`@org/api:lint` 0 errors (6 pre-existing warnings); `nx run @org/app:build` ✓; `@org/app:lint` 0 errors
+(11 pre-existing warnings). NOT browser-verified end-to-end yet.
+
+**Reuse hooks for next phases**: any future module that needs a feature flag / toggle / threshold just
+registers it in `settings.keys.ts` and calls `settings.get(SETTINGS.MY_KEY, { userId, orgId })` — no
+new tables, no migration. Any future AI-adjacent code that wants per-document attribution wraps the
+work in `aiUsageContext.run({ documentId, batchId, … }, …)` once; every nested LLM call is recorded
+automatically without further plumbing.

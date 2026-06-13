@@ -38,6 +38,7 @@ import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
 import { InlineEditPopover } from './InlineEditPopover';
 import { DocumentInsights } from '../../intelligence/DocumentInsights';
+import { AiUsageSummary } from '../../admin/ai-usage/AiUsageSummary';
 import { RisksPanel } from './RisksPanel';
 import { SectionsTree } from './SectionsTree';
 import { labelFor } from './sectionLabels';
@@ -393,6 +394,14 @@ export function BuilderShell({ documentId }: Props) {
         </summary>
         <div className="px-2 pb-3">
           <DocumentInsights sourceId={documentId} scope="document" />
+        </div>
+      </details>
+      <details className="border-t">
+        <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium">
+          {t('aiUsage.miniTitle', 'AI usage')}
+        </summary>
+        <div className="px-2 pb-3">
+          <AiUsageSummary scope={{ kind: 'document', id: documentId }} />
         </div>
       </details>
     </aside>

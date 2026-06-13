@@ -8,6 +8,8 @@ import {
 } from '@org/store';
 import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
+import { AiUsagePage } from './features/admin/ai-usage/AiUsagePage';
+import { AdminSettingsPage } from './features/admin/settings/AdminSettingsPage';
 import {
   CloneDocTypePage,
   ClonePipelinePage,
@@ -108,6 +110,8 @@ export function App() {
         <Route path="/review-queue" element={<ReviewQueuePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/ai-usage" element={<AiUsagePage />} />
+        <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route
           path="/admin/intelligence"
           element={<Navigate to="/admin/intelligence/types" replace />}

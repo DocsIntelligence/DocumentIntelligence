@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AiUsageRecorderService } from '../ai-usage/ai-usage.recorder';
 import type {
   AiProvider,
   AiResponse,
@@ -8,10 +9,21 @@ import type {
   JsonSchema,
   MultimodalInput,
   Structured,
+  TokenUsage,
 } from './providers/ai-provider.interface';
 import { OpenAiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { ClaudeProvider } from './providers/claude.provider';
+
+/** Empty fallback for providers that don't return a granular usage block. */
+const emptyUsage = (totalTokens = 0): TokenUsage => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  reasoningTokens: 0,
+  totalTokens,
+});
 
 @Injectable()
 export class AiService {
@@ -30,6 +42,7 @@ export class AiService {
     private readonly openai: OpenAiProvider,
     private readonly gemini: GeminiProvider,
     private readonly config: ConfigService,
+    private readonly usage: AiUsageRecorderService,
   ) {
     // Priority order is config-driven: AI_DEFAULT_PROVIDER goes first, the rest
     // are fallbacks in a stable order. Default = OpenAI (the current default
@@ -74,12 +87,41 @@ export class AiService {
     }
 
     for (let i = 0; i < available.length; i++) {
+      const provider = available[i];
+      const start = Date.now();
       try {
-        return await available[i].generate(prompt, options);
+        const response = await provider.generate(prompt, options);
+        await this.usage.record({
+          operation: 'generate',
+          provider: response.provider,
+          model: response.model,
+          durationMs: Date.now() - start,
+          usage: response.usage ?? emptyUsage(response.tokensUsed),
+          attempt: i + 1,
+          status: 'success',
+          finishReason: response.finishReason,
+          requestId: response.requestId,
+          temperature: options?.temperature,
+          maxTokens: options?.maxTokens,
+          inputBytes: prompt.length,
+          outputBytes: response.text.length,
+        });
+        return response;
       } catch (error) {
-        this.logger.warn(
-          `${available[i].name} failed: ${(error as Error).message}`,
-        );
+        const err = error as Error;
+        await this.usage.record({
+          operation: 'generate',
+          provider: provider.name,
+          model: 'unknown',
+          durationMs: Date.now() - start,
+          attempt: i + 1,
+          status: 'error',
+          errorMessage: err.message,
+          temperature: options?.temperature,
+          maxTokens: options?.maxTokens,
+          inputBytes: prompt.length,
+        });
+        this.logger.warn(`${provider.name} failed: ${err.message}`);
         if (i === available.length - 1) throw error; // Last provider, re-throw
       }
     }
@@ -97,8 +139,46 @@ export class AiService {
       throw new BadRequestException('No AI provider configured.');
     }
 
-    // Use first available (no fallback for streaming — too complex to retry mid-stream)
-    yield* available[0].stream(prompt, options);
+    // Use first available (no fallback for streaming — too complex to retry mid-stream).
+    // Token usage isn't available on the SSE stream; record a best-effort row at end.
+    const provider = available[0];
+    const start = Date.now();
+    let bytesOut = 0;
+    let firstTokenAt: number | undefined;
+    try {
+      for await (const chunk of provider.stream(prompt, options)) {
+        if (firstTokenAt === undefined) firstTokenAt = Date.now();
+        bytesOut += chunk.length;
+        yield chunk;
+      }
+      await this.usage.record({
+        operation: 'generate',
+        provider: provider.name,
+        model: 'unknown',
+        durationMs: Date.now() - start,
+        latencyToFirstTokenMs: firstTokenAt ? firstTokenAt - start : undefined,
+        status: 'success',
+        streamed: true,
+        inputBytes: prompt.length,
+        outputBytes: bytesOut,
+        temperature: options?.temperature,
+        maxTokens: options?.maxTokens,
+      });
+    } catch (error) {
+      const err = error as Error;
+      await this.usage.record({
+        operation: 'generate',
+        provider: provider.name,
+        model: 'unknown',
+        durationMs: Date.now() - start,
+        status: 'error',
+        streamed: true,
+        errorMessage: err.message,
+        inputBytes: prompt.length,
+        outputBytes: bytesOut,
+      });
+      throw err;
+    }
   }
 
   /** Generate using a specific provider by name */
@@ -112,7 +192,32 @@ export class AiService {
     );
     if (!provider)
       throw new BadRequestException(`Provider "${providerName}" not available`);
-    return provider.generate(prompt, options);
+    const start = Date.now();
+    try {
+      const response = await provider.generate(prompt, options);
+      await this.usage.record({
+        operation: 'generate',
+        provider: response.provider,
+        model: response.model,
+        durationMs: Date.now() - start,
+        usage: response.usage ?? emptyUsage(response.tokensUsed),
+        status: 'success',
+        finishReason: response.finishReason,
+        requestId: response.requestId,
+      });
+      return response;
+    } catch (error) {
+      const err = error as Error;
+      await this.usage.record({
+        operation: 'generate',
+        provider: provider.name,
+        model: 'unknown',
+        durationMs: Date.now() - start,
+        status: 'error',
+        errorMessage: err.message,
+      });
+      throw err;
+    }
   }
 
   // ─── Document Intelligence (capability-negotiated) ───────────────────────
@@ -147,12 +252,37 @@ export class AiService {
     for (let i = 0; i < capable.length; i++) {
       const provider = capable[i];
       if (!provider.extract) continue; // filtered above; narrows away the `!`
+      const start = Date.now();
       try {
-        return await provider.extract<T>(input, schema, options);
+        const response = await provider.extract<T>(input, schema, options);
+        await this.usage.record({
+          operation: 'extract',
+          provider: response.provider,
+          model: response.model,
+          durationMs: Date.now() - start,
+          usage: response.usage ?? emptyUsage(response.tokensUsed),
+          attempt: i + 1,
+          status: 'success',
+          finishReason: response.finishReason,
+          requestId: response.requestId,
+          maxTokens: options?.maxTokens,
+          metadata: options?.schemaName
+            ? { schemaName: options.schemaName }
+            : undefined,
+        });
+        return response;
       } catch (error) {
-        this.logger.warn(
-          `extract: ${provider.name} failed: ${(error as Error).message}`,
-        );
+        const err = error as Error;
+        await this.usage.record({
+          operation: 'extract',
+          provider: provider.name,
+          model: 'unknown',
+          durationMs: Date.now() - start,
+          attempt: i + 1,
+          status: 'error',
+          errorMessage: err.message,
+        });
+        this.logger.warn(`extract: ${provider.name} failed: ${err.message}`);
         if (i === capable.length - 1) throw error;
       }
     }
@@ -174,7 +304,32 @@ export class AiService {
         `Provider "${providerName}" cannot extract`,
       );
     }
-    return provider.extract<T>(input, schema, options);
+    const start = Date.now();
+    try {
+      const response = await provider.extract<T>(input, schema, options);
+      await this.usage.record({
+        operation: 'extract',
+        provider: response.provider,
+        model: response.model,
+        durationMs: Date.now() - start,
+        usage: response.usage ?? emptyUsage(response.tokensUsed),
+        status: 'success',
+        finishReason: response.finishReason,
+        requestId: response.requestId,
+      });
+      return response;
+    } catch (error) {
+      const err = error as Error;
+      await this.usage.record({
+        operation: 'extract',
+        provider: provider.name,
+        model: 'unknown',
+        durationMs: Date.now() - start,
+        status: 'error',
+        errorMessage: err.message,
+      });
+      throw err;
+    }
   }
 
   /** True when at least one available provider can produce embeddings. Lets
@@ -195,7 +350,43 @@ export class AiService {
         'No embedding-capable AI provider configured (RAG is Phase 2).',
       );
     }
-    return provider.embed(texts);
+    const start = Date.now();
+    const totalChars = texts.reduce((acc, t) => acc + t.length, 0);
+    try {
+      const vectors = await provider.embed(texts);
+      // Embedding APIs don't return tokens per call in LangChain's wrapper;
+      // approximate as 1 token / 4 chars (OpenAI rough rule). Cost engine
+      // multiplies against inputPer1M of the matching embedding model.
+      const approxTokens = Math.ceil(totalChars / 4);
+      await this.usage.record({
+        operation: 'embed',
+        provider: provider.name,
+        model:
+          (provider as { embeddingModel?: string }).embeddingModel ??
+          'text-embedding-3-small',
+        durationMs: Date.now() - start,
+        usage: {
+          ...emptyUsage(approxTokens),
+          inputTokens: approxTokens,
+          totalTokens: approxTokens,
+        },
+        status: 'success',
+        metadata: { batchSize: texts.length, totalChars },
+      });
+      return vectors;
+    } catch (error) {
+      const err = error as Error;
+      await this.usage.record({
+        operation: 'embed',
+        provider: provider.name,
+        model: 'text-embedding-3-small',
+        durationMs: Date.now() - start,
+        status: 'error',
+        errorMessage: err.message,
+        metadata: { batchSize: texts.length, totalChars },
+      });
+      throw err;
+    }
   }
 
   /**

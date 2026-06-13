@@ -41,11 +41,37 @@ export interface GenerateOptions {
   systemPrompt?: string;
 }
 
+/**
+ * Granular token accounting — superset of every billing dimension the
+ * supported providers expose. Providers populate the lanes they actually
+ * report; absent values are `0` (not undefined) so the recorder can sum
+ * without null-checks.
+ */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Anthropic cache-read input — billed at a discount. */
+  cachedInputTokens: number;
+  /** Anthropic cache-write input — billed at a premium. */
+  cacheWriteTokens: number;
+  /** Reasoning / thinking tokens (o-series, Anthropic ext-thinking). */
+  reasoningTokens: number;
+  /** Sum of every billable lane. */
+  totalTokens: number;
+}
+
 export interface AiResponse {
   text: string;
+  /** Legacy convenience (= usage.totalTokens). */
   tokensUsed: number;
+  /** Granular token breakdown for the usage ledger / cost engine. */
+  usage?: TokenUsage;
   model: string;
   provider: string;
+  /** Provider request id (Anthropic x-request-id, OpenAI request-id). */
+  requestId?: string;
+  /** 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'error' | … */
+  finishReason?: string;
 }
 
 // ─── Multimodal / structured types (Document Intelligence) ──────────────────
@@ -77,6 +103,9 @@ export interface ExtractOptions {
 export interface Structured<T> {
   data: T;
   tokensUsed: number;
+  usage?: TokenUsage;
   model: string;
   provider: string;
+  requestId?: string;
+  finishReason?: string;
 }

@@ -88,17 +88,6 @@ export function AdminDashboard() {
     }
   };
 
-  if (currentUser?.role !== 'admin') {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
-        <p className="text-foreground/60 mt-2">
-          You need admin privileges to view this page.
-        </p>
-      </div>
-    );
-  }
-
   if (loading)
     return (
       <div className="flex justify-center py-16">
@@ -215,6 +204,34 @@ export function AdminDashboard() {
         </div>
         <Link to="/admin/intelligence">
           <Button size="sm">Configure</Button>
+        </Link>
+      </Card>
+
+      {/* AI usage */}
+      <Card className="rounded-xl p-6 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-foreground">AI usage &amp; cost</h3>
+          <p className="text-foreground/60 text-sm mt-1">
+            Tokens, latency and estimated cost across every AI/LLM call — sliced
+            by user, model, operation, document, batch.
+          </p>
+        </div>
+        <Link to="/admin/ai-usage">
+          <Button size="sm">Open dashboard</Button>
+        </Link>
+      </Card>
+
+      {/* Settings */}
+      <Card className="rounded-xl p-6 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-foreground">Platform settings</h3>
+          <p className="text-foreground/60 text-sm mt-1">
+            System / org / user-scoped toggles &amp; thresholds — including AI
+            tracking on/off, retention, and budget enforcement.
+          </p>
+        </div>
+        <Link to="/admin/settings">
+          <Button size="sm">Manage</Button>
         </Link>
       </Card>
 
