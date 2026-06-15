@@ -23,7 +23,7 @@ buckets. The two surfaces differ only in **where** they measure:
 
 | Surface      | Runs in                                  | Measures inside          | Styled by                    |
 | ------------ | ---------------------------------------- | ------------------------ | ---------------------------- |
-| Live preview | the **app** (`:4200`)                    | `.document-preview-page` | `editor.css`                 |
+| Live preview | the **app** (`:5200`)                    | `.document-preview-page` | `editor.css`                 |
 | Exported PDF | the **artboard** via Puppeteer (`:4210`) | `.doc-page`              | `Page.tsx` `PagePrintStyles` |
 
 For the breaks to match, three things must hold in both contexts:
@@ -49,7 +49,7 @@ The diagnostic exposes all three at once.
 
 It prints two reports you compare: `[PREVIEW/APP]` and `[ARTBOARD/PDF]`.
 
-### Preview (app, `:4200`)
+### Preview (app, `:5200`)
 
 Logged to the browser console. Turn it on with **either**:
 

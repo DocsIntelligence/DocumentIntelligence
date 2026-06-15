@@ -68,6 +68,19 @@ export interface Citation {
   /** Verification reminder shown to humans/agents before binding use. */
   verifyNote?: string;
   topics?: string[];
+  /** Document type keys this citation applies to (e.g. ['legal_notice',
+   *  'cheque_bounce']). Drives the filler's "what to insert" and the
+   *  analyzer's "what's missing" pass. */
+  appliesTo?: string[];
+  /** Other citation ids commonly cited together with this one (e.g.
+   *  ni.138 → ['ni.141','ni.142']). Drives "Consider also citing X". */
+  commonlyPairedWith?: string[];
+  /** ISO yyyy-mm-dd: 'IN' default; future-proof. */
+  jurisdiction?: string;
+  /** Long-form drafting guidance for the public /law/:id page (later). */
+  draftingTips?: string;
+  /** Canonical-text source link (indiacode.nic.in for IN). */
+  externalUrl?: string;
 }
 
 const VERIFY =
@@ -85,6 +98,37 @@ export const CITATIONS: Citation[] = [
       'Criminalises cheque bounce. Payee must send a written demand notice within 30 days of the bank return; drawer gets 15 days to pay; complaint may be filed within one month of the 15-day window lapsing.',
     confidence: 'high',
     topics: ['cheque-bounce', 'notice', 'criminal'],
+    appliesTo: ['legal_notice'],
+    commonlyPairedWith: ['ni.141', 'ni.142'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/2189',
+  },
+  {
+    id: 'ni.141',
+    act: 'Negotiable Instruments Act, 1881',
+    actShort: 'NI Act',
+    section: '141',
+    title: 'Offences by companies (officer-in-default liability)',
+    summary:
+      'When a company commits an offence under §138, every person who at the time was in charge of and responsible for the conduct of the business is also deemed guilty, alongside the company. Cite when the drawer is a company / LLP.',
+    confidence: 'high',
+    topics: ['cheque-bounce', 'company', 'criminal'],
+    appliesTo: ['legal_notice'],
+    commonlyPairedWith: ['ni.138'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/2189',
+  },
+  {
+    id: 'ni.142',
+    act: 'Negotiable Instruments Act, 1881',
+    actShort: 'NI Act',
+    section: '142',
+    title: 'Cognizance of offences (limitation + jurisdiction)',
+    summary:
+      'Court takes cognizance only on a written complaint by the payee, filed within one month of the cause of action (i.e. lapse of the 15-day payment window under §138). Jurisdiction lies where the cheque was drawn / presented / dishonoured.',
+    confidence: 'high',
+    topics: ['cheque-bounce', 'limitation', 'criminal'],
+    appliesTo: ['legal_notice'],
+    commonlyPairedWith: ['ni.138'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/2189',
   },
   {
     id: 'cpa.2019',
@@ -97,6 +141,8 @@ export const CITATIONS: Citation[] = [
     verifyNote:
       'Pecuniary limits were revised by notification; confirm current thresholds before filing.',
     topics: ['consumer'],
+    appliesTo: ['consumer_complaint'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/15256',
   },
   {
     id: 'registration.17',
@@ -108,6 +154,8 @@ export const CITATIONS: Citation[] = [
       'Leases of immovable property from year to year, or for any term exceeding one year, or reserving a yearly rent, require registration. State stamp-duty/registration thresholds vary.',
     confidence: 'high',
     topics: ['rent', 'registration', 'property'],
+    appliesTo: ['rent_agreement'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/2444',
   },
   {
     id: 'it.3a',
@@ -119,6 +167,7 @@ export const CITATIONS: Citation[] = [
       'Recognises electronic signatures (incl. Aadhaar eSign via empaneled ESPs) as legally valid, read with Schedule 2. Schedule 1 excludes some instruments (wills, powers of attorney, trusts, certain conveyances).',
     confidence: 'high',
     topics: ['esign'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/1999',
   },
   {
     id: 'rti.2005',
@@ -129,6 +178,8 @@ export const CITATIONS: Citation[] = [
       'Right to request information from public authorities; application to the PIO, generally answered within 30 days. Central portal: rtionline.gov.in.',
     confidence: 'high',
     topics: ['rti'],
+    appliesTo: ['rti'],
+    externalUrl: 'https://www.indiacode.nic.in/handle/123456789/1362',
   },
 
   // ── 2024 criminal-code remaps (section numbers: VERIFY) ───────────────────
@@ -172,6 +223,7 @@ export const CITATIONS: Citation[] = [
     confidence: 'moderate',
     verifyNote: VERIFY,
     topics: ['bail', 'criminal'],
+    appliesTo: ['anticipatory_bail'],
   },
   {
     id: 'bns.103',

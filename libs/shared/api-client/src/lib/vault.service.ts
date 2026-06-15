@@ -1,6 +1,13 @@
 import type { HttpClient } from './http';
 
-export type VaultEntityKind = 'person' | 'company' | 'other';
+export type VaultEntityKind =
+  | 'person'
+  | 'company'
+  | 'lawyer'
+  | 'court'
+  | 'case'
+  | 'property'
+  | 'other';
 
 export type VaultFieldType =
   | 'text'

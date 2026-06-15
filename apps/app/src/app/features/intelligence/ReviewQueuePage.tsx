@@ -110,7 +110,9 @@ export function ReviewQueuePage() {
 
   const types = useMemo(
     () =>
-      [...new Set(items.map((i) => i.documentTypeKey).filter(Boolean))] as string[],
+      [
+        ...new Set(items.map((i) => i.documentTypeKey).filter(Boolean)),
+      ] as string[],
     [items],
   );
 
@@ -260,7 +262,9 @@ export function ReviewQueuePage() {
       sortValue: (r) => r.overallConfidence ?? -1,
       cell: (r) => {
         const pct =
-          r.overallConfidence != null ? Math.round(r.overallConfidence * 100) : null;
+          r.overallConfidence != null
+            ? Math.round(r.overallConfidence * 100)
+            : null;
         return pct != null ? (
           <Badge variant={pct >= 85 ? 'success' : 'warning'} outline>
             {pct}%
@@ -351,18 +355,27 @@ export function ReviewQueuePage() {
       </div>
 
       <DataTable
-        tableId={batchId ? 'intelligence.reviewQueue.batch' : 'intelligence.reviewQueue.global'}
+        tableId={
+          batchId
+            ? 'intelligence.reviewQueue.batch'
+            : 'intelligence.reviewQueue.global'
+        }
         data={filtered}
         columns={columns}
         rowKey={(r) => r.pipelineRunId}
-        search={(r) => `${r.filename} ${r.documentTypeKey ?? ''} ${r.batchName ?? ''}`}
-        searchPlaceholder={t('intelligence.queue.search', 'Search by file, type, or batch…')}
+        search={(r) =>
+          `${r.filename} ${r.documentTypeKey ?? ''} ${r.batchName ?? ''}`
+        }
+        searchPlaceholder={t(
+          'intelligence.queue.search',
+          'Search by file, type, or batch…',
+        )}
         pageSize={25}
         pageSizeOptions={[10, 25, 50, 100]}
         initialSort={{ key: 'updated', dir: 'desc' }}
         empty={t('intelligence.queue.empty', 'Nothing to review here.')}
         toolbar={
-          (types.length > 1 || (batchId && statuses.length > 1)) ? (
+          types.length > 1 || (batchId && statuses.length > 1) ? (
             <div className="flex flex-wrap items-center gap-2">
               {batchId && statuses.length > 1 && (
                 <>
@@ -457,11 +470,16 @@ function FocusedReview({
     });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="mx-auto space-y-4">
       {/* Stepper header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="gap-1.5"
+          >
             <ArrowRightIcon className="size-3.5 rotate-180" />
             {t('intelligence.queue.backToList', 'Back to list')}
           </Button>
@@ -471,10 +489,7 @@ function FocusedReview({
               total: count,
             })}
           </span>
-          <Badge
-            variant={STATUS_VARIANT[entry.status] ?? 'secondary'}
-            outline
-          >
+          <Badge variant={STATUS_VARIANT[entry.status] ?? 'secondary'} outline>
             {entry.status.replace(/_/g, ' ')}
           </Badge>
         </div>
@@ -542,4 +557,3 @@ function FocusedReview({
     </div>
   );
 }
-

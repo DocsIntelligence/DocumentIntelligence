@@ -52,10 +52,14 @@ export function NewBatchPage() {
     setRejected(
       bad.map((r) =>
         r.reason === 'size'
-          ? t('intelligence.batches.errSize', '{{name}} — too large (max {{mb}} MB)', {
-              name: r.file.name,
-              mb: MAX_FILE_SIZE_MB,
-            })
+          ? t(
+              'intelligence.batches.errSize',
+              '{{name}} — too large (max {{mb}} MB)',
+              {
+                name: r.file.name,
+                mb: MAX_FILE_SIZE_MB,
+              },
+            )
           : r.reason === 'empty'
             ? t('intelligence.batches.errEmpty', '{{name}} — empty file', {
                 name: r.file.name,
@@ -94,7 +98,7 @@ export function NewBatchPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -153,9 +157,13 @@ export function NewBatchPage() {
           />
           {nameTooLong && (
             <span role="alert" className="text-xs text-error">
-              {t('intelligence.batches.nameTooLong', 'Keep the name under {{n}} characters.', {
-                n: MAX_BATCH_NAME,
-              })}
+              {t(
+                'intelligence.batches.nameTooLong',
+                'Keep the name under {{n}} characters.',
+                {
+                  n: MAX_BATCH_NAME,
+                },
+              )}
             </span>
           )}
         </label>

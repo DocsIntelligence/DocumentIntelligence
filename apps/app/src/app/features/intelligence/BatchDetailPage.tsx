@@ -120,7 +120,7 @@ export function BatchDetailPage() {
 
   if (isLoading || !batch) {
     return (
-      <div className="mx-auto max-w-4xl py-12 text-center">
+      <div className="mx-auto py-12 text-center">
         <Spinner />
       </div>
     );
@@ -147,13 +147,17 @@ export function BatchDetailPage() {
       variant: 'destructive',
     });
     // Archivable runs are resolved server-side (no need to hold every id here).
-    if (ok) bulk.mutate({ documentTypeKey, reason: `Skipped type ${documentTypeKey}` });
+    if (ok)
+      bulk.mutate({
+        documentTypeKey,
+        reason: `Skipped type ${documentTypeKey}`,
+      });
   };
 
   const maxCount = Math.max(1, ...typeHistogram.map((h) => h.count));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -210,7 +214,9 @@ export function BatchDetailPage() {
           <div className="flex flex-wrap gap-4 text-xs">
             {FUNNEL_SEGMENTS.map((s) => (
               <span key={s.key} className="flex items-center gap-1.5">
-                <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.bar}`} />
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${s.bar}`}
+                />
                 {t(`intelligence.funnel.${s.key}`, s.label)}:{' '}
                 <strong>{funnel[s.key]}</strong>
               </span>

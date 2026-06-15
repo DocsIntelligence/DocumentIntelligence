@@ -73,10 +73,27 @@ export class ClaudeProvider implements AiProvider {
       .map((b) => (b as { text: string }).text)
       .join('');
 
+    const u = res.usage as {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    } | undefined;
+    const usage = {
+      inputTokens: u?.input_tokens ?? 0,
+      outputTokens: u?.output_tokens ?? 0,
+      cachedInputTokens: u?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u?.cache_creation_input_tokens ?? 0,
+      reasoningTokens: 0,
+      totalTokens:
+        (u?.input_tokens ?? 0) +
+        (u?.output_tokens ?? 0) +
+        (u?.cache_creation_input_tokens ?? 0),
+    };
     return {
       text,
-      tokensUsed:
-        (res.usage?.input_tokens ?? 0) + (res.usage?.output_tokens ?? 0),
+      tokensUsed: usage.totalTokens,
+      usage,
       model: this.modelName,
       provider: this.name,
     };
@@ -180,10 +197,27 @@ export class ClaudeProvider implements AiProvider {
       throw new Error('Claude returned no structured tool_use block');
     }
 
+    const u2 = res.usage as {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    } | undefined;
+    const usage = {
+      inputTokens: u2?.input_tokens ?? 0,
+      outputTokens: u2?.output_tokens ?? 0,
+      cachedInputTokens: u2?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u2?.cache_creation_input_tokens ?? 0,
+      reasoningTokens: 0,
+      totalTokens:
+        (u2?.input_tokens ?? 0) +
+        (u2?.output_tokens ?? 0) +
+        (u2?.cache_creation_input_tokens ?? 0),
+    };
     return {
       data: toolUse.input as T,
-      tokensUsed:
-        (res.usage?.input_tokens ?? 0) + (res.usage?.output_tokens ?? 0),
+      tokensUsed: usage.totalTokens,
+      usage,
       model: this.visionModel,
       provider: this.name,
     };

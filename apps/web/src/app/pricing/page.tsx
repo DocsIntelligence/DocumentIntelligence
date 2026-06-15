@@ -28,7 +28,7 @@ export default async function PricingPage() {
     <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border/50">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-lg font-semibold text-foreground">
             {APP_CONFIG.name}
           </Link>
@@ -60,7 +60,7 @@ export default async function PricingPage() {
       </section>
 
       {/* Plans grid */}
-      <section className="max-w-5xl mx-auto px-4 pb-20">
+      <section className="mx-auto px-4 pb-20">
         {plans.length === 0 ? (
           <p className="text-center text-foreground/50">
             No plans available yet.

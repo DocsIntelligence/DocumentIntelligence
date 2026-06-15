@@ -7,7 +7,15 @@ import {
   type VaultFieldDef,
 } from './vault.fields';
 
-const ENTITY_KINDS = ['person', 'company', 'other'] as const;
+const ENTITY_KINDS = [
+  'person',
+  'company',
+  'lawyer',
+  'court',
+  'case',
+  'property',
+  'other',
+] as const;
 
 /**
  * Admin-configurable vault catalog (docs/10). The field catalog + document
@@ -22,45 +30,62 @@ export class VaultConfigService {
 
   constructor(private readonly db: DatabaseService) {}
 
-  /** Seed the system (org-null) catalog from code constants once, if empty. */
+  /**
+   * Seed the system (org-null) catalog from code constants. Seeds per-kind:
+   * when a new entity kind (e.g. lawyer/court/case/property) ships, this
+   * picks it up on next call without needing a fresh DB — previous code
+   * only seeded when the whole catalog was empty, which silently broke
+   * new kinds on existing prod DBs.
+   */
   async ensureSeeded(): Promise<void> {
     if (this.seeded) return;
-    const count = await this.db.vaultFieldConfig.count({ where: { ownerOrgId: null } });
-    if (count === 0) {
-      for (const kind of ENTITY_KINDS) {
-        const defs = codeFieldDefs(kind);
-        await this.db.vaultFieldConfig.createMany({
-          data: defs.map((f, i) => ({
-            ownerOrgId: null,
-            entityKind: kind,
-            key: f.key,
-            label: f.label,
-            type: f.type ?? 'text',
-            group: f.group ?? null,
-            options: f.options ?? [],
-            sensitive: f.sensitive ?? false,
-            revealLast: f.revealLast ?? null,
-            placeholder: f.placeholder ?? null,
-            sortOrder: i,
-          })),
-        });
-      }
+
+    for (const kind of ENTITY_KINDS) {
+      const have = await this.db.vaultFieldConfig.count({
+        where: { ownerOrgId: null, entityKind: kind },
+      });
+      if (have > 0) continue;
+      const defs = codeFieldDefs(kind);
+      if (defs.length === 0) continue;
+      await this.db.vaultFieldConfig.createMany({
+        data: defs.map((f, i) => ({
+          ownerOrgId: null,
+          entityKind: kind,
+          key: f.key,
+          label: f.label,
+          type: f.type ?? 'text',
+          group: f.group ?? null,
+          options: f.options ?? [],
+          sensitive: f.sensitive ?? false,
+          revealLast: f.revealLast ?? null,
+          placeholder: f.placeholder ?? null,
+          sortOrder: i,
+        })),
+      });
+      this.logger.log(`Vault: seeded ${defs.length} field(s) for kind="${kind}".`);
     }
-    const dkCount = await this.db.vaultDocKindConfig.count({ where: { ownerOrgId: null } });
-    if (dkCount === 0) {
-      await this.db.vaultDocKindConfig.createMany({
-        data: VAULT_DOC_KINDS.map((d, i) => ({
+
+    // Doc kinds — same per-kind insertion. New doc kinds (bar_enrollment,
+    // sale_deed, property_card) plug in automatically.
+    for (const d of VAULT_DOC_KINDS) {
+      const have = await this.db.vaultDocKindConfig.count({
+        where: { ownerOrgId: null, kind: d.kind },
+      });
+      if (have > 0) continue;
+      await this.db.vaultDocKindConfig.create({
+        data: {
           ownerOrgId: null,
           kind: d.kind,
           label: d.label,
           fills: d.fills,
           scannable: d.fills.length > 0,
-          sortOrder: i,
-        })),
+          sortOrder: VAULT_DOC_KINDS.indexOf(d),
+        },
       });
+      this.logger.log(`Vault: seeded doc kind "${d.kind}".`);
     }
+
     this.seeded = true;
-    this.logger.log('Vault catalog seeded (system defaults).');
   }
 
   // ── Resolved catalog (used by VaultService) ───────────────────────────────

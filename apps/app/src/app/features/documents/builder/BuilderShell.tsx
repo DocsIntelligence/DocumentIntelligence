@@ -23,10 +23,10 @@ import { toast } from 'sonner';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
 import { PageSizeSelect } from '../../../lib/page-sizes';
 import { ViewOriginalButton } from '../../intelligence/ViewOriginalButton';
-import { CommentsDialog } from '../CommentsDialog';
-import { ShareDialog } from '../ShareDialog';
 import { SignaturesDialog } from '../SignaturesDialog';
-import { VersionHistoryDialog } from '../VersionHistoryDialog';
+import { CommentsPanel } from '../CommentsPanel';
+import { VersionHistoryPanel } from '../VersionHistoryPanel';
+import { SharePanel } from '../SharePanel';
 import {
   useCreateDocument,
   useDocument,
@@ -37,8 +37,18 @@ import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
 import { InlineEditPopover } from './InlineEditPopover';
-import { DocumentInsights } from '../../intelligence/DocumentInsights';
-import { AiUsageSummary } from '../../admin/ai-usage/AiUsageSummary';
+import { DocumentSidePanel } from '../../legal-ai/DocumentSidePanel';
+import { EditorSideMenu, type RailItem } from '../../editor/EditorActivityRail';
+import { LayoutPresetGroup } from '../../editor/LayoutPresetGroup';
+import {
+  CommentsIcon,
+  FieldsIcon,
+  HistoryIcon as RailHistoryIcon,
+  LegalAiIcon as RailLegalAiIcon,
+  PagesIcon,
+  ShareIcon as RailShareIcon,
+  SignaturesIcon,
+} from '../../editor/rail-icons';
 import { RisksPanel } from './RisksPanel';
 import { SectionsTree } from './SectionsTree';
 import { labelFor } from './sectionLabels';
@@ -79,10 +89,17 @@ export function BuilderShell({ documentId }: Props) {
   const [langModalOpen, setLangModalOpen] = useState(false);
   const [targetLang, setTargetLang] = useState(DEFAULT_LANGUAGE);
   const [langBusy, setLangBusy] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const [signaturesOpen, setSignaturesOpen] = useState(false);
+  type SidebarTab =
+    | 'sections'
+    | 'risks'
+    | 'legal-ai'
+    | 'comments'
+    | 'history'
+    | 'share';
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('sections');
+  const [showPreview, setShowPreview] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [draftTitle, setDraftTitle] = useState('');
@@ -359,56 +376,133 @@ export function BuilderShell({ documentId }: Props) {
     label: labelFor(k),
   }));
 
+  // Side-menu items — same shape as TemplateEditor's: panel-kind items
+  // switch the active section content, action-kind items dispatch a
+  // dialog. Grouped headers cluster related items together.
+  const menuItems: RailItem[] = [
+    {
+      id: 'sections',
+      kind: 'panel',
+      group: t('builder.group.content', 'Content'),
+      label: t('builder.tab.sections', 'Sections'),
+      icon: <PagesIcon />,
+      active: sidebarTab === 'sections',
+      onClick: () => setSidebarTab('sections'),
+    },
+    {
+      id: 'risks',
+      kind: 'panel',
+      group: t('builder.group.content', 'Content'),
+      label: t('builder.risks', 'Risks'),
+      icon: <FieldsIcon />,
+      active: sidebarTab === 'risks',
+      badge: warnings.length > 0 ? warnings.length : undefined,
+      onClick: () => setSidebarTab('risks'),
+    },
+    {
+      id: 'legal-ai',
+      kind: 'panel',
+      group: t('builder.group.intelligence', 'AI & Citations'),
+      label: t('editor.toolbar.legalAi', 'Legal & AI'),
+      icon: <RailLegalAiIcon />,
+      active: sidebarTab === 'legal-ai',
+      onClick: () => setSidebarTab('legal-ai'),
+    },
+    {
+      id: 'comments',
+      kind: 'panel',
+      group: t('builder.group.collaborate', 'Collaborate'),
+      label: t('builder.comments', 'Comments'),
+      icon: <CommentsIcon />,
+      active: sidebarTab === 'comments',
+      onClick: () => setSidebarTab('comments'),
+    },
+    {
+      id: 'history',
+      kind: 'panel',
+      group: t('builder.group.collaborate', 'Collaborate'),
+      label: t('builder.history', 'History'),
+      icon: <RailHistoryIcon />,
+      active: sidebarTab === 'history',
+      onClick: () => setSidebarTab('history'),
+    },
+    {
+      id: 'share',
+      kind: 'panel',
+      group: t('builder.group.collaborate', 'Collaborate'),
+      label: t('builder.share', 'Share'),
+      icon: <RailShareIcon />,
+      active: sidebarTab === 'share',
+      onClick: () => setSidebarTab('share'),
+    },
+    {
+      id: 'signatures',
+      kind: 'action',
+      group: t('builder.group.collaborate', 'Collaborate'),
+      label: t('builder.signatures', 'Signatures'),
+      icon: <SignaturesIcon />,
+      onClick: () => setSignaturesOpen(true),
+    },
+  ];
+
   // Each pane defined once, then placed into either the desktop resizable
   // layout or the mobile single-pane switcher (one mount each — so the single
   // artboard iframe is never duplicated).
   const sectionsPane = (
-    <aside className="flex h-full w-full flex-col bg-background/60">
-      <div className="flex-1 overflow-y-auto">
-        <SectionsTree
-          sections={sections}
-          activeKey={activeSection}
-          onSelect={(k) => {
-            setActiveSection(k);
-            formRef.current?.scrollToSection(k);
-          }}
-        />
-      </div>
-      <div className="border-t max-h-[40%] overflow-y-auto">
-        <RisksPanel
-          warnings={warnings}
-          onJump={(fieldPath) => {
-            const section = bundle.sectionOrder.find(
-              (s) => fieldPath === s || fieldPath.startsWith(`${s}.`),
-            );
-            if (section) {
-              setActiveSection(section);
-              formRef.current?.scrollToSection(section);
-            }
-          }}
-        />
-      </div>
-      <details className="border-t max-h-[50%] overflow-y-auto">
-        <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium">
-          {t('intelligence.insights.title', 'AI insights')}
-        </summary>
-        <div className="px-2 pb-3">
-          <DocumentInsights sourceId={documentId} scope="document" />
+    <aside className="flex h-full w-full bg-background">
+      <EditorSideMenu items={menuItems} />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex-none border-b border-border px-3 py-2 text-xs font-semibold text-foreground/80">
+          {sidebarTab === 'sections' && t('builder.tab.sections', 'Sections')}
+          {sidebarTab === 'risks' && t('builder.risks', 'Risks')}
+          {sidebarTab === 'legal-ai' &&
+            t('editor.toolbar.legalAi', 'Legal & AI')}
+          {sidebarTab === 'comments' && t('builder.comments', 'Comments')}
+          {sidebarTab === 'history' && t('builder.history', 'History')}
+          {sidebarTab === 'share' && t('builder.share', 'Share')}
         </div>
-      </details>
-      <details className="border-t">
-        <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium">
-          {t('aiUsage.miniTitle', 'AI usage')}
-        </summary>
-        <div className="px-2 pb-3">
-          <AiUsageSummary scope={{ kind: 'document', id: documentId }} />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {sidebarTab === 'sections' && (
+            <SectionsTree
+              sections={sections}
+              activeKey={activeSection}
+              onSelect={(k) => {
+                setActiveSection(k);
+                formRef.current?.scrollToSection(k);
+              }}
+            />
+          )}
+          {sidebarTab === 'risks' && (
+            <RisksPanel
+              warnings={warnings}
+              onJump={(fieldPath) => {
+                const section = bundle.sectionOrder.find(
+                  (s) => fieldPath === s || fieldPath.startsWith(`${s}.`),
+                );
+                if (section) {
+                  setActiveSection(section);
+                  formRef.current?.scrollToSection(section);
+                }
+              }}
+            />
+          )}
+          {sidebarTab === 'legal-ai' && (
+            <DocumentSidePanel documentId={documentId} />
+          )}
+          {sidebarTab === 'comments' && (
+            <CommentsPanel documentId={documentId} />
+          )}
+          {sidebarTab === 'history' && (
+            <VersionHistoryPanel documentId={documentId} />
+          )}
+          {sidebarTab === 'share' && <SharePanel documentId={documentId} />}
         </div>
-      </details>
+      </div>
     </aside>
   );
 
   const formPane = (
-    <main className="h-full min-h-0 bg-background">
+    <main className="h-full min-h-0 overflow-y-auto bg-background">
       <BuilderForm
         ref={formRef}
         data={draft}
@@ -533,51 +627,22 @@ export function BuilderShell({ documentId }: Props) {
             ) : null;
           })()}
 
-          <span aria-hidden className="mx-1 h-5 w-px flex-none bg-border/70" />
+          {/* Share / Comments / Signatures / History moved to the left
+              activity rail next to the form — cleans up the top toolbar. */}
 
-          <div
-            role="group"
-            aria-label={t('editor.group.collaborate', 'Collaborate')}
-            className="flex items-center gap-0.5"
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShareOpen(true)}
-              className="h-7 flex-none gap-1.5 px-2 text-xs"
-            >
-              {t('builder.share', 'Share')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCommentsOpen(true)}
-              className="h-7 flex-none gap-1.5 px-2 text-xs"
-            >
-              {t('builder.comments', 'Comments')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSignaturesOpen(true)}
-              className="h-7 flex-none gap-1.5 px-2 text-xs"
-            >
-              {t('builder.signatures', 'Signatures')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setHistoryOpen(true)}
-              className="h-7 flex-none gap-1.5 px-2 text-xs"
-            >
-              {t('builder.history', 'History')}
-            </Button>
-          </div>
-
-          <div className="ml-auto flex flex-none items-center pl-2">
+          <div className="ml-auto flex flex-none items-center gap-2 pl-2">
             <PageSizeSelect
               value={doc.pageSize}
               onChange={(size) => patchMutate({ pageSize: size })}
+            />
+            <LayoutPresetGroup
+              showSidebar={showSidebar}
+              showPreview={showPreview}
+              onChange={(s, p) => {
+                setShowSidebar(s);
+                setShowPreview(p);
+              }}
+              t={t}
             />
           </div>
         </div>
@@ -609,38 +674,63 @@ export function BuilderShell({ documentId }: Props) {
       )}
 
       {isDesktop ? (
-        /* ── Desktop: resizable 3-pane layout (matches the freeform editor) ── */
+        /* ── Desktop: resizable 3-pane layout (matches the freeform editor).
+              Sidebar and preview can be hidden independently via the top-bar
+              4-button layout group. Sidebar 30% / preview 28% by default. ── */
         <Group orientation="horizontal" className="min-h-0 flex-1">
+          {showSidebar && (
+            <>
+              <Panel
+                id="sections"
+                defaultSize="30%"
+                minSize="22%"
+                maxSize="42%"
+                className="min-w-0"
+              >
+                <div className="h-full border-r border-border">
+                  {sectionsPane}
+                </div>
+              </Panel>
+
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+                <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+              </Separator>
+            </>
+          )}
+
           <Panel
-            id="sections"
-            defaultSize="20%"
-            minSize="14%"
-            maxSize="32%"
+            id="form"
+            defaultSize={
+              showPreview && showSidebar
+                ? '42%'
+                : showPreview
+                  ? '72%'
+                  : showSidebar
+                    ? '70%'
+                    : '100%'
+            }
+            minSize="24%"
             className="min-w-0"
           >
-            <div className="h-full border-r border-border">{sectionsPane}</div>
-          </Panel>
-
-          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
-            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
-          </Separator>
-
-          <Panel id="form" defaultSize="40%" minSize="24%" className="min-w-0">
             {formPane}
           </Panel>
 
-          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
-            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
-          </Separator>
+          {showPreview && (
+            <>
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+                <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+              </Separator>
 
-          <Panel
-            id="preview"
-            defaultSize="40%"
-            minSize="22%"
-            className="min-w-0 border-l border-border"
-          >
-            {previewPane}
-          </Panel>
+              <Panel
+                id="preview"
+                defaultSize="28%"
+                minSize="18%"
+                className="min-w-0 border-l border-border"
+              >
+                {previewPane}
+              </Panel>
+            </>
+          )}
         </Group>
       ) : (
         /* ── Mobile / tablet: one pane at a time ── */
@@ -672,21 +762,6 @@ export function BuilderShell({ documentId }: Props) {
         </div>
       )}
 
-      <ShareDialog
-        documentId={documentId}
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-      />
-      <VersionHistoryDialog
-        documentId={documentId}
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-      />
-      <CommentsDialog
-        documentId={documentId}
-        open={commentsOpen}
-        onOpenChange={setCommentsOpen}
-      />
       <SignaturesDialog
         documentId={documentId}
         open={signaturesOpen}
@@ -844,3 +919,4 @@ function GlobeIcon() {
     </svg>
   );
 }
+

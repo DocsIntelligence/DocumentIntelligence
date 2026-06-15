@@ -60,6 +60,49 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
+/**
+ * LangChain's normalised `usage_metadata` shape across providers. Each
+ * adapter (OpenAI / Anthropic / Gemini in LangChain core) emits this on
+ * `AIMessage`, with provider-specific lanes nested under
+ * `input_token_details` / `output_token_details`.
+ *
+ * We accept a permissive shape and pull what's there — anything missing
+ * stays 0.
+ */
+export interface LcUsageMetadata {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  input_token_details?: {
+    cache_read?: number;
+    cache_creation?: number;
+  };
+  output_token_details?: {
+    reasoning?: number;
+  };
+}
+
+/** Convert LangChain `usage_metadata` → our normalised `TokenUsage`. */
+export function tokenUsageFromLc(
+  meta: LcUsageMetadata | null | undefined,
+): TokenUsage {
+  const input = meta?.input_tokens ?? 0;
+  const output = meta?.output_tokens ?? 0;
+  const cachedIn = meta?.input_token_details?.cache_read ?? 0;
+  const cacheWrite = meta?.input_token_details?.cache_creation ?? 0;
+  const reasoning = meta?.output_token_details?.reasoning ?? 0;
+  // LC's `total_tokens` already includes everything; fall back to the sum.
+  const total = meta?.total_tokens ?? input + output + cacheWrite + reasoning;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    cachedInputTokens: cachedIn,
+    cacheWriteTokens: cacheWrite,
+    reasoningTokens: reasoning,
+    totalTokens: total,
+  };
+}
+
 export interface AiResponse {
   text: string;
   /** Legacy convenience (= usage.totalTokens). */

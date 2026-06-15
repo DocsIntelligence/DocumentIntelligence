@@ -1131,7 +1131,8 @@ model VaultEntity {
   id            String   @id @default(cuid())
   ownerUserId   String?
   ownerOrgId    String?
-  /// 'person' | 'company' | 'other'
+  /// 'person' | 'company' | 'lawyer' | 'court' | 'case' | 'property' | 'other'
+  /// Free-form string (not a Prisma enum) so new kinds ship without migrations.
   kind          String   @default("person")
   /// Display label (user-chosen, e.g. "Myself", "Acme Pvt Ltd"). Not a secret.
   label         String
@@ -1175,7 +1176,7 @@ model VaultDocument {
 model VaultFieldConfig {
   id          String   @id @default(cuid())
   ownerOrgId  String?
-  /// 'person' | 'company' | 'other'
+  /// 'person' | 'company' | 'lawyer' | 'court' | 'case' | 'property' | 'other'
   entityKind  String
   /// Stable canonical key (e.g. 'aadhaar_number'). Don't rename — autofill maps to it.
   key         String
@@ -1507,4 +1508,100 @@ model AiBudget {
   @@index([userId, active])
   @@index([orgId, active])
   @@index([featureCode, active])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEGAL CITATION CATALOG — curated statutory references
+// ═══════════════════════════════════════════════════════════════════
+
+/// Curated statute / section reference used by:
+///  • `CitationFillerService` — auto-fills `{{applicable_law}}` placeholders
+///    in AI-drafted documents with the right section + a hyperlinked span.
+///  • `CitationAnalyzerService` — for any saved Document, surfaces which
+///    citations are present, stale (IPC/CrPC/Evidence → BNS/BNSS/BSA),
+///    missing (declared via `appliesTo`), or worth pairing (`commonlyPairedWith`).
+///  • Future public `/law/:id` SEO pages (out of scope for now; the table is
+///    already shaped to power them via `isPublic` + `draftingTips`).
+///
+/// In-code `CITATIONS[]` (libs/shared/legal-reference) stays as the ultimate
+/// fallback so a fresh DB still works. `LegalReferenceService` merges DB rows
+/// over the code seed by `id` — DB wins. Admins extend the catalog through
+/// the admin UI without redeploying.
+model LegalCitation {
+  /// Stable slug (e.g. `bnss.223`, `ni.138`). Doubles as the public URL slug.
+  id String @id
+
+  act      String
+  actShort String?
+  section  String?
+  title    String
+  /// 1–3 paragraph human explainer (your IP — not bare-act text).
+  summary  String  @db.Text
+  /// Optional bare-act text. Leave NULL unless you have rights to host it;
+  /// the public page links to indiacode.nic.in instead.
+  fullText    String? @db.Text
+  /// Canonical-text source for the "Full text →" link.
+  externalUrl String?
+
+  effectiveFrom DateTime?
+  /// Soft ref to another LegalCitation.id (the provision this one replaces,
+  /// e.g. 'crpc.200' for bnss.223). Used by the analyzer's "stale → suggest
+  /// successor" pass.
+  supersedes String?
+  /// 'high' | 'moderate' | 'low' — flagged in UI as confidence chips.
+  confidence String  @default("moderate")
+  /// "Verify the section number against the official bare act before binding use."
+  verifyNote String?
+
+  /// Filter / topic tags ('cheque-bounce', 'criminal', 'rti', …).
+  topics             String[]
+  /// Document type keys this citation applies to ('legal_notice',
+  /// 'cheque_bounce', 'anticipatory_bail'). Powers `applicableFor(docTypeKey)`
+  /// inside CitationFillerService + analyzer's "missing" detection.
+  appliesTo          String[]
+  /// Soft refs to other LegalCitation.id values that are commonly cited in
+  /// the same document (e.g. ni.138 commonly paired with ni.141 + ni.142).
+  /// Powers the analyzer's "suggestions[]" pass.
+  commonlyPairedWith String[]
+  /// Long-form advocate-grade notes for the public `/law/:id` page (when /
+  /// it ships). Markdown-ish; bullet-list-friendly.
+  draftingTips String? @db.Text
+
+  /// ISO-3166-1 alpha-2 ('IN'). Future-proofing for multi-country expansion.
+  jurisdiction String  @default("IN")
+  isActive     Boolean @default(true)
+  /// Surface on public `/law/:id` pages once they exist. Defaults to true;
+  /// turn off for private / org-only citations.
+  isPublic     Boolean @default(true)
+  /// `null` = system / global citation; set for org-private overrides.
+  ownerOrgId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jurisdiction, isActive])
+  @@index([ownerOrgId])
+  @@index([isPublic])
+}
+
+/// Section-grounded AI critique results, cached by (documentId, contentHash).
+/// `CitationCritiqueService` first looks up the matching row by sha256 of
+/// the analyzed HTML — a cache hit returns the stored issues without an AI
+/// call. Re-runs on the same content cost zero tokens. Invalidates implicitly:
+/// content edits change the hash, so the next critique writes a fresh row.
+model CitationCritique {
+  id          String   @id @default(cuid())
+  documentId  String
+  /// sha256 of the analyzed HTML/text.
+  contentHash String
+  /// Model that produced this critique (audit + cost reconciliation).
+  model       String
+  /// Citations the model was grounded on (mirrors CritiqueResult.groundedOn).
+  groundedOn  Json
+  /// CritiqueIssue[] — { category, citationId, title, detail, proposedText, severity }.
+  issues      Json
+  createdAt   DateTime @default(now())
+
+  @@unique([documentId, contentHash])
+  @@index([documentId, createdAt])
 }

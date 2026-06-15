@@ -11,6 +11,12 @@ import { AdminDashboard } from './features/admin/AdminDashboard';
 import { AiUsagePage } from './features/admin/ai-usage/AiUsagePage';
 import { AdminSettingsPage } from './features/admin/settings/AdminSettingsPage';
 import {
+  AdminLegalReferencePage,
+  CloneCitationPage,
+  EditCitationPage,
+  NewCitationPage,
+} from './features/admin/legal-reference/AdminLegalReferencePage';
+import {
   CloneDocTypePage,
   ClonePipelinePage,
   DocTypesPage,
@@ -29,6 +35,7 @@ import {
   PipelinesPage,
   SearchConfigPage,
   VaultConfigPage,
+  VaultDocKindsPage,
 } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
@@ -54,7 +61,12 @@ import {
   ReviewQueuePage,
 } from './features/intelligence';
 import { SearchPage } from './features/search';
-import { VaultPage, VaultEntityPage } from './features/vault';
+import {
+  VaultPage,
+  VaultEntityPage,
+  VaultEntityEditPage,
+  VaultNewEntityPage,
+} from './features/vault';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -75,7 +87,13 @@ export function App() {
 
   return (
     <Routes>
-      {/* Public, no-auth: shared document view */}
+      {/* Public, no-auth: shared document view.
+       *
+       * /law and /law/:id are served by apps/web (Next.js SSR) for SEO +
+       * OG previews + JSON-LD. The SPA never renders them — any in-app link
+       * to a citation page is an absolute URL pointing at the marketing
+       * domain.
+       */}
       <Route path="/s/:token" element={<SharedDocumentView />} />
 
       <Route element={<AuthLayout />}>
@@ -97,7 +115,9 @@ export function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/vault" element={<VaultPage />} />
+        <Route path="/vault/new" element={<VaultNewEntityPage />} />
         <Route path="/vault/:id" element={<VaultEntityPage />} />
+        <Route path="/vault/:id/edit" element={<VaultEntityEditPage />} />
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/documents/templates" element={<TemplatesPage />} />
@@ -112,6 +132,10 @@ export function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/ai-usage" element={<AiUsagePage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/legal-reference" element={<AdminLegalReferencePage />} />
+        <Route path="/admin/legal-reference/new" element={<NewCitationPage />} />
+        <Route path="/admin/legal-reference/:id/edit" element={<EditCitationPage />} />
+        <Route path="/admin/legal-reference/:id/clone" element={<CloneCitationPage />} />
         <Route
           path="/admin/intelligence"
           element={<Navigate to="/admin/intelligence/types" replace />}
@@ -176,6 +200,10 @@ export function App() {
         <Route
           path="/admin/intelligence/vault/fields/:fieldId/edit"
           element={<EditVaultFieldPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/doc-kinds"
+          element={<VaultDocKindsPage />}
         />
         <Route
           path="/admin/intelligence/vault/doc-kinds/new"

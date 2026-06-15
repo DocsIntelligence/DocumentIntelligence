@@ -27,9 +27,13 @@ import { useUploadDocument } from './queries';
 function rejectText(t: TFunction, reason: FileRejectReason): string {
   switch (reason) {
     case 'size':
-      return t('intelligence.upload.errSize', 'File is too large (max {{mb}} MB).', {
-        mb: MAX_FILE_SIZE_MB,
-      });
+      return t(
+        'intelligence.upload.errSize',
+        'File is too large (max {{mb}} MB).',
+        {
+          mb: MAX_FILE_SIZE_MB,
+        },
+      );
     case 'empty':
       return t('intelligence.upload.errEmpty', 'That file is empty.');
     default:
@@ -77,7 +81,7 @@ export function IntelligenceUpload() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {t('intelligence.upload.title', 'Analyze a document')}
@@ -92,7 +96,9 @@ export function IntelligenceUpload() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('intelligence.upload.fileTitle', 'Document')}</CardTitle>
+          <CardTitle>
+            {t('intelligence.upload.fileTitle', 'Document')}
+          </CardTitle>
           <CardDescription>
             {t(
               'intelligence.upload.fileHint',
@@ -162,7 +168,10 @@ export function IntelligenceUpload() {
                   {t('intelligence.engine.vlm', 'Vision — for scanned files')}
                 </SelectItem>
                 <SelectItem value="agentic">
-                  {t('intelligence.engine.agentic', 'Premium — agentic (highest accuracy)')}
+                  {t(
+                    'intelligence.engine.agentic',
+                    'Premium — agentic (highest accuracy)',
+                  )}
                 </SelectItem>
               </SelectContent>
             </Select>

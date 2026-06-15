@@ -52,7 +52,7 @@ export function TemplatesPage() {
   }
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {t('templates.title', 'Templates')}
@@ -86,7 +86,10 @@ export function TemplatesPage() {
             />
             {categories.length > 1 && (
               <div className="flex flex-wrap gap-2">
-                <Chip active={category === null} onClick={() => setCategory(null)}>
+                <Chip
+                  active={category === null}
+                  onClick={() => setCategory(null)}
+                >
                   {t('templates.allCategories', 'All')}
                 </Chip>
                 {categories.map((cat) => (

@@ -51,7 +51,7 @@ function SettingsForm({ config }: { config: SearchConfig }) {
   const submit = handleSubmit((values) => update.mutate(values));
 
   return (
-    <form onSubmit={submit} className="max-w-2xl space-y-6">
+    <form onSubmit={submit} className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField
           label={t('searchAdmin.keywordWeight', 'Keyword weight (0–1)')}

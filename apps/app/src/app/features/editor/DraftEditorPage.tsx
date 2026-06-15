@@ -16,9 +16,6 @@ import {
 } from '../documents/queries';
 import { useLegalAiService } from '../documents/services-context';
 import { useExportPdf } from '../documents/builder/useExportPdf';
-import { ShareDialog } from '../documents/ShareDialog';
-import { VersionHistoryDialog } from '../documents/VersionHistoryDialog';
-import { CommentsDialog } from '../documents/CommentsDialog';
 import { SignaturesDialog } from '../documents/SignaturesDialog';
 
 /** Surface repealed-code (IPC/CrPC/Evidence) citation warnings from the API. */
@@ -43,9 +40,6 @@ export function DraftEditorPage() {
   const legalAi = useLegalAiService();
   const { state: exportState, start: startExport } = useExportPdf(id ?? '');
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const [signaturesOpen, setSignaturesOpen] = useState(false);
 
   // Captured signatures → rendered into the live preview (and the PDF via the
@@ -157,35 +151,16 @@ export function DraftEditorPage() {
   return (
     <>
       {id && (
-        <>
-          <ShareDialog
-            documentId={id}
-            open={shareOpen}
-            onOpenChange={setShareOpen}
-          />
-          <VersionHistoryDialog
-            documentId={id}
-            open={historyOpen}
-            onOpenChange={setHistoryOpen}
-          />
-          <CommentsDialog
-            documentId={id}
-            open={commentsOpen}
-            onOpenChange={setCommentsOpen}
-          />
-          <SignaturesDialog
-            documentId={id}
-            open={signaturesOpen}
-            onOpenChange={setSignaturesOpen}
-            docTypeKey={doc?.documentType?.key}
-          />
-        </>
+        <SignaturesDialog
+          documentId={id}
+          open={signaturesOpen}
+          onOpenChange={setSignaturesOpen}
+          docTypeKey={doc?.documentType?.key}
+        />
       )}
       <TemplateEditor
         backHref="/documents"
-        onShare={() => setShareOpen(true)}
-        onHistory={() => setHistoryOpen(true)}
-        onComments={() => setCommentsOpen(true)}
+        documentId={id}
         onSignatures={() => setSignaturesOpen(true)}
         previewAppendHtml={signaturesHtml}
         persistence={{

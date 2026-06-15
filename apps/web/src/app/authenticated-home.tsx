@@ -31,7 +31,7 @@ export function AuthenticatedHome() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border/50 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="mx-auto px-4 h-14 flex items-center justify-between">
           <h1 className="text-lg font-semibold text-foreground">{SITE_NAME}</h1>
           <div className="flex items-center gap-3">
             <Link
@@ -48,7 +48,7 @@ export function AuthenticatedHome() {
       </header>
 
       {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 py-12">
+      <main className="mx-auto px-4 py-12">
         <div className="flex flex-col items-center text-center space-y-6">
           <UserAvatar name={user?.name} src={user?.picture} size="lg" />
 

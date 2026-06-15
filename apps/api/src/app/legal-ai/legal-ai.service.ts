@@ -17,6 +17,8 @@ import {
 } from '@org/legal-reference';
 import { scaffoldForPreset } from './court-scaffolds';
 import { AiService } from '../ai/ai.service';
+import { CitationFillerService } from './citation-filler.service';
+import { LegalReferenceService } from './legal-reference.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import type {
   ClauseRewriteDto,
@@ -74,6 +76,8 @@ export class LegalAiService {
   constructor(
     private readonly ai: AiService,
     private readonly walletUsage: WalletUsageService,
+    private readonly citationFiller: CitationFillerService,
+    private readonly legalRefs: LegalReferenceService,
   ) {}
 
   async clauseRewrite(userId: string, dto: ClauseRewriteDto) {
@@ -107,6 +111,8 @@ export class LegalAiService {
     placeholders: string[];
     disclaimer: string;
     citationWarnings: string[];
+    insertedCitations: Array<{ id: string; title: string; occurrences: number }>;
+    unresolvedPlaceholders: number;
   }> {
     const bundle = dto.documentTypeKey
       ? getBundle(dto.documentTypeKey)
@@ -117,6 +123,24 @@ export class LegalAiService {
     }
     system += `\n\nLanguage: write the ENTIRE document — every heading, clause, label, and sentence — in ${dto.language}. The ONLY exception: keep {{placeholder}} tokens exactly as given (Latin snake_case keys, e.g. {{landlord_name}}); never translate the keys themselves. If ${dto.language} is not English, still keep ₹ and Indian legal conventions.`;
     system += `\n\n${CRIMINAL_CODE_REFORM_NOTE}`;
+
+    // Inject curated statute context for the relevant doc type so the model
+    // drafts grounded in actual section language (without authoring the
+    // numbers itself — the filler attaches those after).
+    const applicable = dto.documentTypeKey
+      ? await this.legalRefs.applicableFor(dto.documentTypeKey)
+      : [];
+    if (applicable.length > 0) {
+      const block = applicable
+        .slice(0, 5)
+        .map(
+          (c) =>
+            `• ${c.actShort ?? c.act}${c.section ? ` §${c.section}` : ''} — ${c.title}: ${c.summary}`,
+        )
+        .join('\n');
+      system += `\n\nApplicable statutory context (for grounding only — do NOT author section numbers; leave {{applicable_law}} placeholders where a citation belongs and the system will fill them):\n${block}`;
+    }
+
     const scaffold = scaffoldForPreset(dto.presetKey);
     if (scaffold) system += `\n\n${scaffold}`;
     const userMessage =
@@ -128,19 +152,30 @@ export class LegalAiService {
       userMessage,
       `gen:${dto.documentTypeKey ?? 'freeform'}`,
     );
-    const warnings = citationWarnings(stripHtml(html));
+
+    // Auto-fill placeholders + rewrite stale code refs into linked spans.
+    const fill = await this.citationFiller.fill(html, {
+      docTypeKey: dto.documentTypeKey,
+    });
+    const warnings = citationWarnings(stripHtml(fill.filled));
     if (warnings.length) {
       this.logger.warn(
-        `Generated doc cites repealed code(s): ${warnings.join(' | ')}`,
+        `Generated doc still cites repealed code(s) after fill: ${warnings.join(' | ')}`,
       );
     }
     return {
-      html,
+      html: fill.filled,
       model,
       cached,
-      placeholders: extractPlaceholders(html),
+      placeholders: extractPlaceholders(fill.filled),
       disclaimer: DISCLAIMER.trim(),
       citationWarnings: warnings,
+      insertedCitations: fill.insertedCitations.map((i) => ({
+        id: i.citation.id,
+        title: `${i.citation.actShort ?? i.citation.act}${i.citation.section ? ` §${i.citation.section}` : ''}`,
+        occurrences: i.occurrences,
+      })),
+      unresolvedPlaceholders: fill.unresolvedPlaceholders,
     };
   }
 
@@ -154,6 +189,8 @@ export class LegalAiService {
     cached: boolean;
     placeholders: string[];
     citationWarnings: string[];
+    insertedCitations: Array<{ id: string; title: string; occurrences: number }>;
+    unresolvedPlaceholders: number;
   }> {
     const bundle = dto.documentTypeKey
       ? getBundle(dto.documentTypeKey)
@@ -172,12 +209,21 @@ export class LegalAiService {
       userMessage,
       `rev:${dto.documentTypeKey ?? 'freeform'}`,
     );
+    const fill = await this.citationFiller.fill(html, {
+      docTypeKey: dto.documentTypeKey,
+    });
     return {
-      html,
+      html: fill.filled,
       model,
       cached,
-      placeholders: extractPlaceholders(html),
-      citationWarnings: citationWarnings(stripHtml(html)),
+      placeholders: extractPlaceholders(fill.filled),
+      citationWarnings: citationWarnings(stripHtml(fill.filled)),
+      insertedCitations: fill.insertedCitations.map((i) => ({
+        id: i.citation.id,
+        title: `${i.citation.actShort ?? i.citation.act}${i.citation.section ? ` §${i.citation.section}` : ''}`,
+        occurrences: i.occurrences,
+      })),
+      unresolvedPlaceholders: fill.unresolvedPlaceholders,
     };
   }
 

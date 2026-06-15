@@ -1,21 +1,10 @@
-import type { VaultEntityKind, VaultEntitySummary } from '@org/api-client';
+import type { VaultEntitySummary } from '@org/api-client';
+import { KIND_BADGE, KIND_LABEL } from './kinds';
 import {
   Badge,
   Button,
   DataTable,
   type DataTableColumn,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  FormField,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Spinner,
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useState, type ReactNode } from 'react';
@@ -23,18 +12,11 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import {
-  useCreateVaultEntity,
   useDeleteVaultEntity,
   useDuplicateVaultEntity,
   useUpdateVaultEntity,
   useVaultEntities,
 } from './queries';
-
-const KIND_LABEL: Record<VaultEntityKind, string> = {
-  person: 'Person',
-  company: 'Company',
-  other: 'Other',
-};
 
 function relativeDate(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -52,7 +34,6 @@ type Sort = { key: string; dir: 'asc' | 'desc' };
 
 export function VaultPage() {
   const { t } = useTranslation();
-  const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [sort, setSort] = useState<Sort | null>({ key: 'updated', dir: 'desc' });
@@ -80,9 +61,7 @@ export function VaultPage() {
       width: 'w-28',
       sortValue: (r) => r.kind,
       cell: (r) => (
-        <Badge variant={r.kind === 'company' ? 'secondary' : 'primary'}>
-          {KIND_LABEL[r.kind]}
-        </Badge>
+        <Badge variant={KIND_BADGE[r.kind]}>{KIND_LABEL[r.kind]}</Badge>
       ),
     },
     {
@@ -145,7 +124,9 @@ export function VaultPage() {
             )}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>{t('vault.new', 'New entity')}</Button>
+        <Button asChild>
+          <Link to="/vault/new">{t('vault.new', 'New entity')}</Link>
+        </Button>
       </div>
 
       <DataTable
@@ -179,8 +160,6 @@ export function VaultPage() {
           loading: isFetching && isPlaceholderData,
         }}
       />
-
-      {creating && <CreateDialog onClose={() => setCreating(false)} />}
     </div>
   );
 }
@@ -229,6 +208,12 @@ function RowActions({ row: e }: { row: VaultEntitySummary }) {
       <IconButton
         title={t('vault.open', 'Open')}
         onClick={() => navigate(`/vault/${e.id}`)}
+      >
+        <OpenGlyph />
+      </IconButton>
+      <IconButton
+        title={t('common.edit', 'Edit')}
+        onClick={() => navigate(`/vault/${e.id}/edit`)}
       >
         <EditGlyph />
       </IconButton>
@@ -291,6 +276,16 @@ function IconButton({
   );
 }
 
+function OpenGlyph() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
 function EditGlyph() {
   return (
     <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -334,62 +329,5 @@ function TrashGlyph() {
     <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
     </svg>
-  );
-}
-
-function CreateDialog({ onClose }: { onClose: () => void }) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const create = useCreateVaultEntity();
-  const [kind, setKind] = useState<VaultEntityKind>('person');
-  const [label, setLabel] = useState('');
-
-  const submit = async () => {
-    if (!label.trim()) return;
-    const entity = await create.mutateAsync({ kind, label: label.trim(), fields: {} });
-    onClose();
-    navigate(`/vault/${entity.id}`);
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t('vault.newTitle', 'New vault entity')}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <FormField label={t('vault.kind', 'Type')}>
-            <Select value={kind} onValueChange={(v) => setKind(v as VaultEntityKind)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="person">{t('vault.person', 'Person')}</SelectItem>
-                <SelectItem value="company">{t('vault.company', 'Company')}</SelectItem>
-                <SelectItem value="other">{t('vault.other', 'Other')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormField>
-          <FormField label={t('vault.label', 'Name / label')}>
-            <Input
-              autoFocus
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={t('vault.labelPlaceholder', 'e.g. Myself, Acme Pvt Ltd, Landlord Ramesh')}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-          </FormField>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button onClick={submit} disabled={!label.trim() || create.isPending}>
-              {create.isPending && <Spinner className="mr-2 h-4 w-4" />}
-              {t('vault.create', 'Create')}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

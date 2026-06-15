@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
-export const vaultEntityKinds = ['person', 'company', 'other'] as const;
+export const vaultEntityKinds = [
+  'person',
+  'company',
+  'lawyer',
+  'court',
+  'case',
+  'property',
+  'other',
+] as const;
 
 /** Create a vault entity. `fields` is a canonical key→value map (values are
  *  strings; the server encrypts the whole map at rest). */

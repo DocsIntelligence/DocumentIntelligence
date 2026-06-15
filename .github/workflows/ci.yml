@@ -35,8 +35,8 @@ jobs:
       PORT: 3000
       GLOBAL_PREFIX: api
       PUBLIC_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:4200
-      CORS_ORIGIN: http://localhost:4200,http://localhost:4300
+      FRONTEND_URL: http://localhost:5200
+      CORS_ORIGIN: http://localhost:5200,http://localhost:4300
       COOKIE_DOMAIN: localhost
       COOKIE_SECURE: 'false'
       ACCESS_TOKEN_SECRET: ci-test-access-secret-min-16-chars

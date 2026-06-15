@@ -1707,3 +1707,117 @@ registers it in `settings.keys.ts` and calls `settings.get(SETTINGS.MY_KEY, { us
 new tables, no migration. Any future AI-adjacent code that wants per-document attribution wraps the
 work in `aiUsageContext.run({ documentId, batchId, … }, …)` once; every nested LLM call is recorded
 automatically without further plumbing.
+
+## 2026-06-14 (cont.) — Citation auto-fill + section analyzer + public /law catalog
+
+User: "do the citation-fill … also is there a way, in documents based on the section of law, it can improve enhance with some powerful analysis, and proper" + "for docs and all, with proper show me how it will manage and how it will work" + "yes, but for now do the citation not the law itself, later we will do the law for public+maintain all sections and docs, for india as well as other countries" + "enable the law things for public + admin, as well do not skip that" + "make use of indiacode.nic.in right, and suggest analyse or fill the drafts based on information."
+
+What landed (all server + UI, api+app build ✓ / lint 0 errors / migration applied / 12 citations seeded; NOT browser-verified):
+
+- **Prisma `LegalCitation`** model + migration `20260613204412_legal_citation_catalog`. Carries everything the analyzer + filler + public catalog need: act, actShort, section, title, summary, fullText (optional bare-act mirror), externalUrl, supersedes (soft FK), confidence, verifyNote, topics[], appliesTo[] (doc-type keys), commonlyPairedWith[] (related citation ids), draftingTips, jurisdiction ('IN' default), isActive, isPublic, ownerOrgId (null = global). Three indexes for the obvious axes.
+- **In-code `@org/legal-reference` extension**: Citation type gained appliesTo / commonlyPairedWith / jurisdiction / draftingTips / externalUrl. Seeded 12 citations (added ni.141, ni.142). The seed script upserts every in-code CITATION into LegalCitation idempotently and leaves admin-edited fields (draftingTips, externalUrl) alone after the first sync.
+- **`LegalReferenceService`** (apps/api/src/app/legal-ai/legal-reference.service.ts): DB+code merge by `id`, DB wins; 60-second in-memory cache invalidated on writes. `list()` / `get(id)` / `applicableFor(docTypeKey)` / `byTopic(topic)` / `successorOf(repealedId)` / `listPublic()` / admin `listAdmin()` (annotates each row with `source: 'db' | 'code'`) + `createOrUpdate` / `setActive` / `setPublic` / `remove`.
+- **`CitationFillerService`**: two-pass rewriter on AI-drafted HTML. (1) `{{applicable_law}}` placeholders → hyperlinked `<a class="citation-ref" data-citation-id="ni.138" href="/law/ni-138">Section 138 of the NI Act, 1881</a>` spans, picked by an 80-char keyword-score window. (2) Bare IPC/CrPC/Evidence references with a curated successor (e.g. CrPC §200 → BNSS §223) get rewritten in place. Returns `{ filled, insertedCitations[], unresolvedPlaceholders, remainingWarnings }`. Wired into `LegalAiService.generateDocument` + `reviseDocument` (both responses now carry `insertedCitations` + `unresolvedPlaceholders`).
+- **AI grounding**: `LegalAiService.generateDocument` now injects the applicable citations' titles + summaries as a "Applicable statutory context" block into the system prompt (capped at 5). The model still doesn't author section numbers — the filler does.
+- **`CitationAnalyzerService`** + `GET /legal-ai/citations/document/:id/analyze` (also `POST /legal-ai/citations/analyze-text` for raw HTML). Stateless — reads doc.data.html, builds:
+  - `present[]` from `data-citation-id` spans the filler stamped in,
+  - `stale[]` from `validateCitations()` + successor lookup,
+  - `missing[]` = `applicableFor(docTypeKey) - present[]`,
+  - `suggestions[]` from `commonlyPairedWith` of present citations.
+- **IndiaCode adapter** (apps/api/src/app/legal-ai/sources/): `LegalSourceAdapter` interface + `IndiaCodeSourceAdapter` (fetches indiacode.nic.in by curated act-handle map, htmlToText strip, best-effort section isolation, 15 s timeout, never on user hot path) + `LegalSourceRegistry`. **`CitationSyncService.syncFromSource(id)`**: fetch → AI cleanup (`AiService.generate` with `SUMMARISE_SYSTEM` returning strict JSON `{ summary, draftingTips, fullText }`) → persist on the LegalCitation row. Admin-only trigger via `POST /legal-ai/admin/citations/:id/sync`. Pluggable for UK/US later (one new adapter + registry entry).
+- **Public catalog** (auth-free):
+  - `PublicCitationsController` mounted at `/public/law` with the `@Public()` decorator. `GET /public/law` (topic/act/jurisdiction filters) + `GET /public/law/:id` (accepts both `bnss.223` and `bnss-223`; double-guards against private citations leaking).
+  - `apps/app` SPA pages outside ProtectedRoute: `/law` (`PublicLawCatalog` — search + topic-chip + act-chip filters + card grid) and `/law/:id` (`PublicLawDetail` — summary + drafting-tips + applies-to-docs CTAs + external-source link + per-page document.title / meta-description set client-side). Future Next.js SSR port deferred per scope agreement.
+- **Builder integration**: new `CitationHealth` component mounted in `BuilderShell` right pane as a collapsible "Legal references" section (open by default, between AI insights and AI usage). Lists present / stale + suggested successor / missing-expected / commonly-paired suggestions. Each entry deep-links to its `/law/<id>` public page.
+- **Admin catalog UI**: `/admin/legal-reference` (AdminLegalReferencePage) — DataTable of every citation with source badge (db|code), confidence chip, supersedes badge, per-row Active/Public switches, "Sync" button (calls indiacode adapter + AI summariser), Edit/Delete. CitationEditor card with id / jurisdiction / act / actShort / section / confidence / effectiveFrom / supersedes / externalUrl / title / summary / verifyNote / draftingTips / topics[] / appliesTo[] / commonlyPairedWith[]. New sidebar entry "Legal references" with a BookIcon.
+- **Admin CRUD endpoints** on `LegalAiController` (no `@Roles('admin')` per the current open-it-up rule): `GET /legal-ai/admin/citations`, `PATCH .../:id`, `PATCH .../:id/active`, `PATCH .../:id/public`, `DELETE .../:id`, `POST .../:id/sync`. User-facing read endpoints: `GET /legal-ai/citations`, `GET /legal-ai/citations/:id`.
+
+**Module wiring**: `LegalAiModule` now imports `DatabaseModule` + registers `LegalReferenceService`, `CitationFillerService`, `CitationAnalyzerService`, `CitationSyncService`, `IndiaCodeSourceAdapter`, `LegalSourceRegistry`. Exports the first three for any future module that wants to lean on the catalog.
+
+**End-to-end flow demonstration**:
+1. User drafts a legal notice via Draft-with-AI. Brief: "Cheque ₹2L bounced from Acme Pvt Ltd."
+2. `generateDocument` looks up `applicableFor('legal_notice')` → `[ni.138, ni.141, ni.142]`, injects their summaries into the system prompt as grounding context (no section numbers).
+3. Claude/OpenAI returns HTML with `{{applicable_law}}` placeholders.
+4. `CitationFillerService` walks every placeholder, picks the best applicable citation by keyword proximity, inserts hyperlinked spans. Bare "Section 200 of the CrPC" references get rewritten to BNSS §223 spans.
+5. Response carries `insertedCitations: [{id:'ni.138', occurrences:3}, ...]` + `unresolvedPlaceholders: 0`.
+6. Builder right pane "Legal references" calls `/legal-ai/citations/document/:id/analyze` → shows ✓ NI §138 (3×), ✓ NI §141 (1×), ✓ NI §142 (1×), and "Worth considering" suggestions from `commonlyPairedWith`.
+7. Exported PDF carries citation `<a>` spans pointing at `/law/ni-138`. Recipient googles "Section 138 NI Act", lands on the public page, sees a CTA "Reply to a §138 notice → draft now". GTM loop closed.
+8. Admin opens `/admin/legal-reference`, clicks Sync on ni.138 — adapter fetches indiacode HTML, AI cleans + summarises, externalUrl is updated. 60 s cache flushes; next draft uses the fresh summary.
+
+**Not done / honest gaps**:
+- Public pages live in apps/app SPA (no SSR yet) — fine for indexing but a Next.js port to apps/web later will improve crawl speed + sitemap + JSON-LD. Sitemap entries NOT yet generated.
+- The IndiaCode adapter has a hand-curated act-handle map covering ~10 acts. Beyond those, sync falls back to "paste manually". Worth growing the map as new structured doc types ship.
+- Multi-jurisdiction: schema + interface ready (`jurisdiction` field, `LegalSourceAdapter`). UK / US adapters not implemented.
+- Citation one-click "Update CrPC §200 → BNSS §223" / "Insert §141" buttons in the builder pane are read-only links to `/law/<id>` today — actual HTML mutation in the editor not wired yet. Next iteration.
+- `commonlyPairedWith` suggestions surface in the analyzer + the admin form. Per-bundle "required citations" beyond `appliesTo` not modelled separately (use appliesTo).
+- Lint: 14 warnings total (3 new in `CitationHealth`'s useEffect dep + 11 pre-existing), 0 errors. Disabled the `react-hooks/exhaustive-deps` warning on the single-dep refresh effect intentionally.
+
+## 2026-06-14 (cont.) — Citation: one-click fixes + section-grounded AI critique + sitemap
+
+User: "continue" (after the citation-fill + public catalog landed). Picked up the gaps I logged: read-only suggestions → actual editor mutations, plus a section-grounded AI critique pass and a sitemap so the public `/law/*` pages are crawlable.
+
+What landed (api + app build ✓ · lint 0 errors · NOT browser-verified):
+
+- **`CitationApplyService`** (`apps/api/src/app/legal-ai/citation-apply.service.ts`): handles two action kinds.
+  - `replace-stale`: regex-finds the matched repealed-code fragment ("Section 200 of the CrPC") and rewrites it in place with the successor's hyperlinked `<a data-citation-id>` span (BNSS §223). Whitespace-tolerant regex with literal-text fallback. Idempotent (no-op on already-fixed text returns a 400 so the user sees a clear error).
+  - `insert-missing`: appends `<p data-citation-suggested="...">See also: <a class="citation-ref" ...>...</a></p>` before the closing wrapper tag (body/article/main/section) if present, else at the end. Rejects re-insert if the citation id is already in the doc.
+  - Access-checked + lock-checked + only operates on freeform docs (`data.html` present); structured bundles get a clear error rather than silent corruption. Returns the updated HTML + refreshed analysis in one round-trip so the UI hot-swaps without a separate fetch.
+- **`CitationCritiqueService`**: section-grounded AI critique. Loads the citations present in the doc (via `data-citation-id` spans) **plus** the doc-type's declared `appliesTo` citations even if not yet present, builds a prompt block with each section's curated summary + `draftingTips`, and asks the model to flag (high/medium/low severity) missing required clauses / inconsistencies with the cited section / limitation / jurisdiction traps. Strict-JSON output parsed defensively (drops malformed entries, never throws).
+- **Controller endpoints** on `LegalAiController`:
+  - `POST /legal-ai/citations/document/:id/apply-fix` (body = ApplyFixAction)
+  - `POST /legal-ai/citations/document/:id/critique`
+- **Sitemap**: `GET /public/law/sitemap.xml` (no auth, 1-hour cache) — one entry per `isPublic` citation + the index page. Honors `PUBLIC_APP_URL` / `APP_URL` env for absolute URLs.
+- **`CitationHealth` UI upgrade**: stale rows now have an actionable "→ BNSS §223" button (was a passive link) that calls the apply-fix endpoint, swaps the analysis in-place, and toasts the result. Missing rows + commonly-paired suggestions both get "Insert" buttons that append a `See also: …` paragraph. A new "AI critique" button at the top of the panel runs the section-grounded critique and renders the issue list (severity badge + title + detail + optional proposedText pre-block) below the suggestions.
+- **Module wiring**: `LegalAiModule` registers `CitationApplyService` + `CitationCritiqueService`; exports both for downstream reuse.
+
+**End-to-end flow now**:
+1. Draft a notice → builder right pane shows "stale: CrPC §200 → BNSS §223 [→ BNSS §223]" button.
+2. Click the button → API rewrites the fragment → analysis refreshes → toast confirms.
+3. Click "AI critique" → backend grounds the model on §138 + §141 + §142's curated summaries + drafting tips → returns issues like "missing 15-day demand window under §138 proviso (b)" (severity: high) with proposed text.
+4. Public users land on `/law/ni-138` → see drafting tips + a CTA back into the authed app.
+5. `GET /public/law/sitemap.xml` exposes one URL per citation for Google.
+
+**Honest gaps still open**:
+- Issue's `proposedText` is shown but NOT one-click-applied yet — the user has to copy-paste. Next iteration: an "Apply suggestion" button that inserts/replaces the marked clause.
+- The AI critique is one-shot — no caching by `(documentId, content hash)`. Re-runs cost tokens. Cheap to add via the existing AnalysisRun pattern; deferred.
+- Public catalog still SPA-rendered. Sitemap is correct content, but the pages don't have SSR for crawlers (Google handles SPA, but Bing/social previews don't). Next.js port to `apps/web` is the proper fix.
+- IndiaCode adapter handle map is still ~10 acts. Grow it as new doc-type bundles ship.
+
+## 2026-06-14 (cont.) — Filled four open citation gaps
+
+User: "fill all gaps". Took the four open items from the previous entry and closed them.
+
+What landed (api+app build ✓ / api+app+web lint 0 errors / migration applied / NOT browser-verified):
+
+1. **Apply-suggestion** — `CitationApplyService` gained a third action kind `apply-suggestion` taking `proposedText` + optional `citationId` + optional `replaceMatch`. Sanitises the AI's text (strips `<script>`, `<style>`, `<iframe>`, inline event handlers, `javascript:` URLs) before letting it touch the doc HTML. When `replaceMatch` is set, swaps that literal substring in-place; otherwise wraps the proposal in `<p data-critique-applied="1" data-citation-id="…">…</p>` and inserts before the closing wrapper tag. UI: every critique issue with a `proposedText` now renders an inline `[Apply]` button that posts to `/legal-ai/citations/document/:id/apply-fix` and hot-swaps the analysis on success.
+
+2. **Critique caching** — new `CitationCritique` Prisma model (migration `20260613211151_citation_critique_cache`): unique `(documentId, contentHash)` + `model` + `groundedOn Json` + `issues Json`. `CitationCritiqueService.critiqueDocument()` hashes the analyzed HTML with sha256, looks up the matching row first, and returns it (with `cached: true`) without touching the AI. Re-runs on identical content cost zero tokens. Content edits change the hash → next critique writes a fresh row, idempotent upsert. UI surfaces a "cached" pill and a `[Recompute]` ghost button that posts with `?force=1` to bust the cache.
+
+3. **Public catalog SSR (apps/web)** — moved `/law` and `/law/:id` from the SPA into the Next.js marketing site:
+   - `apps/web/src/lib/law.ts` — `fetchPublicCitations()` + `fetchPublicCitation(id)` server-side fetchers (5-minute Next ISR), `citationSlug()` + `slugToId()` helpers.
+   - `apps/web/src/app/law/page.tsx` — server-rendered catalog grouped by act, with `generateMetadata()` for title/description/canonical/OG/Twitter, and a JSON-LD `CollectionPage` block listing every public citation as a `Legislation` entity.
+   - `apps/web/src/app/law/[id]/page.tsx` — server-rendered detail page; per-citation OG + Twitter + canonical, a `Legislation` JSON-LD with `legislationIdentifier` / `legislationJurisdiction` / `legislationDate` / `sameAs`, summary + drafting-tips + applies-to-docs CTAs + bare-act link.
+   - `apps/web/src/app/sitemap.ts` — Next-native sitemap covering `/`, `/law`, and one entry per public citation.
+   - `apps/web/src/app/robots.ts` — allows `/`, `/law*`; disallows `/api/`, `/login`, `/dashboard`; references `/sitemap.xml`.
+   - SPA's `/law` + `/law/:id` routes removed; `PublicLawCatalog.tsx` deleted. `apps/app/src/config.ts` gained `webUrl` + a `lawUrl(citationId)` helper. CitationHealth + the API's CitationFiller/CitationApply span renderers now emit absolute URLs (`{lawHost}/law/{slug}`) so links survive PDF export + email forwarding.
+   - **Pre-existing build break:** `@org/web:build` fails during SSG of `/login` with a React-19 `useMemo` null error in `lib/providers.tsx`. UNRELATED to the citation work — it was breaking before. Worked around for the new pages with `export const dynamic = 'force-dynamic'` on `/law/*` so they're SSR-on-demand (bots still see fully-rendered HTML; build doesn't have to pre-warm). Revert to static + ISR once the Providers SSG bug is fixed upstream. Web lint stays at 0 errors.
+
+4. **IndiaCode handle map grown** — `IndiaCodeSourceAdapter.ACT_HANDLE` expanded from ~10 to ~40 acts: BNS / BNSS / BSA + IPC / CrPC / Evidence (for repealed lookups) + Contract Act / Specific Relief / TPA / Sale of Goods / CPC / Limitation / Partnership / Easements / Registration / Stamp / NI Act / Arbitration / CPA 2019 / Companies Act 2013 / SEBI / FEMA / RBI / Banking Regulation / IBC / Income Tax / CGST / IGST / Industrial Disputes / Payment of Wages / Minimum Wages / Gratuity / EPF / IT Act / DPDP / RTI / Hindu Marriage / Hindu Succession / Special Marriage / Guardians & Wards / Land Acquisition (RFCTLARR) / Constitution. Resolver upgraded to longest-prefix match so "indian contract act" doesn't collide with "contract act" base. State-specific acts (rent control, shops & establishments) are placeholders (`'0'`) — admins paste those manually.
+
+**Cross-cutting cleanup**:
+- Citation `<a>` href generation centralised: `lawUrl()` in `apps/app/src/config.ts` for the SPA, `lawHost` getter (`PUBLIC_APP_URL` env) in CitationFiller + CitationApply for the server. Same shape: `{host}/law/{slug}` with `slug = id.replace(/\./g, '-')`.
+- All four citation services (filler / analyzer / apply / critique / sync) registered + exported from `LegalAiModule`.
+
+**End-to-end + caching demo**:
+1. Draft a §138 notice. CitationFiller stamps `<a href="https://example.com/law/ni-138" data-citation-id="ni.138">…</a>` (absolute, survives email forwards).
+2. Builder's "Legal references" pane → click **AI critique** → server hashes the HTML → no cache row → calls AI → persists. UI shows issues.
+3. Click **Apply** on a high-severity "missing 15-day demand window" issue → server sanitises the `proposedText`, appends a `<p data-critique-applied data-citation-id="ni.138">` block → response carries refreshed analysis → UI hot-swaps.
+4. Edit nothing else. Click **AI critique** again → hash unchanged → instant return (`cached: true`, $0 tokens) → UI shows "cached" pill + **Recompute** button.
+5. Edit a clause → hash changes → next critique calls AI fresh and persists a new row (existing row gets upserted with the new analysis).
+6. Public user lands on `https://example.com/law/ni-138` (Next.js SSR) → first paint includes the full citation summary + drafting tips + JSON-LD Legislation entity → indexed cleanly.
+
+**Honest, still-open gaps**:
+- `@org/web:build` /login SSG break is pre-existing — the React-19 + Next-16 + redux Providers combo crashes during static export. My /law pages dodge it via `dynamic = 'force-dynamic'`. The root fix is in `apps/web/src/lib/providers.tsx`, outside the citation scope.
+- IndiaCode handle map handles are taken from public URL conventions; not every one is exhaustively re-verified. Treat as a bootstrap — admins should sync + spot-check before binding use.
+- Public `/law/:id` "Documents that use this section" links assume the authed app lives at `app.<marketing-domain>`. The current heuristic in apps/web (`webUrl.replace('//','//app.')`) is a placeholder; once a real `NEXT_PUBLIC_APP_URL` env exists, swap to that.
+- Schedule.org JSON-LD on `/law/:id` uses `Legislation` (not the looser `Article`) — Google indexes both, but the `Legislation` rich-result template is best-effort until verified in Search Console.

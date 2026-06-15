@@ -10,9 +10,11 @@ import {
 import { useAdminGroup } from '../lookups/queries';
 import { SearchSettingsManager } from '../search/SearchSettingsManager';
 import {
-  VaultConfigManager,
+  VAULT_KINDS,
   VaultDocKindForm,
+  VaultDocKindsManager,
   VaultFieldForm,
+  VaultFieldsManager,
 } from '../vault/VaultConfigManager';
 import { useVaultDocKinds, useVaultFields } from '../vault/queries';
 import { FieldMapEditor } from './FieldMapEditor';
@@ -126,13 +128,28 @@ export function VaultConfigPage() {
   const { t } = useTranslation();
   return (
     <ConfigShell
-      title={t('vaultAdmin.title', 'Vault fields')}
+      title={t('vaultAdmin.title', 'Vault catalog')}
       subtitle={t(
         'vaultAdmin.subtitle',
         'Configure the entity fields and document kinds the Document Vault offers — no code. Canonical keys stay stable so autofill keeps working.',
       )}
     >
-      <VaultConfigManager />
+      <VaultFieldsManager />
+    </ConfigShell>
+  );
+}
+
+export function VaultDocKindsPage() {
+  const { t } = useTranslation();
+  return (
+    <ConfigShell
+      title={t('vaultAdmin.title', 'Vault catalog')}
+      subtitle={t(
+        'vaultAdmin.docKindsSubtitle',
+        'Document kinds (Aadhaar, PAN, Sale deed …) that Vault entities can attach — each scannable kind autofills a defined set of canonical fields.',
+      )}
+    >
+      <VaultDocKindsManager />
     </ConfigShell>
   );
 }
@@ -325,10 +342,12 @@ export function NewVaultFieldPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const goBack = () => navigate('/admin/intelligence/vault');
-  // ?kind=person|company|other (passed by the section's "Add field" button).
-  const kind = (() => {
-    const v = new URLSearchParams(window.location.search).get('kind');
-    return v === 'person' || v === 'company' || v === 'other' ? v : 'person';
+  // ?kind=<any-supported-kind> (passed by the manager's "Add field" button
+  // so the form pre-selects the kind currently filtered in the list).
+  const kind = ((): (typeof VAULT_KINDS)[number] => {
+    const v = new URLSearchParams(window.location.search).get('kind') ?? '';
+    const allowed = VAULT_KINDS as readonly string[];
+    return allowed.includes(v) ? (v as (typeof VAULT_KINDS)[number]) : 'person';
   })();
   return (
     <ConfigShell

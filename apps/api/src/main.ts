@@ -19,7 +19,7 @@ async function bootstrap() {
   const globalPrefix = config.get<string>('GLOBAL_PREFIX') ?? 'api';
   const port = config.get<number>('PORT') ?? 3000;
   const corsOrigin =
-    config.get<string>('CORS_ORIGIN') ?? 'http://localhost:4200';
+    config.get<string>('CORS_ORIGIN') ?? 'http://localhost:5200';
   const nodeEnv = config.get<string>('NODE_ENV') ?? 'development';
 
   app.setGlobalPrefix(globalPrefix);

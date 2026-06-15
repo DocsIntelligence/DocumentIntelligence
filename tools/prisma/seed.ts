@@ -13,6 +13,7 @@ import {
   getExtractionSchema,
   getFieldMap,
 } from '../../libs/doc-intelligence/src';
+import { CITATIONS } from '../../libs/shared/legal-reference/src/lib/citations';
 
 const prisma = new PrismaClient();
 
@@ -575,6 +576,56 @@ async function main() {
   } else {
     console.log('  ✓ Default pipeline — up to date');
   }
+
+  // ─── Legal citation catalog ─────────────────────────────────────────────
+  // Push every in-code Citation into the LegalCitation table. Idempotent:
+  // upsert by id, and only overwrites the curated metadata fields (admins
+  // can edit summary / drafting tips in the UI without losing them on
+  // re-seed — those edits are in DB-only fields the seed doesn't touch).
+  for (const c of CITATIONS) {
+    await prisma.legalCitation.upsert({
+      where: { id: c.id },
+      create: {
+        id: c.id,
+        act: c.act,
+        actShort: c.actShort,
+        section: c.section,
+        title: c.title,
+        summary: c.summary,
+        externalUrl: c.externalUrl,
+        effectiveFrom: c.effectiveFrom ? new Date(c.effectiveFrom) : null,
+        supersedes: c.supersedes,
+        confidence: c.confidence,
+        verifyNote: c.verifyNote,
+        topics: c.topics ?? [],
+        appliesTo: c.appliesTo ?? [],
+        commonlyPairedWith: c.commonlyPairedWith ?? [],
+        draftingTips: c.draftingTips,
+        jurisdiction: c.jurisdiction ?? 'IN',
+        isActive: true,
+        isPublic: true,
+      },
+      update: {
+        // Re-seed only structural fields (act/title/section/summary, supersedes,
+        // confidence, topics, appliesTo, commonlyPairedWith). Leaves
+        // admin-edited fields (draftingTips, externalUrl) alone after the
+        // first seed unless explicitly cleared in code.
+        act: c.act,
+        actShort: c.actShort,
+        section: c.section,
+        title: c.title,
+        summary: c.summary,
+        effectiveFrom: c.effectiveFrom ? new Date(c.effectiveFrom) : null,
+        supersedes: c.supersedes,
+        confidence: c.confidence,
+        verifyNote: c.verifyNote,
+        topics: c.topics ?? [],
+        appliesTo: c.appliesTo ?? [],
+        commonlyPairedWith: c.commonlyPairedWith ?? [],
+      },
+    });
+  }
+  console.log(`✅ Legal citations seeded (${CITATIONS.length})`);
 }
 
 main()

@@ -85,7 +85,7 @@ export function AnalyzePage() {
 
   if (extractionQuery.isLoading) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center">
+      <div className="mx-auto py-12 text-center">
         <Spinner />
       </div>
     );
@@ -94,14 +94,14 @@ export function AnalyzePage() {
   const extraction = extractionQuery.data?.extraction;
   if (!extraction) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center text-foreground/60">
+      <div className="mx-auto py-12 text-center text-foreground/60">
         {t('intelligence.analyze.noExtraction', 'No extraction found.')}
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">
           {t('intelligence.analyze.reviewTitle', 'Review extraction')}

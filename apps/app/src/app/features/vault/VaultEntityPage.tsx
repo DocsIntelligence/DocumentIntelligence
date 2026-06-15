@@ -4,26 +4,21 @@ import {
   Badge,
   Button,
   Card,
-  DatePicker,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  FormField,
-  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Spinner,
-  Textarea,
 } from '@org/ui';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
-import { useLookupOptions } from '../documents/queries';
 import { useVaultService } from '../documents/services-context';
 import {
   useAddVaultDocument,
@@ -34,10 +29,20 @@ import {
   useUpdateVaultEntity,
   useVaultEntity,
 } from './queries';
+import { KIND_BADGE, KIND_LABEL } from './kinds';
 
-const SCANNABLE = new Set(VAULT_DOC_KINDS.filter((k) => k.scannable).map((k) => k.kind));
-const KIND_LABEL = new Map(VAULT_DOC_KINDS.map((k) => [k.kind, k.label]));
+const SCANNABLE = new Set(
+  VAULT_DOC_KINDS.filter((k) => k.scannable).map((k) => k.kind),
+);
+const DOC_KIND_LABEL = new Map(VAULT_DOC_KINDS.map((k) => [k.kind, k.label]));
 
+/**
+ * `/vault/:id` — read-only detail view of a vault entity. Mirrors the
+ * detail-page pattern used by the admin managers (LookupGroupEditor,
+ * CitationEditor, SchemaEditor): list → row → detail, with a separate
+ * /edit route owning the form. Sensitive values stay masked here; the
+ * Edit page reveals + lets the user change them.
+ */
 export function VaultEntityPage() {
   const { t } = useTranslation();
   const { id = '' } = useParams<{ id: string }>();
@@ -52,13 +57,10 @@ export function VaultEntityPage() {
   const removeDoc = useRemoveVaultDocument(id);
   const scan = useScanVaultDocument(id);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const [editing, setEditing] = useState(false);
-  const [revealing, setRevealing] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
   const [docKind, setDocKind] = useState('aadhaar');
 
-  // Group fields by their `group` for a tidy layout.
+  // Group fields by their `group` for a tidy layout — same shape as the
+  // edit page so users see the same arrangement before and after.
   const groups = useMemo(() => {
     const m = new Map<string, VaultFieldDef[]>();
     for (const f of data?.schema ?? []) {
@@ -78,22 +80,6 @@ export function VaultEntityPage() {
     );
   }
 
-  const startEdit = async () => {
-    setRevealing(true);
-    try {
-      const revealed = await svc.reveal(id);
-      setForm({ ...revealed.fields });
-      setEditing(true);
-    } finally {
-      setRevealing(false);
-    }
-  };
-
-  const save = async () => {
-    await update.mutateAsync({ fields: form });
-    setEditing(false);
-  };
-
   const onPickFile = async (file?: File) => {
     if (file) await addDoc.mutateAsync({ file, kind: docKind });
     if (fileRef.current) fileRef.current.value = '';
@@ -107,7 +93,10 @@ export function VaultEntityPage() {
   const removeEntity = async () => {
     const ok = await confirm({
       title: t('vault.deleteTitle', 'Delete this entity?'),
-      description: t('vault.deleteDesc', 'Its details and all attached documents are permanently removed.'),
+      description: t(
+        'vault.deleteDesc',
+        'Its details and all attached documents are permanently removed.',
+      ),
       confirmLabel: t('common.delete', 'Delete'),
       variant: 'destructive',
     });
@@ -119,17 +108,22 @@ export function VaultEntityPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge variant={data.kind === 'company' ? 'secondary' : 'primary'}>{data.kind}</Badge>
-          <h1 className="text-xl font-semibold">{data.label}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
+            {KIND_LABEL[data.kind] ?? data.kind}
+          </Badge>
+          <h1 className="truncate text-xl font-semibold">{data.label}</h1>
           {!data.isActive && (
             <Badge variant="secondary" outline className="text-[10px]">
               {t('vault.disabled', 'Disabled')}
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-none items-center gap-2">
+          <Button asChild size="sm">
+            <Link to={`/vault/${id}/edit`}>{t('common.edit', 'Edit')}</Link>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -148,73 +142,74 @@ export function VaultEntityPage() {
               <DropdownMenuItem
                 onSelect={() => update.mutate({ isActive: !data.isActive })}
               >
-                {data.isActive ? t('vault.disable', 'Disable') : t('vault.enable', 'Enable')}
+                {data.isActive
+                  ? t('vault.disable', 'Disable')
+                  : t('vault.enable', 'Enable')}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-error" onSelect={removeEntity}>
+                {t('vault.deleteEntity', 'Delete entity')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="ghost" size="sm">
             <Link to="/vault">{t('common.back', 'Back')}</Link>
           </Button>
         </div>
       </div>
 
-      {/* Details (typed, grouped) */}
+      {/* Details — read-only, grouped, sensitive values masked. */}
       <Card className="space-y-5 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">{t('vault.details', 'Details')}</h2>
-          {!editing ? (
-            <Button size="sm" variant="outline" onClick={startEdit} disabled={revealing}>
-              {revealing && <Spinner className="mr-2 h-4 w-4" />}
-              {t('vault.revealEdit', 'Reveal & edit')}
-            </Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button size="sm" onClick={save} disabled={update.isPending}>
-                {update.isPending && <Spinner className="mr-2 h-4 w-4" />}
-                {t('common.save', 'Save')}
-              </Button>
-            </div>
-          )}
+          <h2 className="text-sm font-medium">
+            {t('vault.details', 'Details')}
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            {t(
+              'vault.maskedNote',
+              'Sensitive values are masked. Open Edit to reveal & change them.',
+            )}
+          </p>
         </div>
 
         {groups.map(([group, fields]) => (
-          <div key={group} className="space-y-3">
+          <div key={group} className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {group}
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {fields.map((f) => (
-                <FormField key={f.key} label={f.label + (f.sensitive ? ' 🔒' : '')}>
-                  {editing ? (
-                    <FieldInput
-                      def={f}
-                      value={form[f.key] ?? ''}
-                      onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))}
-                    />
-                  ) : (
-                    <div className="rounded-md border bg-secondary/30 px-2.5 py-2 text-sm">
-                      {data.fields[f.key] || <span className="text-muted-foreground">—</span>}
-                    </div>
-                  )}
-                </FormField>
+                <div key={f.key} className="space-y-1">
+                  <p className="text-xs text-foreground/60">
+                    {f.label}
+                    {f.sensitive && (
+                      <span
+                        role="img"
+                        aria-label={t('vault.sensitive', 'Sensitive')}
+                      >
+                        {' 🔒'}
+                      </span>
+                    )}
+                  </p>
+                  <div className="rounded-md border bg-secondary/20 px-2.5 py-2 text-sm">
+                    {data.fields[f.key] || (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         ))}
-        {!editing && (
-          <p className="text-xs text-muted-foreground">
-            {t('vault.maskedNote', 'Sensitive values are masked. Reveal & edit to view or change them.')}
-          </p>
-        )}
       </Card>
 
-      {/* Documents — upload by kind, scan to autofill */}
+      {/* Documents — upload by kind, scan to autofill. Stays on the detail
+          page because docs are an attachment, not a field — and scanning
+          is an action on the detail object, not a form edit. */}
       <Card className="space-y-3 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">{t('vault.documents', 'Documents')}</h2>
+          <h2 className="text-sm font-medium">
+            {t('vault.documents', 'Documents')}
+          </h2>
           <div className="flex items-center gap-2">
             <Select value={docKind} onValueChange={setDocKind}>
               <SelectTrigger className="h-8 w-auto min-w-36 text-xs">
@@ -249,16 +244,22 @@ export function VaultEntityPage() {
 
         {data.documents.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            {t('vault.noDocs', 'No documents attached. Upload an Aadhaar/PAN and scan it to autofill.')}
+            {t(
+              'vault.noDocs',
+              'No documents attached. Upload an Aadhaar/PAN and scan it to autofill.',
+            )}
           </p>
         ) : (
           <div className="divide-y divide-border/60">
             {data.documents.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-2 py-2">
+              <div
+                key={d.id}
+                className="flex items-center justify-between gap-2 py-2"
+              >
                 <div className="min-w-0">
                   <p className="truncate text-sm">{d.filename}</p>
                   <p className="text-xs text-muted-foreground">
-                    {KIND_LABEL.get(d.kind) ?? d.kind}
+                    {DOC_KIND_LABEL.get(d.kind) ?? d.kind}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -275,7 +276,11 @@ export function VaultEntityPage() {
                       {t('vault.scan', 'Scan & autofill')}
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => openDoc(d.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openDoc(d.id)}
+                  >
                     {t('vault.view', 'View')}
                   </Button>
                   <Button
@@ -292,76 +297,6 @@ export function VaultEntityPage() {
           </div>
         )}
       </Card>
-
-      <div className="flex justify-end">
-        <Button variant="ghost" className="text-error" onClick={removeEntity}>
-          {t('vault.deleteEntity', 'Delete entity')}
-        </Button>
-      </div>
     </div>
-  );
-}
-
-/** Render the right input for a typed vault field. */
-function FieldInput({
-  def,
-  value,
-  onChange,
-}: {
-  def: VaultFieldDef;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  // Lookup options (DB-driven, e.g. country/state) — cached query, shared.
-  const { data: lookups } = useLookupOptions();
-
-  if (def.type === 'select' || def.type === 'lookup') {
-    const opts =
-      def.type === 'lookup' && def.lookupKey
-        ? (lookups?.[def.lookupKey] ?? []).map((o) => ({ value: o.value, label: o.label }))
-        : (def.options ?? []).map((o) => ({ value: o, label: o }));
-    return (
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="—" />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {opts.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-  if (def.type === 'textarea') {
-    return (
-      <Textarea
-        value={value}
-        placeholder={def.placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        rows={2}
-      />
-    );
-  }
-  if (def.type === 'date') {
-    return <DatePicker value={value} onChange={onChange} placeholder={def.placeholder} />;
-  }
-  const type =
-    def.type === 'number'
-        ? 'number'
-        : def.type === 'email'
-          ? 'email'
-          : def.type === 'tel'
-            ? 'tel'
-            : 'text';
-  return (
-    <Input
-      type={type}
-      value={value}
-      placeholder={def.placeholder}
-      onChange={(e) => onChange(e.target.value)}
-    />
   );
 }

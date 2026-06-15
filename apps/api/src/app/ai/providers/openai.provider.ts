@@ -17,9 +17,11 @@ import type {
   ExtractOptions,
   GenerateOptions,
   JsonSchema,
+  LcUsageMetadata,
   MultimodalInput,
   Structured,
 } from './ai-provider.interface';
+import { tokenUsageFromLc } from './ai-provider.interface';
 
 @Injectable()
 export class OpenAiProvider implements AiProvider {
@@ -73,10 +75,12 @@ export class OpenAiProvider implements AiProvider {
     messages.push(new HumanMessage(prompt));
 
     const response = await this.model.invoke(messages);
+    const usage = tokenUsageFromLc(response.usage_metadata as LcUsageMetadata);
 
     return {
       text: response.content as string,
-      tokensUsed: response.usage_metadata?.total_tokens ?? 0,
+      tokensUsed: usage.totalTokens,
+      usage,
       model: this.modelName,
       provider: this.name,
     };
@@ -161,11 +165,14 @@ export class OpenAiProvider implements AiProvider {
 
     const res = await structured.invoke(messages);
     const raw = res.raw as AIMessage;
-    const tokensUsed = raw?.usage_metadata?.total_tokens ?? 0;
+    const usage = tokenUsageFromLc(
+      raw?.usage_metadata as LcUsageMetadata | undefined,
+    );
 
     return {
       data: res.parsed as T,
-      tokensUsed,
+      tokensUsed: usage.totalTokens,
+      usage,
       model: this.visionModel,
       provider: this.name,
     };

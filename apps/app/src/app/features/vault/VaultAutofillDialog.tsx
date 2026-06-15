@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVaultService } from '../documents/services-context';
 import { useVaultEntities } from './queries';
+import { KIND_BADGE, KIND_LABEL } from './kinds';
 
 /**
  * Pick a vault entity to autofill a document section. On pick, fetches the
@@ -73,8 +74,8 @@ export function VaultAutofillDialog({
                 disabled={busyId !== null}
                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary disabled:opacity-50"
               >
-                <Badge variant={e.kind === 'company' ? 'secondary' : 'primary'}>
-                  {e.kind}
+                <Badge variant={KIND_BADGE[e.kind] ?? 'secondary'}>
+                  {KIND_LABEL[e.kind] ?? e.kind}
                 </Badge>
                 <span className="flex-1 truncate">{e.label}</span>
                 {busyId === e.id && <Spinner className="h-4 w-4" />}

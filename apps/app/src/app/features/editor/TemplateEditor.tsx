@@ -15,14 +15,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
   Label,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Textarea,
-  Tooltip,
   PageBreakExtension,
   PlaceholderHighlightExtension,
   PLACEHOLDER_HIGHLIGHT_META,
@@ -42,6 +43,21 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { diffText, isUnchanged, type DiffSegment } from './revision-diff';
 
+import { EditorSideMenu, type RailItem } from './EditorActivityRail';
+import { LayoutPresetGroup } from './LayoutPresetGroup';
+import {
+  CommentsIcon,
+  FieldsIcon,
+  HistoryIcon as RailHistoryIcon,
+  LegalAiIcon as RailLegalAiIcon,
+  PagesIcon,
+  ShareIcon as RailShareIcon,
+  SignaturesIcon,
+} from './rail-icons';
+import { DocumentSidePanel } from '../legal-ai/DocumentSidePanel';
+import { CommentsPanel } from '../documents/CommentsPanel';
+import { VersionHistoryPanel } from '../documents/VersionHistoryPanel';
+import { SharePanel } from '../documents/SharePanel';
 import { EditorToolbar } from './components/EditorToolbar';
 import {
   PlaceholderForm,
@@ -60,6 +76,7 @@ import type { PageSizeKey } from '@org/document-templates';
 
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
 const DRAFT_KEY = 'legaldraft:editor:draft:v1';
+const PANEL_VISIBILITY_KEY = 'editor:panel-visibility:v1';
 
 /** Snapshot of editor state handed to persistence callbacks. */
 export type EditorDraftState = {
@@ -120,14 +137,11 @@ export interface TemplateEditorProps {
   /** When provided, the PDF button uses this (the reliable backend export) instead of window.print. */
   onExportPdf?: () => void;
   exportingPdf?: boolean;
-  /** When provided (bound docs), shows a Share action in the top bar. */
-  onShare?: () => void;
-  /** When provided (bound docs), shows a version-History action in the top bar. */
-  onHistory?: () => void;
-  /** When provided (bound docs), shows a Comments action in the top bar. */
-  onComments?: () => void;
   /** When provided (bound docs), shows a Signatures action in the top bar. */
   onSignatures?: () => void;
+  /** When set, the activity rail renders an inline "Legal & AI" panel that
+   *  mounts `<DocumentSidePanel documentId={…}>` in the left rail. */
+  documentId?: string;
   /** Extra rendered HTML appended in the preview (e.g. signatures + audit). */
   previewAppendHtml?: string;
 }
@@ -141,10 +155,8 @@ function TemplateEditorInner({
   onAiRevise,
   onExportPdf,
   exportingPdf,
-  onShare,
-  onHistory,
-  onComments,
   onSignatures,
+  documentId,
   previewAppendHtml,
 }: {
   persistence: EditorPersistence;
@@ -162,10 +174,8 @@ function TemplateEditorInner({
   ) => Promise<{ html: string }>;
   onExportPdf?: () => void;
   exportingPdf?: boolean;
-  onShare?: () => void;
-  onHistory?: () => void;
-  onComments?: () => void;
   onSignatures?: () => void;
+  documentId?: string;
   previewAppendHtml?: string;
 }) {
   const { t } = useTranslation();
@@ -224,8 +234,32 @@ function TemplateEditorInner({
     [persistence],
   );
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'fields' | 'pages'>('fields');
+  type SidebarTab =
+    | 'fields'
+    | 'pages'
+    | 'legal-ai'
+    | 'comments'
+    | 'history'
+    | 'share';
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('fields');
   const [showPreview, setShowPreview] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(true);
+  // Persisted per-panel visibility (which menu items the user has hidden).
+  // Lives in localStorage so the preference survives reloads / new docs.
+  const [hiddenPanels, setHiddenPanels] = useState<Set<string>>(
+    () => loadHiddenPanels(),
+  );
+  useEffect(() => {
+    saveHiddenPanels(hiddenPanels);
+  }, [hiddenPanels]);
+  const togglePanelVisibility = useCallback((id: string) => {
+    setHiddenPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   // lg+ shows the resizable 3-pane layout; below that we show one pane at a
   // time via a segmented control (3 columns are unusable on a phone).
   const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -741,55 +775,187 @@ function TemplateEditorInner({
   // The three panes are defined once and placed into either the desktop
   // resizable layout or the mobile single-pane switcher (one mount each, so
   // the single Tiptap EditorContent is never duplicated).
+  // Side-menu items. Panel-kind items switch the inline section content;
+  // action-kind items dispatch a callback (typically opens a dialog the
+  // parent owns). Items requiring a `documentId` (Legal & AI, Comments,
+  // History) only render when one is provided — keeps the menu honest.
+  const menuItems: RailItem[] = [
+    {
+      id: 'fields',
+      kind: 'panel',
+      group: t('editor.group.content', 'Content'),
+      label: t('editor.tabs.fields', 'Fields'),
+      icon: <FieldsIcon />,
+      active: sidebarTab === 'fields',
+      badge:
+        completionStats.total > 0
+          ? `${completionStats.filled}/${completionStats.total}`
+          : undefined,
+      onClick: () => setSidebarTab('fields'),
+    },
+    {
+      id: 'pages',
+      kind: 'panel',
+      group: t('editor.group.content', 'Content'),
+      label: t('editor.tabs.pages', 'Pages'),
+      icon: <PagesIcon />,
+      active: sidebarTab === 'pages',
+      onClick: () => setSidebarTab('pages'),
+    },
+    ...(documentId
+      ? [
+          {
+            id: 'legal-ai',
+            kind: 'panel' as const,
+            group: t('editor.group.intelligence', 'AI & Citations'),
+            label: t('editor.toolbar.legalAi', 'Legal & AI'),
+            icon: <RailLegalAiIcon />,
+            active: sidebarTab === 'legal-ai',
+            onClick: () => setSidebarTab('legal-ai'),
+          },
+          {
+            id: 'comments',
+            kind: 'panel' as const,
+            group: t('editor.group.collaborate', 'Collaborate'),
+            label: t('editor.toolbar.comments', 'Comments'),
+            icon: <CommentsIcon />,
+            active: sidebarTab === 'comments',
+            onClick: () => setSidebarTab('comments'),
+          },
+          {
+            id: 'history',
+            kind: 'panel' as const,
+            group: t('editor.group.collaborate', 'Collaborate'),
+            label: t('editor.toolbar.history', 'History'),
+            icon: <RailHistoryIcon />,
+            active: sidebarTab === 'history',
+            onClick: () => setSidebarTab('history'),
+          },
+        ]
+      : []),
+    ...(documentId
+      ? [
+          {
+            id: 'share',
+            kind: 'panel' as const,
+            group: t('editor.group.collaborate', 'Collaborate'),
+            label: t('editor.toolbar.share', 'Share'),
+            icon: <RailShareIcon />,
+            active: sidebarTab === 'share',
+            onClick: () => setSidebarTab('share'),
+          },
+        ]
+      : []),
+    ...(onSignatures
+      ? [
+          {
+            id: 'signatures',
+            kind: 'action' as const,
+            group: t('editor.group.collaborate', 'Collaborate'),
+            label: t('editor.toolbar.signatures', 'Signatures'),
+            icon: <SignaturesIcon />,
+            onClick: onSignatures,
+          },
+        ]
+      : []),
+  ];
+
+  // The visibility list is the *full* set of available items — drives the
+  // Customize popover. The menu itself renders only the not-hidden subset.
+  const visibleMenuItems = menuItems.filter((it) => !hiddenPanels.has(it.id));
+
+  // If the active section's been hidden, fall back to the first visible
+  // panel so the section column never goes blank.
+  useEffect(() => {
+    if (!hiddenPanels.has(sidebarTab)) return;
+    const firstVisiblePanel = visibleMenuItems.find((i) => i.kind === 'panel');
+    if (firstVisiblePanel) setSidebarTab(firstVisiblePanel.id as SidebarTab);
+  }, [hiddenPanels, sidebarTab, visibleMenuItems]);
+
+  const customizeButton = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('editor.customize.button', 'Customize sidebar')}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] font-medium text-foreground/55 hover:bg-secondary hover:text-foreground"
+        >
+          <GearIcon />
+          <span className="flex-1 truncate">
+            {t('editor.customize.button', 'Customize sidebar')}
+          </span>
+          {hiddenPanels.size > 0 && (
+            <span className="rounded bg-secondary px-1 text-[9px] font-semibold text-foreground/60">
+              {menuItems.length - hiddenPanels.size}/{menuItems.length}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-56">
+        <DropdownMenuLabel>
+          {t('editor.customize.label', 'Show in sidebar')}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {menuItems.map((it) => (
+          <DropdownMenuCheckboxItem
+            key={it.id}
+            checked={!hiddenPanels.has(it.id)}
+            onCheckedChange={() => togglePanelVisibility(it.id)}
+            onSelect={(e) => e.preventDefault()}
+          >
+            <span className="flex items-center gap-2">
+              <span className="flex size-4 items-center justify-center text-foreground/60">
+                {it.icon}
+              </span>
+              <span>{it.label}</span>
+            </span>
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const sidebarPane = (
-    <aside className="flex h-full w-full flex-col bg-background">
-      <Tabs
-        value={sidebarTab}
-        onValueChange={(v) => setSidebarTab(v as 'fields' | 'pages')}
-        className="flex flex-1 flex-col overflow-hidden"
-      >
-        <div className="border-b border-border px-3 py-2">
-          <TabsList className="w-full">
-            <TabsTrigger value="fields" className="flex-1 text-xs">
-              {t('editor.tabs.fields', 'Fields')}
-              {completionStats.total > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
-                  {completionStats.filled}/{completionStats.total}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="pages" className="flex-1 text-xs">
-              {t('editor.tabs.pages', 'Pages')}
-            </TabsTrigger>
-          </TabsList>
+    <aside className="flex h-full w-full bg-background">
+      <EditorSideMenu items={visibleMenuItems} footer={customizeButton} />
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Section header — title for the active view */}
+        <div className="flex-none border-b border-border px-3 py-2 text-xs font-semibold text-foreground/80">
+          {sidebarTab === 'fields' && t('editor.tabs.fields', 'Fields')}
+          {sidebarTab === 'pages' && t('editor.tabs.pages', 'Pages')}
+          {sidebarTab === 'legal-ai' && t('editor.toolbar.legalAi', 'Legal & AI')}
+          {sidebarTab === 'comments' && t('editor.toolbar.comments', 'Comments')}
+          {sidebarTab === 'history' && t('editor.toolbar.history', 'History')}
+          {sidebarTab === 'share' && t('editor.toolbar.share', 'Share')}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <TabsContent value="fields" className="!mt-0">
-            {completionStats.total > 0 && (
-              <div className="border-b border-border bg-secondary/15 px-4 py-2">
-                <div className="flex items-center justify-between text-[11px] text-foreground/60">
-                  <span>{t('editor.completion', 'Completion')}</span>
-                  <span>{completionStats.pct}%</span>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {sidebarTab === 'fields' && (
+            <>
+              {completionStats.total > 0 && (
+                <div className="border-b border-border bg-secondary/15 px-4 py-2">
+                  <div className="flex items-center justify-between text-[11px] text-foreground/60">
+                    <span>{t('editor.completion', 'Completion')}</span>
+                    <span>{completionStats.pct}%</span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
+                    <div
+                      className="h-full bg-emerald-500 transition-all"
+                      style={{ width: `${completionStats.pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
-                  <div
-                    className="h-full bg-emerald-500 transition-all"
-                    style={{ width: `${completionStats.pct}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            <PlaceholderForm
-              ref={formRef}
-              fields={fieldsFromTemplate}
-              values={values}
-              onChange={handleValueChange}
-              unknownKeys={discoveredKeys}
-            />
-          </TabsContent>
-
-          <TabsContent value="pages" className="!mt-0">
+              )}
+              <PlaceholderForm
+                ref={formRef}
+                fields={fieldsFromTemplate}
+                values={values}
+                onChange={handleValueChange}
+                unknownKeys={discoveredKeys}
+              />
+            </>
+          )}
+          {sidebarTab === 'pages' && (
             <PageNavigator
               html={html}
               activePage={activePage}
@@ -797,9 +963,21 @@ function TemplateEditorInner({
               onAddPage={handleAddPage}
               onRemovePage={handleRemovePage}
             />
-          </TabsContent>
+          )}
+          {sidebarTab === 'legal-ai' && documentId && (
+            <DocumentSidePanel documentId={documentId} />
+          )}
+          {sidebarTab === 'comments' && documentId && (
+            <CommentsPanel documentId={documentId} />
+          )}
+          {sidebarTab === 'history' && documentId && (
+            <VersionHistoryPanel documentId={documentId} />
+          )}
+          {sidebarTab === 'share' && documentId && (
+            <SharePanel documentId={documentId} />
+          )}
         </div>
-      </Tabs>
+      </div>
     </aside>
   );
 
@@ -894,11 +1072,17 @@ function TemplateEditorInner({
             <div className="flex size-8 flex-none items-center justify-center rounded-md bg-secondary/60 text-lg">
               {template.icon}
             </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold leading-tight">
-                {template.name}
-              </div>
-              <div className="truncate text-[11px] text-foreground/55">
+            <div className="min-w-0 flex-1">
+              <input
+                value={template.name}
+                onChange={(e) =>
+                  setTemplate((tpl) => ({ ...tpl, name: e.target.value }))
+                }
+                placeholder={t('editor.untitled', 'Untitled document')}
+                aria-label={t('editor.titleLabel', 'Document title')}
+                className="w-full min-w-0 rounded border-0 bg-transparent px-1.5 py-0.5 text-sm font-semibold leading-tight focus:bg-foreground/5 focus:outline-none"
+              />
+              <div className="truncate px-1.5 text-[11px] text-foreground/55">
                 {t(
                   'editor.meta.fieldsFilled',
                   '{{category}} · {{filled}}/{{total}} fields filled',
@@ -981,23 +1165,6 @@ function TemplateEditorInner({
                 {t('editor.toolbar.print', 'Print')}
               </Button>
             )}
-
-            <Tooltip
-              content={
-                showPreview
-                  ? t('editor.toolbar.hidePreview', 'Hide preview')
-                  : t('editor.toolbar.showPreview', 'Show preview')
-              }
-            >
-              <Button
-                variant={showPreview ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => setShowPreview((s) => !s)}
-                className="size-8 p-0"
-              >
-                <SplitIcon />
-              </Button>
-            </Tooltip>
           </div>
         </div>
 
@@ -1052,87 +1219,65 @@ function TemplateEditorInner({
             )}
           </ToolbarGroup>
 
-          {(onShare || onComments || onSignatures || onHistory) && (
-            <>
-              <ToolbarDivider />
-              <ToolbarGroup
-                label={t('editor.group.collaborate', 'Collaborate')}
-              >
-                {onShare && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onShare}
-                    className="h-7 gap-1.5 px-2 text-xs"
-                  >
-                    <ShareIcon />
-                    {t('editor.toolbar.share', 'Share')}
-                  </Button>
-                )}
-                {onComments && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onComments}
-                    className="h-7 gap-1.5 px-2 text-xs"
-                  >
-                    <CommentIcon />
-                    {t('editor.toolbar.comments', 'Comments')}
-                  </Button>
-                )}
-                {onSignatures && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onSignatures}
-                    className="h-7 gap-1.5 px-2 text-xs"
-                  >
-                    <SignatureIcon />
-                    {t('editor.toolbar.signatures', 'Signatures')}
-                  </Button>
-                )}
-                {onHistory && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onHistory}
-                    className="h-7 gap-1.5 px-2 text-xs"
-                  >
-                    <HistoryIcon />
-                    {t('editor.toolbar.history', 'History')}
-                  </Button>
-                )}
-              </ToolbarGroup>
-            </>
-          )}
+          {/* Collaborate buttons (Share/Comments/Signatures/Legal&AI/History)
+              now live in the left activity rail — kept off the top toolbar
+              to reduce horizontal crowding. The rail is the single source of
+              truth for those actions. */}
 
           <div className="ml-auto flex flex-none items-center gap-2 pl-2">
             <DocumentFontSelect value={fontFamily} onChange={setFontFamily} />
             <PageSizeSelect value={pageSize} onChange={handlePageSizeChange} />
+            <LayoutPresetGroup
+              showSidebar={showSidebar}
+              showPreview={showPreview}
+              onChange={(s, p) => {
+                setShowSidebar(s);
+                setShowPreview(p);
+              }}
+              t={t}
+            />
           </div>
         </div>
       </header>
 
       {isDesktop ? (
-        /* ── Desktop: resizable 3-pane layout ── */
+        /* ── Desktop: resizable 3-pane layout (menu | editor | preview).
+              Preview defaults to a compact 28% width and can be hidden via
+              the top-bar toggle. The sidebar is wider (30%) to fit the
+              labeled side menu + active section content. Both sidebar and
+              preview can be hidden independently via top-bar toggles. ── */
         <Group orientation="horizontal" className="flex-1">
-          <Panel
-            id="sidebar"
-            defaultSize="22%"
-            minSize="15%"
-            maxSize="36%"
-            className="min-w-0"
-          >
-            <div className="h-full border-r border-border">{sidebarPane}</div>
-          </Panel>
+          {showSidebar && (
+            <>
+              <Panel
+                id="sidebar"
+                defaultSize="30%"
+                minSize="22%"
+                maxSize="42%"
+                className="min-w-0"
+              >
+                <div className="h-full border-r border-border">
+                  {sidebarPane}
+                </div>
+              </Panel>
 
-          <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
-            <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
-          </Separator>
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+                <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
+              </Separator>
+            </>
+          )}
 
           <Panel
             id="editor"
-            defaultSize={showPreview ? '40%' : '78%'}
+            defaultSize={
+              showPreview && showSidebar
+                ? '42%'
+                : showPreview
+                  ? '72%'
+                  : showSidebar
+                    ? '70%'
+                    : '100%'
+            }
             minSize="28%"
             className="min-w-0"
           >
@@ -1146,8 +1291,8 @@ function TemplateEditorInner({
               </Separator>
               <Panel
                 id="preview"
-                defaultSize="38%"
-                minSize="20%"
+                defaultSize="28%"
+                minSize="18%"
                 className="min-w-0 border-l border-border"
               >
                 {previewPane}
@@ -1472,10 +1617,8 @@ export function TemplateEditor({
   onAiRevise,
   onExportPdf,
   exportingPdf,
-  onShare,
-  onHistory,
-  onComments,
   onSignatures,
+  documentId,
   previewAppendHtml,
 }: TemplateEditorProps = {}) {
   return (
@@ -1489,10 +1632,8 @@ export function TemplateEditor({
         onAiRevise={onAiRevise}
         onExportPdf={onExportPdf}
         exportingPdf={exportingPdf}
-        onShare={onShare}
-        onHistory={onHistory}
-        onComments={onComments}
         onSignatures={onSignatures}
+        documentId={documentId}
         previewAppendHtml={previewAppendHtml}
       />
     </TransliterationProvider>
@@ -1588,6 +1729,30 @@ function stripHtmlToText(html: string): string {
 
 function escapeAttr(s: string): string {
   return s.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function loadHiddenPanels(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(PANEL_VISIBILITY_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((v): v is string => typeof v === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenPanels(set: Set<string>): void {
+  try {
+    window.localStorage.setItem(
+      PANEL_VISIBILITY_KEY,
+      JSON.stringify([...set]),
+    );
+  } catch {
+    /* best-effort */
+  }
 }
 
 const PRINT_CSS = `
@@ -1707,7 +1872,8 @@ function PrintIcon() {
   );
 }
 
-function SplitIcon() {
+
+function GearIcon() {
   return (
     <svg
       className="size-3.5"
@@ -1715,9 +1881,11 @@ function SplitIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <line x1="12" y1="3" x2="12" y2="21" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
@@ -1753,73 +1921,3 @@ function BackIcon() {
   );
 }
 
-function ShareIcon() {
-  return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="18" cy="5" r="3" />
-      <circle cx="6" cy="12" r="3" />
-      <circle cx="18" cy="19" r="3" />
-      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-    </svg>
-  );
-}
-
-function CommentIcon() {
-  return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-
-function SignatureIcon() {
-  return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 17.5c3-1 4-6 6-6s2 4 4 4 3-3 5-3" />
-      <line x1="3" y1="21" x2="21" y2="21" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 3v5h5" />
-      <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-      <path d="M12 7v5l4 2" />
-    </svg>
-  );
-}

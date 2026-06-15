@@ -19,7 +19,7 @@ const nextConfig = {
     '@org/transliteration',
   ],
 
-  // Dev server port — avoids conflict with API (3000) and React app (4200)
+  // Dev server port — avoids conflict with API (3000) and React app (5200)
   devIndicators: false,
 
   async rewrites() {

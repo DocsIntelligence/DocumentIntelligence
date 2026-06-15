@@ -274,7 +274,7 @@ export class AuthController {
     this.setAuthCookies(res, result.accessToken, result.refreshToken);
     const redirectUrl = this.config.get<string>(
       'FRONTEND_URL',
-      'http://localhost:4200',
+      'http://localhost:5200',
     );
     res.redirect(
       `${redirectUrl}/auth/callback?status=authenticated&method=github`,
@@ -320,7 +320,7 @@ export class AuthController {
     this.setAuthCookies(res, result.accessToken, result.refreshToken);
     const redirectUrl = this.config.get<string>(
       'FRONTEND_URL',
-      'http://localhost:4200',
+      'http://localhost:5200',
     );
     res.redirect(
       `${redirectUrl}/auth/callback?status=authenticated&method=google`,
@@ -366,7 +366,7 @@ export class AuthController {
     this.setAuthCookies(res, result.accessToken, result.refreshToken);
     const redirectUrl = this.config.get<string>(
       'FRONTEND_URL',
-      'http://localhost:4200',
+      'http://localhost:5200',
     );
     res.redirect(
       `${redirectUrl}/auth/callback?status=authenticated&method=linkedin`,

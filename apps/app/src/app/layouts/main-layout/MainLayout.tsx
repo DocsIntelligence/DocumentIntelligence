@@ -274,6 +274,11 @@ function Sidebar({
               icon={<VaultIcon />}
             />
             <NavItem
+              to="/admin/legal-reference"
+              label={t('nav.legalReference', 'Legal references')}
+              icon={<BookIcon />}
+            />
+            <NavItem
               to="/admin/ai-usage"
               label={t('nav.aiUsage', 'AI usage')}
               icon={<ChartIcon />}
@@ -632,6 +637,14 @@ function ChartIcon() {
       <rect x="6" y="10" width="3" height="9" />
       <rect x="11" y="6" width="3" height="13" />
       <rect x="16" y="13" width="3" height="6" />
+    </svg>
+  );
+}
+function BookIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
     </svg>
   );
 }

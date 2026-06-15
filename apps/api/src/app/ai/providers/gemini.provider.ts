@@ -10,7 +10,9 @@ import type {
   AiProvider,
   AiResponse,
   GenerateOptions,
+  LcUsageMetadata,
 } from './ai-provider.interface';
+import { tokenUsageFromLc } from './ai-provider.interface';
 
 @Injectable()
 export class GeminiProvider implements AiProvider {
@@ -53,10 +55,14 @@ export class GeminiProvider implements AiProvider {
     messages.push(new HumanMessage(prompt));
 
     const response = await this.model.invoke(messages);
+    const usage = tokenUsageFromLc(
+      response.usage_metadata as LcUsageMetadata | undefined,
+    );
 
     return {
       text: response.content as string,
-      tokensUsed: response.usage_metadata?.total_tokens ?? 0,
+      tokensUsed: usage.totalTokens,
+      usage,
       model: this.modelName,
       provider: this.name,
     };
