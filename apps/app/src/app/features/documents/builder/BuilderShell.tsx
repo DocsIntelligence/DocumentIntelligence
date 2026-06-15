@@ -157,7 +157,10 @@ export function BuilderShell({ documentId }: Props) {
     });
     if (serialized === lastSavedRef.current) return;
     lastSavedRef.current = serialized;
-    patchMutate({ data: debouncedDraft, title: debouncedTitle });
+    patchMutate({
+      data: debouncedDraft,
+      title: debouncedTitle?.trim() || undefined,
+    });
   }, [debouncedDraft, debouncedTitle, patchMutate]);
 
   // Schema + risks.
@@ -273,7 +276,9 @@ export function BuilderShell({ documentId }: Props) {
       const componentKey = resolveComponentKey(doc);
       const Template = getTemplate(componentKey);
       if (!Template) {
-        toast.error(t('builder.detach.noTemplate', 'No renderer for this template.'));
+        toast.error(
+          t('builder.detach.noTemplate', 'No renderer for this template.'),
+        );
         return;
       }
       const markup = renderToStaticMarkup(
@@ -919,4 +924,3 @@ function GlobeIcon() {
     </svg>
   );
 }
-

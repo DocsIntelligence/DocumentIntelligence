@@ -98,7 +98,7 @@ export function detailToForm(
   return {
     key: clone ? `${d.key}_copy` : d.key,
     name: clone ? `${d.name} (copy)` : d.name,
-    documentTypeKey: clone ? '' : d.documentTypeKey ?? '',
+    documentTypeKey: clone ? '' : (d.documentTypeKey ?? ''),
     description: d.description ?? '',
     jurisdiction: d.jurisdiction ?? '',
     fields: d.fields.length
@@ -124,7 +124,9 @@ function toPayload(v: ExtractionSchemaDto): UpsertSchemaPayload {
   return {
     key: v.key.trim(),
     name: v.name.trim(),
-    documentTypeKey: v.documentTypeKey?.trim() ? v.documentTypeKey.trim() : null,
+    documentTypeKey: v.documentTypeKey?.trim()
+      ? v.documentTypeKey.trim()
+      : null,
     description: v.description?.trim() || undefined,
     jurisdiction: v.jurisdiction?.trim() || undefined,
     fields: v.fields.map((f) => ({
@@ -426,10 +428,7 @@ export function SchemaManager() {
           empty={
             <div className="space-y-3 py-6">
               <p className="text-sm text-foreground/60">
-                {t(
-                  'adminIntel.schema.empty',
-                  'No document types yet.',
-                )}
+                {t('adminIntel.schema.empty', 'No document types yet.')}
               </p>
               <Button size="sm" onClick={startCreate}>
                 {t('adminIntel.schema.create', '+ New type')}
@@ -459,7 +458,12 @@ function StatTile({
   };
   return (
     <div className="rounded-xl border border-border bg-background/60 p-3">
-      <p className={cn('text-2xl font-semibold leading-none tabular-nums', toneClass[tone])}>
+      <p
+        className={cn(
+          'text-2xl font-semibold leading-none tabular-nums',
+          toneClass[tone],
+        )}
+      >
         {value}
       </p>
       <p className="mt-1.5 text-xs text-foreground/55">{label}</p>
@@ -502,7 +506,9 @@ export function SchemaEditor({
     // Cast: Zod's input type (optional `.default()` fields + the recursive
     // `z.lazy` field) diverges from the output type RHF works with. zodResolver
     // validates against the real schema and hands RHF parsed (output) values.
-    resolver: zodResolver(extractionSchemaSchema) as Resolver<ExtractionSchemaDto>,
+    resolver: zodResolver(
+      extractionSchemaSchema,
+    ) as Resolver<ExtractionSchemaDto>,
     defaultValues: initial,
     mode: 'onBlur',
   });
@@ -531,17 +537,24 @@ export function SchemaEditor({
   return (
     <FormProvider {...form}>
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
-        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            {t('common.back', 'Back to types')}
-          </Button>
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending
-              ? t('common.saving', 'Saving…')
-              : creating
-              ? t('adminIntel.schema.create', '+ New type')
-              : t('adminIntel.schema.saveVersion', 'Save (new version)')}
-          </Button>
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+          <h4 className="text-sm font-medium text-foreground">
+            {creating
+              ? t('adminIntel.schema.newType', 'New extraction type')
+              : t('adminIntel.schema.editType', 'Edit extraction type')}
+          </h4>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              {t('common.back', 'Back to types')}
+            </Button>
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending
+                ? t('common.saving', 'Saving…')
+                : creating
+                  ? t('adminIntel.schema.create', '+ New type')
+                  : t('adminIntel.schema.saveVersion', 'Save (new version)')}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -567,7 +580,10 @@ export function SchemaEditor({
             />
           </FormField>
           <FormField
-            label={t('adminIntel.schema.docTypeKey', 'Drafting type key (optional)')}
+            label={t(
+              'adminIntel.schema.docTypeKey',
+              'Drafting type key (optional)',
+            )}
             error={errors.documentTypeKey?.message}
           >
             <Input
@@ -577,7 +593,10 @@ export function SchemaEditor({
             />
           </FormField>
           <FormField
-            label={t('adminIntel.schema.jurisdiction', 'Jurisdiction (optional)')}
+            label={t(
+              'adminIntel.schema.jurisdiction',
+              'Jurisdiction (optional)',
+            )}
             error={errors.jurisdiction?.message}
           >
             <Input
@@ -769,7 +788,13 @@ function FieldRow({
           {...register(`fields.${index}.format`)}
         />
         <div className="ml-auto flex gap-1">
-          <Button type="button" size="sm" variant="ghost" disabled={!canUp} onClick={onUp}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!canUp}
+            onClick={onUp}
+          >
             ↑
           </Button>
           <Button

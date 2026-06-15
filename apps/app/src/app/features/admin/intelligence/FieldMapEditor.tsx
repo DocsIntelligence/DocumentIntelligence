@@ -105,11 +105,15 @@ function MapForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
-      {/* Context strip — the page header already shows the page title. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{typeLabel}</span>
-          <span className="font-mono text-xs text-foreground/45">{schemaKey}</span>
+      {/* Context strip */}
+      <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-sm font-medium text-foreground">
+            {typeLabel}
+          </span>
+          <span className="font-mono text-xs text-foreground/45">
+            {schemaKey}
+          </span>
           {docTypeKey ? (
             <Badge variant="secondary" outline>
               {docTypeKey}
@@ -125,7 +129,7 @@ function MapForm({
             })}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
             {t('common.back', 'Back to types')}
           </Button>
@@ -153,12 +157,22 @@ function MapForm({
         </p>
       ) : (
         <div className="space-y-2">
+          {/* Column headers */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 pb-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">
+              {t('adminIntel.map.extractionField', 'Extraction field')}
+            </span>
+            <span />
+            <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">
+              {t('adminIntel.map.documentPath', 'Document path')}
+            </span>
+          </div>
           {schema.fields.map((f) => (
             <Card
               key={f.key}
-              className="flex flex-wrap items-center gap-3 px-3 py-2"
+              className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2"
             >
-              <span className="min-w-0 flex-1 text-sm" title={f.key}>
+              <span className="min-w-0 text-sm" title={f.key}>
                 <span className="block truncate font-medium text-foreground">
                   {f.label}
                 </span>
@@ -168,7 +182,7 @@ function MapForm({
               </span>
               <span className="text-foreground/30">→</span>
               <Input
-                className="flex-1 font-mono text-xs"
+                className="w-full font-mono text-xs"
                 placeholder={t('adminIntel.map.path', 'parties.landlord.name')}
                 {...register(`mapping.${f.key}`)}
               />

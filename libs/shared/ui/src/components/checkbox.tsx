@@ -17,7 +17,17 @@ export const Checkbox = forwardRef<
     <CheckboxPrimitive.Indicator
       className={cn('flex items-center justify-center text-current')}
     >
-      ✓
+      <svg
+        className="size-3"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M2.5 6.5L5 9l4.5-6" />
+      </svg>
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>
 ));
