@@ -65,6 +65,9 @@ export class DocumentsService {
     if (query.documentTypeKey) {
       where.documentType = { key: query.documentTypeKey };
     }
+    if (query.groupId) {
+      where.groupId = query.groupId;
+    }
     if (query.q) {
       where.title = { contains: query.q, mode: 'insensitive' };
     }
@@ -93,6 +96,7 @@ export class DocumentsService {
         include: {
           documentType: { select: { key: true, name: true } },
           template: { select: { key: true, name: true } },
+          group: { select: { id: true, name: true, kind: true } },
         },
       }),
       this.db.document.count({ where }),

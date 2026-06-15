@@ -14,6 +14,7 @@ import '@fontsource/noto-sans-devanagari/600.css';
 import '@fontsource/noto-sans-devanagari/700.css';
 import {
   createAuthService,
+  createDocumentGroupsService,
   createDocumentsService,
   createHttpClient,
   createIntelligenceService,
@@ -72,6 +73,7 @@ const http = createHttpClient({
 const auth = createAuthService(http);
 const users = createUsersService(http);
 const documents = createDocumentsService(http);
+const documentGroups = createDocumentGroupsService(http);
 const legalAi = createLegalAiService(http);
 const shares = createSharesService(http);
 const lookups = createLookupsService(http);
@@ -104,6 +106,7 @@ root.render(
         <TooltipProvider>
           <ServicesProvider
             documents={documents}
+            documentGroups={documentGroups}
             legalAi={legalAi}
             shares={shares}
             lookups={lookups}

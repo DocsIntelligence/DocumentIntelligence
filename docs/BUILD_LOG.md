@@ -1821,3 +1821,70 @@ What landed (api+app build ✓ / api+app+web lint 0 errors / migration applied /
 - IndiaCode handle map handles are taken from public URL conventions; not every one is exhaustively re-verified. Treat as a bootstrap — admins should sync + spot-check before binding use.
 - Public `/law/:id` "Documents that use this section" links assume the authed app lives at `app.<marketing-domain>`. The current heuristic in apps/web (`webUrl.replace('//','//app.')`) is a placeholder; once a real `NEXT_PUBLIC_APP_URL` env exists, swap to that.
 - Schedule.org JSON-LD on `/law/:id` uses `Legislation` (not the looser `Article`) — Google indexes both, but the `Legislation` rich-result template is best-effort until verified in Search Console.
+
+## 2026-06-15 — Document groups: in-group search + summary-from-summaries
+
+Finished off the document-groups module the previous session left dangling, and wired the user-requested **search-first** intelligence pattern: full-text + semantic search **scoped to a single group**, and a group summary that is **synthesised from the documents' existing analysis summaries** rather than re-running summarisation against full document text.
+
+**API**:
+
+1. `apps/api/src/app/search/search.service.ts` — `SearchParams` gained `groupId?: string`. When set, the SearchService:
+   - forces `kind = 'document'` (sources aren't in groups; `Document.groupId` only),
+   - pushes an `EXISTS (SELECT 1 FROM "Document" d WHERE d.id = si."refId" AND d."groupId" = $X)` predicate into the same WHERE clause as the existing tsv + trgm + vector match, so pagination, `total`, and facets are correct in a single SQL round-trip (uses the existing `Document_groupId_idx`).
+2. `apps/api/src/app/document-groups/group-intelligence.service.ts` — replaced the broken post-filter implementation:
+   - `searchInGroup()` now delegates to `SearchService.search({ groupId, … })` — no document-id fetch, no client-side filter on a page slice (which had `total = filtered.length` and lost pages 2+).
+   - `generateGroupSummary()` rewritten to fetch the latest `AnalysisRun.summary` per document via a single `DISTINCT ON ("subjectId")` raw query instead of N `findFirst` calls; returns `unanalyzedCount` so the UI can warn when some docs are excluded.
+   - Added `getStoredSummary()` returning the last-generated summary from `DocumentGroup.metadata` (`{ summary, summaryGeneratedAt, summaryModel }`) so the UI can show prior output without re-generating.
+3. `apps/api/src/app/document-groups/document-groups.service.ts` — tightened `assertAccess`: it was letting any caller past when `ownerOrgId` was set. Now async + verifies `OrgMember(orgId, userId)` for org-owned groups; all five call sites updated to `await`.
+4. `document-groups.controller.ts` — new routes (JwtAuthGuard, same as the existing ones):
+   - `POST /groups/:id/search` — body `{ q, sort?, page?, pageSize? }`, returns the standard `SearchResponse` (with highlight markers).
+   - `GET  /groups/:id/summary` — returns the stored summary (or `null`).
+   - `POST /groups/:id/summary` — generates a fresh group summary from the existing per-document analyses, persists it into `metadata`, and returns it.
+5. `document-groups.module.ts` — registered `GroupIntelligenceService` (previously orphaned) + imported `AiModule` (SearchModule is global so it's already in scope).
+
+**Client**:
+
+6. `libs/shared/api-client/src/lib/document-groups.service.ts` — added `search()`, `getSummary()`, `generateSummary()` + the `GroupSearchPayload`, `GroupSummary`, `GenerateGroupSummaryResult` types. Imports `SearchResponse`/`SearchSort` from the existing search-service module so the hit shape stays unified.
+7. `apps/app/src/app/features/groups/queries.ts` — `useGroupSearch()`, `useGroupSummary()`, `useGenerateGroupSummary()` hooks (react-query keys under `groupsKeys.search/summary`, generate-mutation invalidates summary + detail on success and surfaces server `message` in the toast).
+8. `apps/app/src/app/features/search/index.ts` — barrelled `Highlighted` + `hrefForHit` so the groups feature can reuse the same `«hl»…«/hl»` renderer the global search uses.
+9. `apps/app/src/app/features/groups/GroupIntelligencePanel.tsx` — new component, slotted above `<DocumentsList groupId>` in `GroupDetailPage`. Card with two sections:
+   - **Search within group**: debounced (250 ms) input → `useGroupSearch`; renders up to 10 hits as title + body snippet (both `Highlighted`), each linking via `hrefForHit`. Empty/loading/no-match states all explicit.
+   - **Group summary**: shows `useGroupSummary` result; `Generate` (or `Regenerate`) button runs the mutation; warns when `unanalyzedCount > 0`; shows `generatedAt` + model footer. Disabled when the group is empty.
+
+**Verification**: `pnpm nx run-many -t build -p api app api-client` is green. `pnpm nx run-many -t lint -p api app api-client` is green (0 errors; warnings are pre-existing). Not runtime-verified — needs API running + a group with analyzed docs to exercise the summary path, and any group with kind='document' search-indexed rows for the search path.
+
+**Honest open gaps**:
+- `assertAccess` change is a small behaviour fix — any prior org-owned group that someone non-member touched would now correctly throw 403; verify no caller relies on the old laxity before deploying.
+- `GroupIntelligencePanel` shows the summary `generatedAt` from `metadata`, which the generation endpoint stamps as `new Date().toISOString()`. If multiple users hit the button quickly, the last writer wins — no optimistic-concurrency guard. Fine for v1.
+- Search facets card (the existing global-search chips) isn't surfaced in the group panel — the hits list is intentionally minimal. Power users still have the global `/search` page.
+- No "ask the group" RAG endpoint yet (would need to chunk + embed per-doc, then top-k across the group). Out of scope here; can layer on top of the SourceChunk model when needed.
+
+## 2026-06-15 (cont.) — Manual analyze from the documents list (single + bulk + status)
+
+The previous session added analyse-document infrastructure (`POST /intelligence/documents/:id/analyze`, `useRunAnalysis`, the `DocumentInsights` panel on the editor) but exposed it only inside the editor. Drafting documents from the list had no first-class "Analyze" action. Added it now — single + bulk + a per-row analysis-presence indicator, all driven off the existing AnalysisService + the same content-hash cache.
+
+**API**:
+
+1. `analysis.service.ts` — `analyze` / `analyzeDocument` / `analyzeSubject` accept `{ force?: boolean }`. When `force=true`, the content-hash cache lookup is skipped so the AI is re-run even when the text is byte-identical (this is what "Re-analyze" means semantically; without force, the existing fingerprint-cached result was just being returned and the button felt broken). Added `getDocumentsAnalysisStatus(userId, documentIds[])` — access-checks via the existing user/org-member predicate, then one `DISTINCT ON ("subjectId")` query (uses `AnalysisRun_subjectType_subjectId_createdAt_idx`) to get the latest run per doc. Returns `Record<id, { hasAnalysis, lastAnalyzedAt, summary, runId }>` with every input id keyed (inaccessible/missing docs get the neutral `hasAnalysis=false` shape, no leakage).
+2. `intelligence.controller.ts` — `POST /intelligence/sources/:id/analyze?force=` + `POST /intelligence/documents/:id/analyze?force=` accept the new flag. New `POST /intelligence/documents/analyze-status` takes `{ documentIds: string[] }` and returns the keyed status object. JwtAuthGuard, same as the rest of the controller.
+
+**Client**:
+
+3. `intelligence.service.ts` (api-client) — `analyze(id, { force })` + `analyzeDocument(id, { force })` send `?force=true` only when truthy (otherwise no param, keeping the query string clean). New `getDocumentsAnalysisStatus(documentIds)`. New exported type `DocumentAnalysisStatus`.
+4. `apps/app/.../features/intelligence/queries.ts` — `useRunAnalysis` mutationFn now accepts an optional `{ force?: boolean }` (no breaking change for existing `runAnalysis.mutate()` callers in `DocumentInsights`). New `useDocumentsAnalysisStatus(documentIds)` hook — key is `['intelligence', 'analysis-status', sortedIds]` so two pages with the same set of ids hit the same cache, with 15s staleness + `keepPreviousData` so the badge doesn't flicker between pages.
+5. `AnalyzeDocumentDialog.tsx` (new, in `features/documents/`) — single-doc dialog. Loads the cached analysis via `useAnalysis(id, 'document')`. If cached: shows "Last analyzed Xd ago", a clamped summary line, party chips (first 6), and counts; footer offers **Open full insights** (navigates to the document editor where `DocumentInsights` lives) + **Re-analyze (force)**. If not cached: shows a neutral empty state with an **Analyze now** CTA. While running, swaps the body for a spinner labeled "Running analysis…".
+6. `BulkAnalyzeDialog.tsx` (new) — multi-doc runner. Iterates targets with a concurrency cap of 2 (worker pool over a shared cursor), per-row state (`pending → running → analyzed | cached | failed`), live `<Progress>` + finished/total counter + ✓/✗ tallies, a `Force re-analyze` checkbox (default off), and a `Stop after current` cancel control that flips a ref so workers exit between docs (mid-flight AI calls still complete cleanly). "Cached" vs "Analyzed" is distinguished by comparing the returned `run.id` to the latest analysis fetched before the call — so the user sees which docs were free vs which actually spent tokens. On completion, invalidates `['intelligence', 'analysis-status']` and `['intelligence', 'analysis']` so the list re-decorates immediately.
+7. `DocumentsList.tsx`:
+   - New **Analysis** column, hidden in external `selectable` mode (group add-docs flow), shown otherwise. Page-batched via `useDocumentsAnalysisStatus(rows.map(r => r.id))` — one HTTP round-trip per page, not N. Renders a `✓ <relative>` pill or a muted "Not analyzed" label; clicking opens the single-doc dialog.
+   - **Analyze** item in the row's `⋯` dropdown — opens the same dialog. Label flips to "View / re-analyze" when the row is already analyzed (so the user knows which action they're taking).
+   - **Select to analyze** toolbar button (toggle). Distinct from the prop-driven `selectable` mode used by the group add-docs flow — the new `internalSelect` state is local. When on: checkboxes appear (same column reused), actions/group columns hide, and the selection bar's primary action becomes **Analyze N**.
+   - Bottom selection bar now branches by mode: `selectable` external mode keeps **Add N to group**; internal select mode shows **Analyze N**.
+   - Wired the two new dialogs at the bottom alongside the existing share/history/rename/add-to-group dialogs.
+
+**Verification**: `pnpm nx run-many -t build -p api app api-client` is green; `pnpm nx run-many -t lint -p api app api-client` is green (0 errors; warnings are pre-existing). Not runtime-verified — needs an API instance + a document with extractable text to exercise the actual AI call and the cache short-circuit.
+
+**Honest open gaps**:
+- Concurrency cap is hard-coded at 2. Fine for a handful, but for a bulk run on 50 docs against a slow provider this is a coarse setting. Could be a SearchConfig-style admin knob later.
+- "Cached" detection compares run ids — if a `force=false` call somehow yields a fresh run that happens to dedupe to a *different* prior row (unlikely, but theoretically possible if multiple cache entries exist for the same contentHash across subject types), the label could mis-classify. The classification is cosmetic; the analysis itself is correct.
+- The analyze endpoint is synchronous from the client's POV (the server awaits the AI call). With force=true on a long doc that's 10–30s of locked HTTP. The bulk dialog tolerates this (worker pool, progress, cancel), but a single-doc dialog can feel slow on a cold cache. Out-of-scope: switching analyze to a queued/job pattern with polling would be a bigger refactor (parallel to how upload jobs work) and worth doing if users actually complain.
+- The new `Analyze` column adds an extra HTTP round-trip per page. Mitigated by `staleTime: 15s` + `keepPreviousData`, but on a fresh page load it's a small extra latency. Could be folded into the documents list endpoint if it becomes hot.

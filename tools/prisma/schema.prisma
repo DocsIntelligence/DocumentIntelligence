@@ -158,6 +158,7 @@ model User {
 
   // Documents domain
   ownedDocuments    Document[]         @relation("DocumentOwnerUser")
+  ownedGroups       DocumentGroup[]    @relation("GroupOwnerUser")
   documentVersions  DocumentVersion[]
   documentShares    DocumentShare[]
   documentComments  DocumentComment[]
@@ -459,6 +460,7 @@ model Document {
   language       String            @default("en")
   jurisdiction   String?
   lockedAt       DateTime?
+  groupId        String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -466,6 +468,7 @@ model Document {
   template     DocumentTemplate @relation(fields: [templateId], references: [id])
   ownerUser    User?            @relation("DocumentOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
   ownerOrg     Organisation?    @relation(fields: [ownerOrgId], references: [id], onDelete: SetNull)
+  group        DocumentGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   versions DocumentVersion[]
   shares   DocumentShare[]
@@ -477,6 +480,30 @@ model Document {
   @@index([ownerOrgId, updatedAt])
   @@index([documentTypeId])
   @@index([status])
+  @@index([groupId])
+}
+
+// ─── DocumentGroup ─────────────────────────────────────────────
+// Lightweight container for related documents (bundle output, manual folders).
+
+model DocumentGroup {
+  id          String   @id @default(cuid())
+  ownerUserId String?
+  ownerOrgId  String?
+  name        String
+  kind        String   @default("folder") // 'bundle' | 'folder' | 'matter'
+  metadata    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ownerUser User?         @relation("GroupOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerOrg  Organisation? @relation("GroupOwnerOrg", fields: [ownerOrgId], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerOrgId, updatedAt])
+  @@index([kind])
 }
 
 // ─── DocumentVersion ───────────────────────────────────────────
@@ -595,6 +622,7 @@ model Organisation {
   branding  BrandingProfile?   @relation(fields: [brandingId], references: [id])
   documents Document[]
   templates DocumentTemplate[]
+  groups    DocumentGroup[]    @relation("GroupOwnerOrg")
 
   // Document Intelligence domain (separate; see docs/05)
   sourceDocuments SourceDocument[]

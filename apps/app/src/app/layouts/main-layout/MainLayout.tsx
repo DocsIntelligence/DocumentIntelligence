@@ -16,10 +16,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { APP_ENV } from '../../../config';
-import {
-  SearchCommandPalette,
-  openSearchPalette,
-} from '../../features/search';
+import { SearchCommandPalette, openSearchPalette } from '../../features/search';
 
 /**
  * Authenticated app shell: a fixed left sidebar on md+ screens, and a
@@ -147,7 +144,9 @@ function Sidebar({
             className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/50"
           >
             <SearchIcon />
-            <span className="flex-1 text-left">{t('search.title', 'Search')}…</span>
+            <span className="flex-1 text-left">
+              {t('search.title', 'Search')}…
+            </span>
             <kbd className="rounded border px-1.5 py-0.5 text-[10px]">⌘K</kbd>
           </button>
         </div>
@@ -184,7 +183,7 @@ function Sidebar({
             label={t('nav.create', 'Create')}
             icon={<PlusSquareIcon />}
             storageKey="nav.group.create"
-            childPaths={['/documents']}
+            childPaths={['/documents', '/groups']}
           >
             <NavItem
               to="/documents/new"
@@ -207,6 +206,12 @@ function Sidebar({
               end
               label={t('nav.myDocuments', 'My documents')}
               icon={<DocsIcon />}
+            />
+            <NavItem
+              to="/groups"
+              end
+              label={t('nav.groups', 'Groups')}
+              icon={<FolderIcon />}
             />
           </NavGroup>
 
@@ -637,6 +642,13 @@ function ChartIcon() {
       <rect x="6" y="10" width="3" height="9" />
       <rect x="11" y="6" width="3" height="13" />
       <rect x="16" y="13" width="3" height="6" />
+    </svg>
+  );
+}
+function FolderIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </svg>
   );
 }

@@ -1,4 +1,5 @@
 import type {
+  DocumentGroupsService,
   DocumentsService,
   IntelligenceAdminService,
   IntelligenceService,
@@ -19,6 +20,7 @@ import { createContext, type ReactNode, useContext } from 'react';
 
 interface Services {
   documents: DocumentsService;
+  documentGroups: DocumentGroupsService;
   legalAi: LegalAiService;
   shares: SharesService;
   lookups: LookupsService;
@@ -37,6 +39,7 @@ interface ProviderProps extends Services {
 
 export function ServicesProvider({
   documents,
+  documentGroups,
   legalAi,
   shares,
   lookups,
@@ -51,6 +54,7 @@ export function ServicesProvider({
     <ServicesContext.Provider
       value={{
         documents,
+        documentGroups,
         legalAi,
         shares,
         lookups,
@@ -120,4 +124,11 @@ export function useVaultAdminService(): VaultAdminService {
   const ctx = useContext(ServicesContext);
   if (!ctx) throw new Error('useVaultAdminService outside <ServicesProvider>');
   return ctx.vaultAdmin;
+}
+
+export function useDocumentGroupsService(): DocumentGroupsService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx)
+    throw new Error('useDocumentGroupsService outside <ServicesProvider>');
+  return ctx.documentGroups;
 }

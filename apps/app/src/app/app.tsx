@@ -55,6 +55,9 @@ import {
   TemplatesPage,
 } from './features/documents';
 import { EditorDemo, DraftEditorPage } from './features/editor';
+import { GroupDetailPage } from './features/groups/GroupDetailPage';
+import { GroupsPage } from './features/groups/GroupsPage';
+import { GroupAddDocsPage } from './features/groups/GroupAddDocsPage';
 import {
   AnalyzePage,
   BatchDetailPage,
@@ -125,6 +128,9 @@ export function App() {
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/documents/templates" element={<TemplatesPage />} />
         <Route path="/documents/draft-ai" element={<DraftWithAIPage />} />
+        <Route path="/groups" element={<GroupsPage />} />
+        <Route path="/groups/:id" element={<GroupDetailPage />} />
+        <Route path="/groups/:id/add" element={<GroupAddDocsPage />} />
         <Route path="/analyze" element={<IntelligenceUpload />} />
         <Route path="/analyze/:sourceId" element={<AnalyzePage />} />
         <Route path="/batches" element={<BatchesPage />} />
@@ -135,10 +141,22 @@ export function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/ai-usage" element={<AiUsagePage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
-        <Route path="/admin/legal-reference" element={<AdminLegalReferencePage />} />
-        <Route path="/admin/legal-reference/new" element={<NewCitationPage />} />
-        <Route path="/admin/legal-reference/:id/edit" element={<EditCitationPage />} />
-        <Route path="/admin/legal-reference/:id/clone" element={<CloneCitationPage />} />
+        <Route
+          path="/admin/legal-reference"
+          element={<AdminLegalReferencePage />}
+        />
+        <Route
+          path="/admin/legal-reference/new"
+          element={<NewCitationPage />}
+        />
+        <Route
+          path="/admin/legal-reference/:id/edit"
+          element={<EditCitationPage />}
+        />
+        <Route
+          path="/admin/legal-reference/:id/clone"
+          element={<CloneCitationPage />}
+        />
         <Route
           path="/admin/intelligence"
           element={<Navigate to="/admin/intelligence/types" replace />}
@@ -176,10 +194,7 @@ export function App() {
           path="/admin/intelligence/pipelines/:pipelineKey/clone"
           element={<ClonePipelinePage />}
         />
-        <Route
-          path="/admin/intelligence/lookups"
-          element={<LookupsPage />}
-        />
+        <Route path="/admin/intelligence/lookups" element={<LookupsPage />} />
         <Route
           path="/admin/intelligence/lookups/new"
           element={<NewLookupGroupPage />}
@@ -192,10 +207,7 @@ export function App() {
           path="/admin/intelligence/search"
           element={<SearchConfigPage />}
         />
-        <Route
-          path="/admin/intelligence/vault"
-          element={<VaultConfigPage />}
-        />
+        <Route path="/admin/intelligence/vault" element={<VaultConfigPage />} />
         <Route
           path="/admin/intelligence/vault/entity-kinds/new"
           element={<NewVaultEntityKindPage />}

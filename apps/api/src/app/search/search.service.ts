@@ -13,6 +13,12 @@ export interface SearchParams {
   sort?: SearchSort;
   page: number;
   pageSize: number;
+  /**
+   * Restrict to documents belonging to this DocumentGroup. Only meaningful for
+   * kind='document'; when set, sources are excluded automatically (groups only
+   * contain drafting documents — see Document.groupId).
+   */
+  groupId?: string;
 }
 
 export interface SearchHit {
@@ -81,9 +87,13 @@ export class SearchService {
 
     const q = (params.q ?? '').trim();
     const allowedKinds = new Set(cfg.enabledKinds);
-    const kinds = (params.kind ? [params.kind] : ['document', 'source']).filter(
-      (k) => allowedKinds.has(k),
-    );
+    // A groupId filter is document-only: groups only contain drafting docs.
+    const requestedKinds = params.groupId
+      ? ['document']
+      : params.kind
+        ? [params.kind]
+        : ['document', 'source'];
+    const kinds = requestedKinds.filter((k) => allowedKinds.has(k));
     const empty: SearchResponse = {
       items: [],
       total: 0,
@@ -130,6 +140,14 @@ export class SearchService {
       if (withKind) conds.push(`si.kind = ANY(${p(kinds)}::text[])`);
       if (params.type) conds.push(`si.type = ${p(params.type)}`);
       if (params.status) conds.push(`si.status = ${p(params.status)}`);
+      if (params.groupId) {
+        // SearchIndex.refId for kind='document' is Document.id. Filter via
+        // EXISTS so the planner can use the Document_groupId_idx index without
+        // joining ahead of WHERE.
+        conds.push(
+          `si.kind = 'document' AND EXISTS (SELECT 1 FROM "Document" d WHERE d.id = si."refId" AND d."groupId" = ${p(params.groupId)})`,
+        );
+      }
 
       let scoreExpr = '0';
       let snippetExpr = `left(si."bodyText", 240)`;

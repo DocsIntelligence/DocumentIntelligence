@@ -150,10 +150,13 @@ export const createIntelligenceService = (http: HttpClient) => ({
       )
       .then((r) => r.data),
 
-  /** Run analysis (summary/parties/obligations/risk flags + cited-law health). */
-  analyze: (sourceId: string) =>
+  /** Run analysis (summary/parties/obligations/risk flags + cited-law health).
+   *  `force=true` bypasses the content-hash cache (Re-analyze). */
+  analyze: (sourceId: string, opts?: { force?: boolean }) =>
     http
-      .post<AnalysisRun>(`/intelligence/sources/${sourceId}/analyze`, {})
+      .post<AnalysisRun>(`/intelligence/sources/${sourceId}/analyze`, {}, {
+        params: opts?.force ? { force: 'true' } : undefined,
+      })
       .then((r) => r.data),
 
   /** Get the latest analysis for a document (null if not analysed yet). */
@@ -170,14 +173,25 @@ export const createIntelligenceService = (http: HttpClient) => ({
 
   // ─── Analyse / ask on a DRAFTING document (docs/09 #6) ───────────────────
 
-  analyzeDocument: (documentId: string) =>
+  analyzeDocument: (documentId: string, opts?: { force?: boolean }) =>
     http
-      .post<AnalysisRun>(`/intelligence/documents/${documentId}/analyze`, {})
+      .post<AnalysisRun>(`/intelligence/documents/${documentId}/analyze`, {}, {
+        params: opts?.force ? { force: 'true' } : undefined,
+      })
       .then((r) => r.data),
 
   getDocumentAnalysis: (documentId: string) =>
     http
       .get<AnalysisResult>(`/intelligence/documents/${documentId}/analysis`)
+      .then((r) => r.data),
+
+  /** Batched analysis-presence lookup keyed by document id. */
+  getDocumentsAnalysisStatus: (documentIds: string[]) =>
+    http
+      .post<Record<string, DocumentAnalysisStatus>>(
+        '/intelligence/documents/analyze-status',
+        { documentIds },
+      )
       .then((r) => r.data),
 
   askDocument: (documentId: string, question: string) =>
@@ -349,6 +363,13 @@ export interface AnalysisRun {
   riskFlags: { severity: 'low' | 'medium' | 'high'; note: string }[] | null;
   citationFindings: CitationFinding[] | null;
   createdAt: string;
+}
+
+export interface DocumentAnalysisStatus {
+  hasAnalysis: boolean;
+  lastAnalyzedAt: string | null;
+  summary: string | null;
+  runId: string | null;
 }
 
 /** Latest-analysis envelope. Same shape for sources and drafting documents

@@ -116,14 +116,14 @@ export function LookupManager() {
     {
       key: 'name',
       header: t('adminLookups.name', 'Name'),
-      cell: (g) => <span className="font-medium text-foreground">{g.name}</span>,
+      cell: (g) => (
+        <span className="font-medium text-foreground">{g.name}</span>
+      ),
     },
     {
       key: 'key',
       header: t('adminLookups.key', 'Key'),
-      cell: (g) => (
-        <code className="text-foreground/55 text-xs">{g.key}</code>
-      ),
+      cell: (g) => <code className="text-foreground/55 text-xs">{g.key}</code>,
     },
     {
       key: 'count',
@@ -136,7 +136,9 @@ export function LookupManager() {
       header: t('adminLookups.visibility', 'Visibility'),
       cell: (g) =>
         g.isPublic === false ? (
-          <Badge variant="secondary">{t('adminLookups.private', 'private')}</Badge>
+          <Badge variant="secondary">
+            {t('adminLookups.private', 'private')}
+          </Badge>
         ) : (
           <Badge variant="info">{t('adminLookups.public', 'public')}</Badge>
         ),
@@ -334,7 +336,7 @@ export function GroupEditor({
         groupId: group.id,
         payload: {
           label: newLabel.trim(),
-          value: (newValue.trim() || newLabel.trim()),
+          value: newValue.trim() || newLabel.trim(),
           order: group.values.length,
         },
       },
@@ -350,7 +352,7 @@ export function GroupEditor({
   const sorted = [...group.values].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-foreground">
@@ -533,7 +535,11 @@ function ValueRow({ value }: { value: LookupValue }) {
           >
             {active ? <EyeIcon /> : <EyeOffIcon />}
           </IconButton>
-          <IconButton danger title={t('common.delete', 'Delete')} onClick={onDelete}>
+          <IconButton
+            danger
+            title={t('common.delete', 'Delete')}
+            onClick={onDelete}
+          >
             <TrashIcon />
           </IconButton>
         </div>

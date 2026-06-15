@@ -99,16 +99,32 @@ export function useAnalysis(id: string | undefined, scope: InsightScope = 'sourc
   });
 }
 
-/** Run (or re-run) analysis for a subject. */
+/** Run (or re-run) analysis for a subject. Pass `{ force: true }` to bypass
+ *  the content-hash cache (Re-analyze button). */
 export function useRunAnalysis(id: string, scope: InsightScope = 'source') {
   const svc = useIntelligenceService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () =>
-      scope === 'document' ? svc.analyzeDocument(id) : svc.analyze(id),
+    mutationFn: (vars?: { force?: boolean }) =>
+      scope === 'document'
+        ? svc.analyzeDocument(id, vars)
+        : svc.analyze(id, vars),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: analysisKey(scope, id) }),
     onError: (err) => toast.error(extractMessage(err, 'Analysis failed')),
+  });
+}
+
+/** Page-level analysis status lookup (one round-trip for the current page). */
+export function useDocumentsAnalysisStatus(documentIds: string[]) {
+  const svc = useIntelligenceService();
+  const sorted = [...documentIds].sort();
+  return useQuery({
+    queryKey: ['intelligence', 'analysis-status', sorted] as const,
+    queryFn: () => svc.getDocumentsAnalysisStatus(sorted),
+    enabled: sorted.length > 0,
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
   });
 }
 

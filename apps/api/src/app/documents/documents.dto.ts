@@ -40,6 +40,7 @@ const ListDocumentsQuerySchema = z.object({
   documentTypeKey: z.string().optional(),
   status: DocumentStatusEnum.optional(),
   orgId: z.string().cuid().optional(),
+  groupId: z.string().optional(),
   /** Free-text search over the title (case-insensitive). */
   q: z.string().trim().max(200).optional(),
   /** 0-based page index for offset pagination. */

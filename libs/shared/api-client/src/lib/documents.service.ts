@@ -61,6 +61,7 @@ export interface DocumentSummary {
   // `componentKey` is the canonical template→renderer mapping (present on the
   // detail response via `getById`'s full template include; omitted by `list`).
   template?: { key: string; name: string; componentKey?: string };
+  group?: { id: string; name: string; kind: string } | null;
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -96,6 +97,7 @@ export interface ListDocumentsQuery {
   documentTypeKey?: string;
   status?: DocumentStatus;
   orgId?: string;
+  groupId?: string;
   /** Free-text search over the title. */
   q?: string;
   /** 0-based page index. */

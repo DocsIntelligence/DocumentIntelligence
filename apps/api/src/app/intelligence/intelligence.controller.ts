@@ -151,8 +151,12 @@ export class IntelligenceController {
     summary:
       'Analyse a document: summary, parties, obligations, key dates, risk flags + cited-law health.',
   })
-  analyze(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.analysis.analyze(user.id, id);
+  analyze(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ) {
+    return this.analysis.analyze(user.id, id, { force: force === 'true' });
   }
 
   @Get('sources/:id/analysis')
@@ -177,8 +181,27 @@ export class IntelligenceController {
 
   @Post('documents/:id/analyze')
   @ApiOperation({ summary: 'Analyse a drafting document (cached by content).' })
-  analyzeDocument(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.analysis.analyzeDocument(user.id, id);
+  analyzeDocument(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ) {
+    return this.analysis.analyzeDocument(user.id, id, {
+      force: force === 'true',
+    });
+  }
+
+  @Post('documents/analyze-status')
+  @ApiOperation({
+    summary:
+      'Batched analysis status for a set of drafting documents (one round-trip; powers the documents-list status column).',
+  })
+  documentsAnalysisStatus(
+    @CurrentUser() user: User,
+    @Body() body: { documentIds: string[] },
+  ) {
+    const ids = Array.isArray(body?.documentIds) ? body.documentIds : [];
+    return this.analysis.getDocumentsAnalysisStatus(user.id, ids);
   }
 
   @Get('documents/:id/analysis')

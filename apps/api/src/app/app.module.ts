@@ -12,6 +12,7 @@ import { CommonModule } from './common/common.module';
 import { RequestLoggerMiddleware } from './common/middleware/logger.middleware';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
+import { DocumentGroupsModule } from './document-groups/document-groups.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './users/users.module';
     AiModule,
     StorageModule,
     DocumentsModule,
+    DocumentGroupsModule,
     LegalAiModule,
     IntelligenceModule.forRootAsync(),
     IntelligenceAdminModule,

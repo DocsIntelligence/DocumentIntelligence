@@ -69,8 +69,8 @@ export class AnalysisService {
 
   // ─── Public API: sources (back-compat) ────────────────────────────────────
 
-  analyze(userId: string, sourceId: string) {
-    return this.analyzeSubject(userId, 'source', sourceId);
+  analyze(userId: string, sourceId: string, opts?: { force?: boolean }) {
+    return this.analyzeSubject(userId, 'source', sourceId, opts);
   }
 
   getLatestAnalysis(userId: string, sourceId: string) {
@@ -83,8 +83,12 @@ export class AnalysisService {
 
   // ─── Public API: drafting documents (docs/09 #6) ──────────────────────────
 
-  analyzeDocument(userId: string, documentId: string) {
-    return this.analyzeSubject(userId, 'document', documentId);
+  analyzeDocument(
+    userId: string,
+    documentId: string,
+    opts?: { force?: boolean },
+  ) {
+    return this.analyzeSubject(userId, 'document', documentId, opts);
   }
 
   getLatestDocumentAnalysis(userId: string, documentId: string) {
@@ -95,20 +99,102 @@ export class AnalysisService {
     return this.askSubject(userId, 'document', documentId, question);
   }
 
+  /**
+   * Batched analysis-presence lookup for a set of drafting-document IDs. Used
+   * by the documents list to render a per-row "Analyzed / Not analyzed" cell
+   * without firing N requests. Access-checked: only returns rows the user can
+   * see. Documents the user can't access (or doesn't exist) get a `null` value
+   * so callers can render a neutral "Not analyzed" state without leaking info.
+   */
+  async getDocumentsAnalysisStatus(
+    userId: string,
+    documentIds: string[],
+  ): Promise<
+    Record<
+      string,
+      {
+        hasAnalysis: boolean;
+        lastAnalyzedAt: string | null;
+        summary: string | null;
+        runId: string | null;
+      }
+    >
+  > {
+    const result: Record<
+      string,
+      {
+        hasAnalysis: boolean;
+        lastAnalyzedAt: string | null;
+        summary: string | null;
+        runId: string | null;
+      }
+    > = {};
+    for (const id of documentIds) {
+      result[id] = {
+        hasAnalysis: false,
+        lastAnalyzedAt: null,
+        summary: null,
+        runId: null,
+      };
+    }
+    if (documentIds.length === 0) return result;
+
+    const accessible = await this.db.document.findMany({
+      where: {
+        id: { in: documentIds },
+        OR: [
+          { ownerUserId: userId },
+          { ownerOrg: { members: { some: { userId } } } },
+        ],
+      },
+      select: { id: true },
+    });
+    const accessibleIds = accessible.map((d) => d.id);
+    if (accessibleIds.length === 0) return result;
+
+    // DISTINCT ON keeps the indexed plan against
+    // AnalysisRun_subjectType_subjectId_createdAt_idx — one round-trip, no N+1.
+    const rows = await this.db.$queryRaw<
+      Array<{
+        subjectId: string;
+        id: string;
+        summary: string | null;
+        createdAt: Date;
+      }>
+    >`
+      SELECT DISTINCT ON ("subjectId") "subjectId", id, summary, "createdAt"
+      FROM "AnalysisRun"
+      WHERE "subjectType" = 'document'
+        AND "subjectId" = ANY(${accessibleIds})
+      ORDER BY "subjectId", "createdAt" DESC
+    `;
+    for (const r of rows) {
+      result[r.subjectId] = {
+        hasAnalysis: true,
+        lastAnalyzedAt: r.createdAt.toISOString(),
+        summary: r.summary,
+        runId: r.id,
+      };
+    }
+    return result;
+  }
+
   // ─── Subject-polymorphic core ─────────────────────────────────────────────
 
   private async analyzeSubject(
     userId: string,
     subjectType: SubjectType,
     subjectId: string,
+    opts?: { force?: boolean },
   ) {
     const subject = await this.resolveSubject(userId, subjectType, subjectId);
     const { text } = subject;
 
     // Cache: reuse an existing run if the analyzed text is unchanged (dedup by
-    // content hash). Only when we actually have text to hash.
+    // content hash). Only when we actually have text to hash AND the caller
+    // hasn't asked to force-refresh (re-analyze button).
     const contentHash = text ? this.hash(text) : null;
-    if (contentHash) {
+    if (contentHash && !opts?.force) {
       const cached = await this.db.analysisRun.findFirst({
         where: { subjectType, subjectId, contentHash },
         orderBy: { createdAt: 'desc' },
