@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@org/ui';
 import { selectUser, useAppSelector } from '@org/store';
 import { APP_ENV } from '../../../../config';
+import { useBatches } from '../../intelligence/queries';
 
 const API_BASE_URL = APP_ENV.apiUrl;
 
@@ -120,12 +121,27 @@ function fmtMs(ms: number) {
 export function AiUsagePage() {
   const { t } = useTranslation();
   const currentUser = useAppSelector(selectUser);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [days, setDays] = useState(30);
   const [scope, setScope] = useState<'workspace' | 'me'>('workspace');
   const [operation, setOperation] = useState<string>('');
   const [provider, setProvider] = useState<string>('');
   const [model, setModel] = useState<string>('');
+  // Seed scope-bound filters from the URL once on mount so links from the
+  // AiUsageSummary "View all →" buttons actually pre-filter the page.
+  const [batchId, setBatchId] = useState<string>(
+    () => searchParams.get('batch') ?? '',
+  );
+  const [sourceDocumentId, setSourceDocumentId] = useState<string>(
+    () => searchParams.get('source') ?? '',
+  );
+  const [pipelineRunId, setPipelineRunId] = useState<string>(
+    () => searchParams.get('pipeline-run') ?? '',
+  );
+  const [documentId, setDocumentId] = useState<string>(
+    () => searchParams.get('document') ?? '',
+  );
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<UsageRow[]>([]);
@@ -133,8 +149,37 @@ export function AiUsagePage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState('');
+  // Debounced search — typing should NOT refetch on every keystroke, otherwise
+  // the input feels laggy on a slow backend.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(handle);
+  }, [query]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // List of batches for the Batch filter dropdown. Read-only and small —
+  // the user's own batches, server-paginated to ~50 most recent.
+  const batchesQuery = useBatches({ pageSize: 100 });
+  const batchOptions = batchesQuery.data?.items ?? [];
+
+  // Sync the active scope filter back into the URL so a shared link survives
+  // a refresh. Single-source-of-truth: state → URL.
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const set = (k: string, v: string) => {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    };
+    set('batch', batchId);
+    set('source', sourceDocumentId);
+    set('pipeline-run', pipelineRunId);
+    set('document', documentId);
+    setSearchParams(params, { replace: true });
+    // searchParams is intentionally excluded — we only push, never react.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchId, sourceDocumentId, pipelineRunId, documentId]);
 
   const range = useMemo(() => {
     const to = new Date();
@@ -145,7 +190,19 @@ export function AiUsagePage() {
 
   useEffect(() => {
     setPage(0);
-  }, [scope, operation, provider, model, days, query, pageSize]);
+  }, [
+    scope,
+    operation,
+    provider,
+    model,
+    days,
+    debouncedQuery,
+    batchId,
+    sourceDocumentId,
+    pipelineRunId,
+    documentId,
+    pageSize,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,7 +212,11 @@ export function AiUsagePage() {
     if (operation) params.set('operation', operation);
     if (provider) params.set('provider', provider);
     if (model) params.set('model', model);
-    if (query.trim()) params.set('q', query.trim());
+    if (batchId) params.set('batchId', batchId);
+    if (sourceDocumentId) params.set('sourceDocumentId', sourceDocumentId);
+    if (pipelineRunId) params.set('pipelineRunId', pipelineRunId);
+    if (documentId) params.set('documentId', documentId);
+    if (debouncedQuery.trim()) params.set('q', debouncedQuery.trim());
     const listParams = new URLSearchParams(params);
     listParams.set('page', String(page));
     listParams.set('pageSize', String(pageSize));
@@ -163,10 +224,10 @@ export function AiUsagePage() {
     Promise.all([
       fetch(`${base}/ai-usage/summary?${params.toString()}`, {
         credentials: 'include',
-      }).then((r) => r.json()),
+      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
       fetch(`${base}/ai-usage?${listParams.toString()}`, {
         credentials: 'include',
-      }).then((r) => r.json()),
+      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
     ])
       .then(([s, l]) => {
         if (cancelled) return;
@@ -175,7 +236,15 @@ export function AiUsagePage() {
         setTotal(l.total ?? 0);
       })
       .catch(() => {
-        if (!cancelled) toast.error(t('aiUsage.loadFailed', 'Failed to load AI usage'));
+        if (!cancelled) {
+          // Don't blow away the Input + filters when a fetch fails — just
+          // null out the data so the empty-state cards show, but the user
+          // can still type / change filters to retry.
+          setSummary(null);
+          setRows([]);
+          setTotal(0);
+          toast.error(t('aiUsage.loadFailed', 'Failed to load AI usage'));
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -187,7 +256,22 @@ export function AiUsagePage() {
     return () => {
       cancelled = true;
     };
-  }, [scope, range.from, range.to, operation, provider, model, query, page, pageSize, t]);
+  }, [
+    scope,
+    range.from,
+    range.to,
+    operation,
+    provider,
+    model,
+    batchId,
+    sourceDocumentId,
+    pipelineRunId,
+    documentId,
+    debouncedQuery,
+    page,
+    pageSize,
+    t,
+  ]);
 
   const columns: DataTableColumn<UsageRow>[] = [
     {
@@ -338,14 +422,63 @@ export function AiUsagePage() {
         </div>
       </div>
 
+      {/* Active scope-filter pills — show what the URL pre-filtered to, with
+          one-click clear. */}
+      {(batchId || sourceDocumentId || pipelineRunId || documentId) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/20 px-3 py-2 text-xs">
+          <span className="text-foreground/60">
+            {t('aiUsage.scopedTo', 'Scoped to')}:
+          </span>
+          {batchId && (
+            <ScopePill
+              label={t('aiUsage.scopeBatch', 'Batch')}
+              value={
+                batchOptions.find((b) => b.id === batchId)?.name ?? batchId
+              }
+              onClear={() => setBatchId('')}
+            />
+          )}
+          {sourceDocumentId && (
+            <ScopePill
+              label={t('aiUsage.scopeSource', 'Source')}
+              value={sourceDocumentId}
+              onClear={() => setSourceDocumentId('')}
+            />
+          )}
+          {pipelineRunId && (
+            <ScopePill
+              label={t('aiUsage.scopePipelineRun', 'Pipeline run')}
+              value={pipelineRunId}
+              onClear={() => setPipelineRunId('')}
+            />
+          )}
+          {documentId && (
+            <ScopePill
+              label={t('aiUsage.scopeDocument', 'Document')}
+              value={documentId}
+              onClear={() => setDocumentId('')}
+            />
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>
-      ) : !summary ? (
-        <p className="text-foreground/50">{t('aiUsage.empty', 'No data yet.')}</p>
       ) : (
         <>
+          {!summary || summary.totals.calls === 0 ? (
+            <Card className="rounded-xl p-5">
+              <p className="text-sm text-foreground/60">
+                {t(
+                  'aiUsage.empty',
+                  'No AI calls match the current filter window.',
+                )}
+              </p>
+            </Card>
+          ) : (
+            <>
           {/* KPI tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiTile
@@ -492,8 +625,11 @@ export function AiUsagePage() {
               </table>
             </Card>
           </div>
+            </>
+          )}
 
-          {/* Filters + recent calls */}
+          {/* Filters + recent calls — always shown so users can adjust filters
+              even when the current window has no data. */}
           <Card className="rounded-xl p-5">
             <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
               <h3 className="font-medium text-foreground">
@@ -512,7 +648,7 @@ export function AiUsagePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all">All operations</SelectItem>
-                    {summary.perOperation.map((o) => (
+                    {(summary?.perOperation ?? []).map((o) => (
                       <SelectItem key={o.operation} value={o.operation}>
                         {o.operation}
                       </SelectItem>
@@ -525,7 +661,7 @@ export function AiUsagePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all">All providers</SelectItem>
-                    {summary.perProvider.map((p) => (
+                    {(summary?.perProvider ?? []).map((p) => (
                       <SelectItem key={p.provider} value={p.provider}>
                         {p.provider}
                       </SelectItem>
@@ -538,14 +674,39 @@ export function AiUsagePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all">All models</SelectItem>
-                    {summary.perModel.map((m) => (
+                    {(summary?.perModel ?? []).map((m) => (
                       <SelectItem key={`${m.provider}/${m.model}`} value={m.model}>
                         {m.model}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {(operation || provider || model || query) && (
+                <Select
+                  value={batchId || '__all'}
+                  onValueChange={(v) => setBatchId(v === '__all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder={t('aiUsage.filterBatch', 'Batch')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all">
+                      {t('aiUsage.allBatches', 'All batches')}
+                    </SelectItem>
+                    {batchOptions.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name ?? b.id.slice(0, 8)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(operation ||
+                  provider ||
+                  model ||
+                  batchId ||
+                  sourceDocumentId ||
+                  pipelineRunId ||
+                  documentId ||
+                  query) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -553,6 +714,10 @@ export function AiUsagePage() {
                       setOperation('');
                       setProvider('');
                       setModel('');
+                      setBatchId('');
+                      setSourceDocumentId('');
+                      setPipelineRunId('');
+                      setDocumentId('');
                       setQuery('');
                     }}
                   >
@@ -583,6 +748,33 @@ export function AiUsagePage() {
         </>
       )}
     </div>
+  );
+}
+
+function ScopePill({
+  label,
+  value,
+  onClear,
+}: {
+  label: string;
+  value: string;
+  onClear: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1">
+      <span className="text-foreground/55">{label}:</span>
+      <span className="font-mono text-foreground/90 truncate max-w-[180px]">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={onClear}
+        title="Clear"
+        className="-mr-0.5 ml-0.5 text-foreground/45 hover:text-error"
+      >
+        ×
+      </button>
+    </span>
   );
 }
 

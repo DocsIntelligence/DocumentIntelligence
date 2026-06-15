@@ -8,6 +8,7 @@
   --color-background: oklch(var(--background));
   --color-foreground: oklch(var(--foreground));
   --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
 
   --color-primary: oklch(var(--primary));
   --color-primary-accent: oklch(var(--primary-accent));
@@ -17,9 +18,26 @@
   --color-secondary-accent: oklch(var(--secondary-accent));
   --color-secondary-foreground: oklch(var(--secondary-foreground));
 
+  /* Aliased neutrals — kept so shadcn-style class names (bg-muted,
+     bg-card, bg-popover, bg-accent) all resolve to the same neutral
+     family as `secondary`. Splitting them lets us drift later
+     without a rename. */
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-card: oklch(var(--card));
+  --color-card-foreground: oklch(var(--card-foreground));
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+
   --color-error: oklch(var(--error));
   --color-error-accent: oklch(var(--error-accent));
   --color-error-foreground: oklch(var(--error-foreground));
+
+  /* Alias for shadcn `destructive` class names. */
+  --color-destructive: oklch(var(--error));
+  --color-destructive-foreground: oklch(var(--error-foreground));
 
   --color-warning: oklch(var(--warning));
   --color-warning-accent: oklch(var(--warning-accent));
@@ -42,6 +60,7 @@
     --background: 0.97 0.01 240;
     --foreground: 0.14 0.02 260;
     --border: 0.91 0.01 260;
+    --input: 0.91 0.01 260;
 
     --primary: 0.55 0.18 230;
     --primary-accent: 0.42 0.15 235;
@@ -50,6 +69,16 @@
     --secondary: 0.92 0.04 250;
     --secondary-accent: 0.95 0.02 250;
     --secondary-foreground: 0.2 0.05 260;
+
+    /* Neutral aliases — by default we share the secondary family. */
+    --muted: 0.95 0.02 250;
+    --muted-foreground: 0.45 0.03 260;
+    --card: 1 0 0;
+    --card-foreground: 0.14 0.02 260;
+    --popover: 1 0 0;
+    --popover-foreground: 0.14 0.02 260;
+    --accent: 0.92 0.04 250;
+    --accent-foreground: 0.2 0.05 260;
 
     --error: 0.58 0.22 15;
     --error-accent: 0.7 0.19 15;
@@ -72,14 +101,24 @@
     --background: 0.14 0.02 260;
     --foreground: 0.95 0.01 260;
     --border: 0.27 0.02 260;
+    --input: 0.27 0.02 260;
 
-    --primary: 0.92 0.01 260;
-    --primary-accent: 0.85 0.02 260;
+    --primary: 0.7 0.16 230;
+    --primary-accent: 0.78 0.14 230;
     --primary-foreground: 0.14 0.02 260;
 
-    --secondary: 0.27 0.02 260;
-    --secondary-accent: 0.2 0.02 260;
+    --secondary: 0.22 0.02 260;
+    --secondary-accent: 0.18 0.02 260;
     --secondary-foreground: 0.95 0.01 260;
+
+    --muted: 0.22 0.02 260;
+    --muted-foreground: 0.7 0.02 260;
+    --card: 0.18 0.02 260;
+    --card-foreground: 0.95 0.01 260;
+    --popover: 0.18 0.02 260;
+    --popover-foreground: 0.95 0.01 260;
+    --accent: 0.27 0.02 260;
+    --accent-foreground: 0.95 0.01 260;
 
     --error: 0.5 0.2 15;
     --error-accent: 0.4 0.18 15;

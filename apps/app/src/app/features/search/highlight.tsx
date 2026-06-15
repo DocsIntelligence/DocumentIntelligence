@@ -26,7 +26,7 @@ export function Highlighted({ text }: { text: string }) {
         p.hit ? (
           <mark
             key={i}
-            className="rounded bg-yellow-200 px-0.5 text-inherit dark:bg-yellow-500/30"
+            className="rounded bg-warning/30 px-0.5 text-inherit"
           >
             {p.text}
           </mark>

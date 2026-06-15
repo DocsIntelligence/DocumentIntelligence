@@ -23,6 +23,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { SearchIndexService } from '../search/search-index.service';
 import { errorMessage } from '../common/error.util';
+import { aiUsageContext } from '../ai-usage/ai-usage.context';
 import { deriveBatchCounts, deriveBatchStatus } from './batch-status';
 import { IntelligenceService } from './intelligence.service';
 import { PipelineService } from './pipeline.service';
@@ -278,42 +279,54 @@ export class PipelineExecutorService {
       ownerOrgId: run.sourceDocument.ownerOrgId,
     };
 
-    for (const stage of remaining) {
-      const exec = await this.db.stageExecution.create({
-        data: {
-          pipelineRunId: runId,
-          stageId: stage.id,
-          stageType: stage.type,
-          status: 'running',
-          startedAt: new Date(),
-          heartbeatAt: new Date(),
-        },
-      });
-      try {
-        const { score, output } = await this.runStage(stage, ctx);
-        await this.db.stageExecution.update({
-          where: { id: exec.id },
-          data: {
-            status: 'passed',
-            score,
-            output: (output ?? {}) as Prisma.InputJsonValue,
-            finishedAt: new Date(),
-          },
-        });
-      } catch (e) {
-        const message = errorMessage(e);
-        await this.db.stageExecution.update({
-          where: { id: exec.id },
-          data: { status: 'failed', error: message, finishedAt: new Date() },
-        });
-        await this.db.pipelineRun.update({
-          where: { id: runId },
-          data: { status: 'failed', error: `${stage.type}: ${message}` },
-        });
-        await this.recomputeBatchStatus(run.batchId);
-        throw e;
-      }
-    }
+    await aiUsageContext.run(
+      {
+        userId: run.sourceDocument.ownerUserId,
+        orgId: run.sourceDocument.ownerOrgId,
+        sourceDocumentId: run.sourceDocumentId,
+        pipelineRunId: runId,
+        batchId: run.batchId,
+        extractionId: extraction.id,
+      },
+      async () => {
+        for (const stage of remaining) {
+          const exec = await this.db.stageExecution.create({
+            data: {
+              pipelineRunId: runId,
+              stageId: stage.id,
+              stageType: stage.type,
+              status: 'running',
+              startedAt: new Date(),
+              heartbeatAt: new Date(),
+            },
+          });
+          try {
+            const { score, output } = await this.runStage(stage, ctx);
+            await this.db.stageExecution.update({
+              where: { id: exec.id },
+              data: {
+                status: 'passed',
+                score,
+                output: (output ?? {}) as Prisma.InputJsonValue,
+                finishedAt: new Date(),
+              },
+            });
+          } catch (e) {
+            const message = errorMessage(e);
+            await this.db.stageExecution.update({
+              where: { id: exec.id },
+              data: { status: 'failed', error: message, finishedAt: new Date() },
+            });
+            await this.db.pipelineRun.update({
+              where: { id: runId },
+              data: { status: 'failed', error: `${stage.type}: ${message}` },
+            });
+            await this.recomputeBatchStatus(run.batchId);
+            throw e;
+          }
+        }
+      },
+    );
 
     await this.db.pipelineRun.update({
       where: { id: runId },
@@ -373,6 +386,38 @@ export class PipelineExecutorService {
     );
     const archived = results.filter((r) => r.status === 'fulfilled').length;
     return { archived, total: runIds.length };
+  }
+
+  /**
+   * Unified bulk action dispatcher. One server entrypoint covers approve /
+   * archive (and any future verbs like reject) so the client doesn't have to
+   * pick between near-identical mutations. Each per-run failure is collected
+   * into `errors` instead of aborting the batch, mirroring the existing
+   * `bulkArchive` tolerance.
+   */
+  async bulkAction(
+    userId: string,
+    action: 'approve' | 'archive',
+    runIds: string[],
+    reason?: string,
+  ) {
+    const unique = Array.from(new Set(runIds));
+    const op = (id: string) =>
+      action === 'approve'
+        ? this.approveRun(userId, id)
+        : this.archiveRun(userId, id, reason);
+    const results = await Promise.allSettled(unique.map(op));
+    const errors: { runId: string; message: string }[] = [];
+    let succeeded = 0;
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') succeeded += 1;
+      else
+        errors.push({
+          runId: unique[i],
+          message: (r.reason as Error)?.message ?? `${action} failed`,
+        });
+    });
+    return { action, succeeded, total: unique.length, errors };
   }
 
   /**
@@ -556,6 +601,41 @@ export class PipelineExecutorService {
     });
     await this.recomputeBatchStatus(run.batchId);
 
+    // Attach every AI call inside this run to the right subject — the
+    // recorder reads these from AsyncLocalStorage so engines / providers
+    // never need to thread the fields explicitly. extractionId is patched
+    // in below once the extract stage produces a record.
+    return aiUsageContext.run(
+      {
+        userId: src.ownerUserId,
+        orgId: src.ownerOrgId,
+        sourceDocumentId: src.id,
+        pipelineRunId: runId,
+        batchId: run.batchId,
+      },
+      () => this.runStages(runId, run, ctx),
+    );
+  }
+
+  /**
+   * Stage-loop body, extracted so `run()` can wrap it in
+   * `aiUsageContext.run(...)` without indenting the whole block.
+   */
+  private async runStages(
+    runId: string,
+    run: {
+      batchId: string | null;
+      pipeline: {
+        stages: Array<{
+          id: string;
+          type: PipelineStageType;
+          order: number;
+          config: Prisma.JsonValue;
+        }>;
+      };
+    },
+    ctx: RunContext,
+  ): Promise<void> {
     for (const stage of run.pipeline.stages) {
       const exec = await this.db.stageExecution.create({
         data: {
@@ -746,6 +826,9 @@ export class PipelineExecutorService {
           },
         });
         ctx.extractionId = created.id;
+        // Propagate extractionId onto the AI-usage attribution so downstream
+        // stages' AI calls (validate / export) attach to the right record.
+        aiUsageContext.patch({ extractionId: created.id });
         this.searchIndex.enqueueSource(ctx.sourceDocumentId);
         return {
           score: result.overallConfidence,

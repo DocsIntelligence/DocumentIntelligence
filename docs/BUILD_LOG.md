@@ -2024,3 +2024,129 @@ What landed:
 - PipelineManager / DocTypesPage — move toolbar toggles into the DataTable `toolbar` slot + server-paginate before the catalog grows past ~50.
 - Extract the `DocumentsToolbar` (Select + active-filter pills) into a shared util once a second list wants exactly the same shape — not pre-extracted today.
 - Investigate / clean up the four pre-existing typecheck errors before they start drifting more files (`Button` variant union no longer admits `'default'`; `DocumentInsights` calls `useDocumentInsights()` with zero args; `data-table.tsx` `pinned: 'right' | 'left'` widened beyond the prop type).
+
+### 2026-06-15 — Theme system: missing tokens + dark mode wired
+
+User: "check and fix the colors and theme properly for the whole app, and
+implement... some thing looks like it's not properly..."
+
+Audit found two real bugs (not just style drift):
+
+1. **`libs/shared/ui/src/theme.css`** was a parallel/incompatible token set
+   (color-primary-500…900, color-danger-*, color-surface) that **nothing
+   imports**. Deleted it — single source of truth is now
+   `apps/app/src/styles.css`.
+2. **Half a dozen shadcn-shaped tokens were referenced but never defined**
+   — `bg-muted`, `text-muted-foreground`, `bg-card`, `bg-popover`,
+   `bg-accent`, `bg-destructive`. ~60 call sites across `libs/shared/ui` and
+   `apps/app` were rendering `inherit` (invisible / wrong color). Extended
+   `@theme` in `styles.css` with `muted`, `card`, `popover`, `accent`,
+   `destructive` (+ `-foreground` variants and `--input` for input borders).
+   Both light and dark variables now defined.
+3. **Dark mode was a dead code path** — `.dark { … }` existed in CSS but
+   nothing toggled the class. Added:
+   - `apps/app/src/app/theme/ThemeProvider.tsx` — `light` / `dark` /
+     `system` preference, persisted to `localStorage('theme')`, re-resolves
+     on OS pref change when on `system`.
+   - `apps/app/src/app/theme/ThemeToggle.tsx` — segmented Sun / Monitor /
+     Moon switcher placed in `MainLayout`'s footer next to the language
+     switcher.
+   - Inline boot script in `apps/app/index.html` that applies the stored
+     preference (or OS pref) BEFORE React mounts, so the first paint isn't
+     the wrong theme. Same logic mirrored in `ThemeProvider` for runtime.
+   - `colorScheme` is also written to the root so native form controls
+     (scrollbars, date pickers) inherit the right palette.
+4. **Tweaked dark-mode palette**: primary in dark was `0.92 0.01 260` (a
+   stark white-primary). Switched to `0.7 0.16 230` so `bg-primary/10
+   text-primary` (the active nav indicator) reads as a brand-blue tint in
+   dark, matching how it reads in light.
+5. **Killed three hard-coded color escape hatches**:
+   - `apps/app/.../search/highlight.tsx` — search-hit highlight was
+     `bg-yellow-200 dark:bg-yellow-500/30` → now `bg-warning/30`.
+   - `apps/app/.../editor/components/PaginatedPreview.tsx` — preview canvas
+     `bg-zinc-100 dark:bg-zinc-900` → `bg-muted`; stamp-area annotation
+     `border-amber-400/70 bg-amber-50/60 text-amber-700` → warning token.
+     The document page itself stays `bg-white text-zinc-900` on purpose —
+     paper doesn't have a dark mode.
+   - `libs/shared/ui/.../rich-text-editor/document-editor.tsx` — preview
+     pane `bg-zinc-100 dark:bg-zinc-900` → `bg-muted`.
+
+**Explicitly NOT touched** (called out so a future pass doesn't think they
+were missed):
+- ~250 `text-foreground/55|60|65|70` opacity-muting calls — a deliberate
+  aesthetic; collapsing them into `text-muted-foreground` would be a 30+
+  file sweep and want a separate design review. Token now exists, so new
+  code can adopt it gradually.
+- The four pre-existing typecheck errors (DocumentsList variant union,
+  GroupIntelligencePanel variant union, DocumentInsights args, data-table
+  pinned type) — orthogonal; still tracked.
+
+**Verification**: `pnpm nx typecheck app` runs with the same 4 pre-existing
+errors and no new ones. Not browser-tested — needs a quick toggle to verify
+dark mode actually flips and persists.
+
+### 2026-06-15 — Intelligence bulk actions + generic-banner bug
+
+User: "add bulk options on batch, delete, also bulk option in review if
+there can be, and Document type — 'Detected as a generic / unknown
+document.' is showing on all review pages".
+
+1. **Generic banner bug** — `ReviewExtraction.tsx` was deciding
+   `isGeneric = !extraction.documentTypeKey || schema.key === 'generic_document'`.
+   `extraction.documentTypeKey` is sourced from `schema.documentTypeKey`,
+   which is **null** for any schema the admin hasn't explicitly linked to
+   a doc type. Result: every non-linked schema (including named ones like
+   `nda_in`) mis-rendered as "generic". Fixed by relying on the schema key
+   alone: `isGeneric = schema.key === 'generic_document'`.
+
+2. **Bulk delete on Batches** — added a real cascade-delete:
+   - `BatchService.delete(userId, batchId)` — gathers the batch's
+     SourceDocument IDs via its runs, deletes the storage objects
+     best-effort, then deletes the SourceDocuments (cascades to
+     PipelineRuns → StageExecutions → extractions). Finally the Batch row.
+     Promoted Documents are left alone (they live independently once
+     converted out of an extraction).
+   - `BatchService.bulkDelete(userId, ids[])` — loops with per-batch error
+     tolerance and returns `{ deletedBatches, deletedRuns }`.
+   - Controller: `@Delete('batches/:id')` + `@Post('batches/delete')`.
+   - api-client: `deleteBatch(id)` + `bulkDeleteBatches(ids)`.
+   - `apps/app/.../intelligence/queries.ts` — `useDeleteBatch` +
+     `useBulkDeleteBatches` with the standard invalidate-on-success +
+     toast pattern.
+   - `BatchesPage.tsx` — "Select multiple" toggle in the page header, a
+     left-pinned checkbox column that appears only in select mode, a
+     sticky selection bar with a destructive Delete button and a Clear
+     ghost button. Confirms via the standard `useConfirm()` dialog with
+     a description that calls out exactly what gets removed.
+
+3. **Bulk approve + bulk archive on Review queue** — no backend approve-many
+   endpoint exists; explored that route and decided to wrap the per-run
+   `approveRun` in a client-side loop with tolerant error handling
+   (`useBulkApproveRuns`) so we get aggregate counts in the toast. Bulk
+   archive reuses the existing `useBulkArchive` (which posts to
+   `/runs/archive`). The sticky selection bar offers both. The Approve
+   button targets only the parked subset of the selection
+   (`needs_review`) — the count next to it reflects "n can be approved"
+   when the selection mixes statuses.
+
+**Verification**: `pnpm nx build api` is green. `pnpm nx typecheck app`
+still reports only the same 4 pre-existing errors (DocumentsList variant
+union, GroupIntelligencePanel variant union, DocumentInsights args,
+data-table `pinned` type). Not runtime-tested — the cascade delete needs
+a real batch in the DB to exercise, and the bulk approve/archive want
+parked runs to walk through.
+
+**Honest open gaps**:
+- The cascade delete deletes Source Documents that may have been
+  referenced in search-index rows (`SourceDocument.onDelete: Cascade`
+  takes care of the FK side, but the search index rebuild may want a
+  manual invalidate — left as a follow-up; the search service has its
+  own enqueue/dequeue lifecycle).
+- The bulk-approve loop is sequential on the client to keep error
+  reporting simple. If a user routinely approves 100+ at once it'd be
+  worth a real backend endpoint (`POST /runs/approve` with body
+  `{ runIds }`) — flagged but not built.
+- BatchesPage's bulk-action bar is sticky from the top of the page
+  container; it doesn't account for the global app header. Acceptable on
+  the current layout (no fixed top bar on desktop), but worth revisiting
+  if a fixed chrome lands.

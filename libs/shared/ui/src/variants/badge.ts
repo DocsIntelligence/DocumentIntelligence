@@ -18,7 +18,14 @@ export const badgeVariants = cva(
     },
     compoundVariants: [
       { outline: true, variant: 'primary', className: 'text-primary' },
-      { outline: true, variant: 'secondary', className: 'text-secondary' },
+      // `secondary` is a near-background neutral; using `text-secondary` on a
+      // transparent background renders as invisible light-on-light. Outline
+      // secondary should read as a normal-text chip with the standard border.
+      {
+        outline: true,
+        variant: 'secondary',
+        className: 'text-foreground/80 border-border',
+      },
       { outline: true, variant: 'error', className: 'text-error' },
       { outline: true, variant: 'warning', className: 'text-warning' },
       { outline: true, variant: 'info', className: 'text-info' },

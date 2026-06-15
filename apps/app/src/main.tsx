@@ -39,6 +39,7 @@ import App from './app/app';
 import { ConfirmProvider } from './app/components/confirm/ConfirmProvider';
 import { PromptProvider } from './app/components/confirm/PromptProvider';
 import { ServicesProvider } from './app/features/documents/services-context';
+import { ThemeProvider } from './app/theme/ThemeProvider';
 import { APP_ENV } from './config';
 import './styles.css';
 
@@ -102,6 +103,7 @@ const root = ReactDOM.createRoot(
 root.render(
   <Provider store={store}>
     <StrictMode>
+      <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ServicesProvider
@@ -127,6 +129,7 @@ root.render(
           </ServicesProvider>
         </TooltipProvider>
       </QueryClientProvider>
+      </ThemeProvider>
     </StrictMode>
   </Provider>,
 );

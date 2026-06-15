@@ -378,7 +378,7 @@ export function DocumentEditor({
         {/* Preview pane (artboard) */}
         {showPreview && (
           <div
-            className="overflow-y-auto bg-zinc-100 dark:bg-zinc-900"
+            className="overflow-y-auto bg-muted"
             style={{ width: `${100 - panelWidth}%` }}
           >
             <div className="flex min-h-full flex-col items-center px-6 py-8">

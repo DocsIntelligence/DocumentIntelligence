@@ -284,12 +284,39 @@ export const createIntelligenceService = (http: HttpClient) => ({
       })
       .then((r) => r.data),
 
+  /**
+   * Whole-batch export. Returns the full JSON payload (batch metadata +
+   * per-run extraction values + original-file details). The caller writes
+   * the blob to disk; we don't trigger the browser download here.
+   */
+  exportBatch: (batchId: string) =>
+    http
+      .get<BatchExport>(`/intelligence/batches/${batchId}/export.json`)
+      .then((r) => r.data),
+
   /** Skip (archive) all archivable runs of a classified type in a batch. */
   archiveType: (batchId: string, documentTypeKey: string, reason?: string) =>
     http
       .post<{ archived: number; total: number }>(
         `/intelligence/batches/${batchId}/archive-type`,
         { documentTypeKey, reason },
+      )
+      .then((r) => r.data),
+
+  /** Delete a batch and ALL of its source documents / runs / extractions. */
+  deleteBatch: (batchId: string) =>
+    http
+      .delete<{ ok: true; deletedRuns: number }>(
+        `/intelligence/batches/${batchId}`,
+      )
+      .then((r) => r.data),
+
+  /** Bulk-delete batches (and their cascaded artifacts). */
+  bulkDeleteBatches: (ids: string[]) =>
+    http
+      .post<{ ok: true; deletedBatches: number; deletedRuns: number }>(
+        '/intelligence/batches/delete',
+        { ids },
       )
       .then((r) => r.data),
 
@@ -326,6 +353,25 @@ export const createIntelligenceService = (http: HttpClient) => ({
         runIds,
         reason,
       })
+      .then((r) => r.data),
+
+  /**
+   * Unified bulk action on runs — `action: 'approve' | 'archive'`. Preferred
+   * over the per-action endpoints because we get a per-run error list back
+   * in one call.
+   */
+  bulkRunAction: (
+    action: 'approve' | 'archive',
+    runIds: string[],
+    reason?: string,
+  ) =>
+    http
+      .post<{
+        action: 'approve' | 'archive';
+        succeeded: number;
+        total: number;
+        errors: { runId: string; message: string }[];
+      }>('/intelligence/runs/bulk', { action, runIds, reason })
       .then((r) => r.data),
 
   /** Active extraction types the user can pick from (manual override). */
@@ -501,6 +547,12 @@ export interface BatchRun {
   documentTypeKey: string | null;
   archivedReason: string | null;
   updatedAt: string;
+  /**
+   * Latest extraction for this run's source document (null until extraction
+   * lands). Surfaced here so per-row actions like "Create editable document"
+   * don't need a second round-trip to look it up.
+   */
+  extractionId: string | null;
 }
 export interface BatchFunnel {
   inProgress: number;
@@ -529,6 +581,43 @@ export interface ListRunsQuery {
 export interface BatchRunsResult {
   items: BatchRun[];
   total: number;
+}
+
+export interface BatchExportItem {
+  runId: string;
+  status: string;
+  documentTypeKey: string | null;
+  archivedReason: string | null;
+  updatedAt: string;
+  originalFile: {
+    sourceDocumentId: string;
+    filename: string;
+    contentType: string;
+    byteSize: number;
+    s3Key: string;
+    uploadedAt: string;
+  };
+  extraction: {
+    id: string;
+    schemaKey: string;
+    documentTypeKey: string | null;
+    overallConfidence: number | null;
+    reviewed: boolean;
+    reviewedAt: string | null;
+    fields: Record<string, unknown>;
+  } | null;
+}
+export interface BatchExport {
+  batch: {
+    id: string;
+    name: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  exportedAt: string;
+  totalRuns: number;
+  items: BatchExportItem[];
 }
 
 export interface ReviewQueueItem {

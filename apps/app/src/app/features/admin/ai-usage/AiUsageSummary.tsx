@@ -73,7 +73,7 @@ export function AiUsageSummary({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API_BASE_URL}/config/ai-usage/by-${scope.kind}/${scope.id}`, {
+    fetch(`${API_BASE_URL}/admin/ai-usage/by-${scope.kind}/${scope.id}`, {
       credentials: 'include',
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -29,6 +30,7 @@ import {
   ArchiveTypeDto,
   AskDto,
   BulkArchiveDto,
+  BulkRunActionDto,
   ListBatchesQueryDto,
   ListRunsQueryDto,
   PresignUploadDto,
@@ -338,6 +340,15 @@ export class IntelligenceController {
     return this.batches.listRuns(user.id, id, query);
   }
 
+  @Get('batches/:id/export.json')
+  @ApiOperation({
+    summary:
+      'Full-batch JSON export: every run + its latest extraction values + the original-file metadata',
+  })
+  exportBatch(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.batches.exportJson(user.id, id);
+  }
+
   @Post('batches/:id/archive-type')
   @ApiOperation({ summary: 'Skip (archive) all archivable runs of a type' })
   archiveType(
@@ -351,6 +362,24 @@ export class IntelligenceController {
       body.documentTypeKey,
       body.reason,
     );
+  }
+
+  @Delete('batches/:id')
+  @ApiOperation({
+    summary:
+      'Delete a batch and ALL of its source documents / runs / extractions',
+  })
+  deleteBatch(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.batches.delete(user.id, id);
+  }
+
+  @Post('batches/delete')
+  @ApiOperation({ summary: 'Bulk-delete batches (and their cascaded artifacts)' })
+  bulkDeleteBatches(
+    @CurrentUser() user: User,
+    @Body() body: { ids: string[] },
+  ) {
+    return this.batches.bulkDelete(user.id, body?.ids ?? []);
   }
 
   // ─── Review queue (docs/07 P4.4) ───────────────────────────────────────────
@@ -393,6 +422,20 @@ export class IntelligenceController {
   @ApiOperation({ summary: 'Bulk-archive runs (e.g. skip all of a type)' })
   bulkArchive(@CurrentUser() user: User, @Body() body: BulkArchiveDto) {
     return this.pipelines.bulkArchive(user.id, body.runIds, body.reason);
+  }
+
+  @Post('runs/bulk')
+  @ApiOperation({
+    summary:
+      'Unified bulk action on pipeline runs — body.action selects approve / archive',
+  })
+  bulkRunAction(@CurrentUser() user: User, @Body() body: BulkRunActionDto) {
+    return this.pipelines.bulkAction(
+      user.id,
+      body.action,
+      body.runIds,
+      body.reason,
+    );
   }
 
   // ─── Manual type override ──────────────────────────────────────────────────

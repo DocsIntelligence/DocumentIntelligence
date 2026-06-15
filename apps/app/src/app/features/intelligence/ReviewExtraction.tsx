@@ -159,8 +159,13 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
     },
   });
 
-  const isGeneric =
-    !extraction.documentTypeKey || extraction.schema.key === GENERIC_SCHEMA_KEY;
+  // The schema key is the only reliable "is this generic?" signal. The
+  // top-level `documentTypeKey` is sourced from `schema.documentTypeKey`,
+  // which is null for any schema the admin hasn't explicitly linked to a
+  // doc type — that's a separate concern from "what kind of document was
+  // detected", and using it here mis-flagged every unlinked-schema run as
+  // generic.
+  const isGeneric = extraction.schema.key === GENERIC_SCHEMA_KEY;
 
   const flagged = useMemo(
     () => new Set(extraction.review.flaggedFields),
@@ -254,59 +259,104 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
       </Card>
 
       {/* Manual type override — config-driven from the resolver's schema list. */}
-      <Card className={isGeneric ? 'border-warning/50' : undefined}>
-        <CardContent className="space-y-3 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">
-                {t('intelligence.review.typeTitle', 'Document type')}
-              </p>
-              <p className="mt-0.5 text-xs text-foreground/60">
-                {isGeneric
-                  ? t(
-                      'intelligence.review.typeGeneric',
-                      'Detected as a generic / unknown document. Pick the correct type to re-extract it with that type’s fields.',
-                    )
-                  : t(
-                      'intelligence.review.typeKnown',
-                      'Detected as “{{name}}”. Re-process as a different type if that’s wrong.',
-                      { name: extraction.schema.name },
-                    )}
-              </p>
-            </div>
-            {isGeneric && (
+      {isGeneric ? (
+        <Card className="border-warning/50">
+          <CardContent className="space-y-3 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {t('intelligence.review.typeTitle', 'Document type')}
+                </p>
+                <p className="mt-0.5 text-xs text-foreground/60">
+                  {t(
+                    'intelligence.review.typeGeneric',
+                    'Detected as a generic / unknown document. Pick the correct type to re-extract it with that type’s fields.',
+                  )}
+                </p>
+              </div>
               <Badge variant="warning" outline>
                 {t('intelligence.review.generic', 'Generic')}
               </Badge>
-            )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={targetSchema} onValueChange={setTargetSchema}>
+                <SelectTrigger className="w-64">
+                  <SelectValue
+                    placeholder={t(
+                      'intelligence.review.pickType',
+                      'Choose a type…',
+                    )}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {(schemaOptions.data ?? []).map((s) => (
+                    <SelectItem key={s.key} value={s.key}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                disabled={!targetSchema || reprocess.isPending || busy}
+                onClick={() => reprocess.mutate(targetSchema)}
+              >
+                {reprocess.isPending
+                  ? t('intelligence.review.reprocessing', 'Re-processing…')
+                  : t('intelligence.review.reprocess', 'Re-process as type')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+            <span className="text-foreground/60">
+              {t('intelligence.review.typeTitle', 'Document type')}
+            </span>
+            <Badge variant="secondary" outline className="font-medium">
+              {extraction.schema.name}
+            </Badge>
+            <span className="hidden text-foreground/45 sm:inline">
+              ·{' '}
+              {t(
+                'intelligence.review.typeKnownShort',
+                "Wrong? Pick a different type and re-process.",
+              )}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <Select value={targetSchema} onValueChange={setTargetSchema}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="h-9 w-56 text-sm">
                 <SelectValue
-                  placeholder={t('intelligence.review.pickType', 'Choose a type…')}
+                  placeholder={t(
+                    'intelligence.review.pickType',
+                    'Choose a type…',
+                  )}
                 />
               </SelectTrigger>
               <SelectContent>
-                {(schemaOptions.data ?? []).map((s) => (
-                  <SelectItem key={s.key} value={s.key}>
-                    {s.name}
-                  </SelectItem>
-                ))}
+                {(schemaOptions.data ?? [])
+                  .filter((s) => s.key !== extraction.schema.key)
+                  .map((s) => (
+                    <SelectItem key={s.key} value={s.key}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             <Button
-              variant={isGeneric ? 'primary' : 'outline'}
+              size="sm"
+              variant="outline"
               disabled={!targetSchema || reprocess.isPending || busy}
               onClick={() => reprocess.mutate(targetSchema)}
             >
               {reprocess.isPending
                 ? t('intelligence.review.reprocessing', 'Re-processing…')
-                : t('intelligence.review.reprocess', 'Re-process as type')}
+                : t('intelligence.review.reprocessShort', 'Re-process')}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       <Card>
         <CardContent className="divide-y divide-border/60 p-0">

@@ -266,6 +266,40 @@ export function useBatchRuns(batchId: string | undefined, query: ListRunsQuery =
 }
 
 /** Skip (archive) all archivable runs of a type in a batch. */
+/** Delete a single batch (cascades to runs / extractions / source docs). */
+export function useDeleteBatch() {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => svc.deleteBatch(batchId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      toast.success('Batch deleted');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Delete failed')),
+  });
+}
+
+/** Bulk-delete batches; aggregate toast on success. */
+export function useBulkDeleteBatches() {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => svc.bulkDeleteBatches(ids),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      toast.success(
+        `Deleted ${res.deletedBatches} batch${
+          res.deletedBatches === 1 ? '' : 'es'
+        } (${res.deletedRuns} runs)`,
+      );
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Bulk delete failed')),
+  });
+}
+
 export function useArchiveType(batchId?: string) {
   const svc = useIntelligenceService();
   const qc = useQueryClient();
@@ -313,6 +347,39 @@ export function useArchiveRun(batchId?: string) {
       toast.success('Archived (skipped)');
     },
     onError: (err) => toast.error(extractMessage(err, 'Archive failed')),
+  });
+}
+
+/**
+ * Unified bulk action on pipeline runs (server endpoint `/runs/bulk`).
+ * One hook handles approve + archive — the action label drives the toast
+ * copy so the caller doesn't need to wrap it. Partial failures are
+ * tolerated; the toast surfaces the aggregate counts.
+ */
+export function useBulkRunAction(batchId?: string) {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      action: 'approve' | 'archive';
+      runIds: string[];
+      reason?: string;
+    }) => svc.bulkRunAction(vars.action, vars.runIds, vars.reason),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches });
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      const verb = res.action === 'approve' ? 'Approved' : 'Archived';
+      if (res.errors.length === 0) {
+        toast.success(`${verb} ${res.succeeded}`);
+      } else {
+        toast.warning(
+          `${verb} ${res.succeeded} of ${res.total}; ${res.errors.length} failed`,
+        );
+      }
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Bulk action failed')),
   });
 }
 

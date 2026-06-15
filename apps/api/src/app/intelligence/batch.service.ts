@@ -232,7 +232,19 @@ export class BatchService {
         orderBy,
         take: query.pageSize,
         skip: query.page * query.pageSize,
-        include: { sourceDocument: { select: { id: true, filename: true } } },
+        include: {
+          sourceDocument: {
+            select: {
+              id: true,
+              filename: true,
+              extractions: {
+                select: { id: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
       }),
       this.db.pipelineRun.count({ where }),
     ]);
@@ -246,8 +258,85 @@ export class BatchService {
         documentTypeKey: r.documentTypeKey,
         archivedReason: r.archivedReason,
         updatedAt: r.updatedAt.toISOString(),
+        extractionId: r.sourceDocument.extractions[0]?.id ?? null,
       })),
       total,
+    };
+  }
+
+  /**
+   * Full-batch export: flattens every run's latest extraction values plus the
+   * original-file metadata into one JSON blob the user can download. Not
+   * paginated — they explicitly asked for "all values + file details" as a
+   * single artefact. We cap the run count via the existing DB index; if a
+   * batch grows past ~10k runs this would want a streaming response, but the
+   * current ceiling (~1000) is comfortable in-memory.
+   */
+  async exportJson(userId: string, batchId: string) {
+    const batch = await this.db.batch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException('Batch not found');
+    await this.assertCanAccess(userId, batch);
+
+    const runs = await this.db.pipelineRun.findMany({
+      where: { batchId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        sourceDocument: {
+          select: {
+            id: true,
+            filename: true,
+            contentType: true,
+            byteSize: true,
+            s3Key: true,
+            createdAt: true,
+            extractions: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      batch: {
+        id: batch.id,
+        name: batch.name,
+        status: batch.status,
+        createdAt: batch.createdAt.toISOString(),
+        updatedAt: batch.updatedAt.toISOString(),
+      },
+      exportedAt: new Date().toISOString(),
+      totalRuns: runs.length,
+      items: runs.map((r) => {
+        const e = r.sourceDocument.extractions[0];
+        return {
+          runId: r.id,
+          status: r.status,
+          documentTypeKey: r.documentTypeKey,
+          archivedReason: r.archivedReason,
+          updatedAt: r.updatedAt.toISOString(),
+          originalFile: {
+            sourceDocumentId: r.sourceDocument.id,
+            filename: r.sourceDocument.filename,
+            contentType: r.sourceDocument.contentType,
+            byteSize: r.sourceDocument.byteSize,
+            s3Key: r.sourceDocument.s3Key,
+            uploadedAt: r.sourceDocument.createdAt.toISOString(),
+          },
+          extraction: e
+            ? {
+                id: e.id,
+                schemaKey: e.schemaKey,
+                documentTypeKey: e.documentTypeKey,
+                overallConfidence: e.overallConfidence,
+                reviewed: e.reviewed,
+                reviewedAt: e.reviewedAt?.toISOString() ?? null,
+                fields: e.fields as Record<string, unknown>,
+              }
+            : null,
+        };
+      }),
     };
   }
 
@@ -272,6 +361,78 @@ export class BatchService {
       running: c.running,
       createdAt: batch.createdAt,
     };
+  }
+
+  /**
+   * Delete a batch and EVERYTHING it produced. Cascade plan: gather the
+   * `sourceDocumentId`s on the batch's runs, delete the storage objects
+   * (best-effort — a storage miss can't block the row delete), delete the
+   * SourceDocuments (which cascades to PipelineRuns / StageExecutions /
+   * extractions / search-index rows), then delete the Batch itself.
+   *
+   * Documents promoted out of these extractions are NOT touched — they live
+   * independently in the `Document` table once the user creates them.
+   */
+  async delete(userId: string, batchId: string) {
+    const batch = await this.db.batch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException('Batch not found');
+    await this.assertCanAccess(userId, batch);
+
+    const runs = await this.db.pipelineRun.findMany({
+      where: { batchId },
+      select: { id: true, sourceDocumentId: true },
+    });
+    const sourceIds = Array.from(
+      new Set(runs.map((r) => r.sourceDocumentId).filter(Boolean)),
+    );
+    const sources = sourceIds.length
+      ? await this.db.sourceDocument.findMany({
+          where: { id: { in: sourceIds } },
+          select: { id: true, s3Key: true },
+        })
+      : [];
+
+    // Storage cleanup is best-effort: we still want the DB rows gone even if
+    // the object store hiccups (orphans are easy to GC later from the keys
+    // we can list, but a half-deleted batch with live S3 + dead rows is
+    // worse for the user).
+    await Promise.allSettled(
+      sources.map((s) =>
+        s.s3Key ? this.storage.delete(s.s3Key).catch(() => undefined) : null,
+      ),
+    );
+
+    if (sourceIds.length) {
+      await this.db.sourceDocument.deleteMany({
+        where: { id: { in: sourceIds } },
+      });
+    }
+    await this.db.batch.delete({ where: { id: batchId } });
+
+    return { ok: true, deletedRuns: runs.length };
+  }
+
+  /** Delete many batches; returns aggregate counts. Each is auth-checked. */
+  async bulkDelete(userId: string, batchIds: string[]) {
+    const seen = new Set<string>();
+    let deletedBatches = 0;
+    let deletedRuns = 0;
+    for (const id of batchIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      try {
+        const res = await this.delete(userId, id);
+        deletedBatches += 1;
+        deletedRuns += res.deletedRuns;
+      } catch (err) {
+        // Swallow per-batch failures — the caller gets the aggregate result
+        // and can re-fetch the list to see what survived. Surfacing a hard
+        // error would roll back already-deleted batches in callers that
+        // expect partial success (the multi-select UX is one of those).
+        this.logger.warn(`bulkDelete: ${id} failed: ${(err as Error).message}`);
+      }
+    }
+    return { ok: true, deletedBatches, deletedRuns };
   }
 
   private async assertCanAccess(

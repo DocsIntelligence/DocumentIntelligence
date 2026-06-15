@@ -168,7 +168,7 @@ export function PaginatedPreview({
   return (
     <div
       className={cn(
-        'relative h-full min-h-0 bg-zinc-100 dark:bg-zinc-900',
+        'relative h-full min-h-0 bg-muted',
         className,
       )}
       style={docFontStyle}
@@ -243,7 +243,7 @@ export function PaginatedPreview({
                 >
                   {reservedTop > 0 && (
                     <div
-                      className="absolute inset-x-0 top-0 flex items-center justify-center border-b border-dashed border-amber-400/70 bg-amber-50/60 text-[10px] font-medium uppercase tracking-wide text-amber-700"
+                      className="absolute inset-x-0 top-0 flex items-center justify-center border-b border-dashed border-warning/70 bg-warning/10 text-[10px] font-medium uppercase tracking-wide text-warning"
                       style={{ height: `${reservedTop}mm` }}
                     >
                       Pre-printed stamp area — kept clear

@@ -65,6 +65,18 @@ const BulkArchiveSchema = z.object({
 });
 export class BulkArchiveDto extends createZodDto(BulkArchiveSchema) {}
 
+/**
+ * Unified bulk action on a set of pipeline runs. One endpoint covers
+ * approve / archive (and any future verbs) so the client never has to
+ * pick between three near-identical mutations.
+ */
+const BulkRunActionSchema = z.object({
+  action: z.enum(['approve', 'archive']),
+  runIds: z.array(z.string().min(1)).min(1).max(500),
+  reason: z.string().max(500).optional(),
+});
+export class BulkRunActionDto extends createZodDto(BulkRunActionSchema) {}
+
 /** Re-extract a source as a reviewer-chosen type (manual override). */
 const ReprocessSchema = z.object({
   schemaKey: z.string().min(1).max(120),

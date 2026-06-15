@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Queue } from 'bullmq';
 import { AiService } from '../ai/ai.service';
+import { aiUsageContext } from '../ai-usage/ai-usage.context';
 import { DatabaseService } from '../database/database.service';
 import { SearchConfigService } from './search-config.service';
 import { SearchTextService, ExtractedText } from './search-text.service';
@@ -147,19 +148,50 @@ export class SearchIndexService {
     if (!cfg.semanticEnabled || !this.ai.canEmbed()) return;
     const input = `${t.title}\n${t.bodyText}`.slice(0, EMBED_CHAR_BUDGET).trim();
     if (!input) return;
-    try {
-      const [vec] = await this.ai.embed([input]);
-      if (!vec?.length) return;
-      await this.db.$executeRawUnsafe(
-        'UPDATE "SearchIndex" SET embedding = $1::vector WHERE kind = $2 AND "refId" = $3',
-        toVectorLiteral(vec),
-        kind,
-        refId,
-      );
-    } catch (e) {
-      // Keyword index still works; embedding is best-effort.
-      this.logger.warn(`embed ${kind}:${refId} failed: ${String(e)}`);
+    // Attribute the embed call to the right subject. Indexing runs in a
+    // BullMQ worker (or sync fallback) detached from the original request's
+    // ALS scope, so we re-open one here. For sources we also look up the
+    // most recent PipelineRun → batchId + pipelineRunId, so usage filtered
+    // by batch on the dashboard surfaces every embed too. One indexed query
+    // per embed is comfortable compared to the embedding cost itself.
+    let pipelineRunId: string | null = null;
+    let batchId: string | null = null;
+    if (kind === 'source') {
+      const latestRun = await this.db.pipelineRun.findFirst({
+        where: { sourceDocumentId: refId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, batchId: true },
+      });
+      pipelineRunId = latestRun?.id ?? null;
+      batchId = latestRun?.batchId ?? null;
     }
+    await aiUsageContext.run(
+      {
+        userId: t.ownerUserId ?? null,
+        orgId: t.ownerOrgId ?? null,
+        operation: 'embed',
+        pipelineRunId,
+        batchId,
+        ...(kind === 'document'
+          ? { documentId: refId }
+          : { sourceDocumentId: refId }),
+      },
+      async () => {
+        try {
+          const [vec] = await this.ai.embed([input]);
+          if (!vec?.length) return;
+          await this.db.$executeRawUnsafe(
+            'UPDATE "SearchIndex" SET embedding = $1::vector WHERE kind = $2 AND "refId" = $3',
+            toVectorLiteral(vec),
+            kind,
+            refId,
+          );
+        } catch (e) {
+          // Keyword index still works; embedding is best-effort.
+          this.logger.warn(`embed ${kind}:${refId} failed: ${String(e)}`);
+        }
+      },
+    );
   }
 
   // ── Backfill (one-shot reindex of everything; safe to re-run) ────────────

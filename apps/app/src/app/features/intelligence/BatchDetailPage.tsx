@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   DataTable,
   type DataTableColumn,
   DropdownMenu,
@@ -12,19 +11,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Spinner,
 } from '@org/ui';
 import type { BatchRun } from '@org/api-client';
 import { useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { useIntelligenceService } from '../documents/services-context';
 import {
   useApproveRun,
   useArchiveRun,
   useArchiveType,
   useBatch,
   useBatchRuns,
+  useConvert,
   useReprocessRun,
   useSchemaOptions,
 } from './queries';
@@ -80,30 +87,86 @@ const FUNNEL_SEGMENTS: {
 export function BatchDetailPage() {
   const { t } = useTranslation();
   const confirm = useConfirm();
+  const navigate = useNavigate();
+  const svc = useIntelligenceService();
   const { id } = useParams<{ id: string }>();
   const { data: batch, isLoading } = useBatch(id);
   const archive = useArchiveRun(id);
   const bulk = useArchiveType(id);
   const approve = useApproveRun(id);
   const reprocess = useReprocessRun(id);
+  const convert = useConvert();
   const schemaOptions = useSchemaOptions();
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(RUNS_PAGE_SIZE);
+  const [query, setQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const createDoc = async (extractionId: string) => {
+    const res = await convert.mutateAsync(extractionId);
+    navigate(
+      res.mode === 'structured'
+        ? `/documents/${res.documentId}/edit`
+        : `/documents/${res.documentId}/draft`,
+    );
+  };
+
+  const exportJson = async () => {
+    if (!id) return;
+    setExporting(true);
+    try {
+      const data = await svc.exportBatch(id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (data.batch.name ?? data.batch.id).replace(
+        /[^a-z0-9_.-]+/gi,
+        '_',
+      );
+      a.href = url;
+      a.download = `${safeName}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(
+        t('intelligence.batches.exportDone', 'Exported {{n}} runs', {
+          n: data.totalRuns,
+        }),
+      );
+    } catch (err) {
+      toast.error(
+        t('intelligence.batches.exportFailed', 'Export failed: {{msg}}', {
+          msg: (err as Error).message,
+        }),
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Runs are server-paginated (docs/09 #9) — a batch can hold ~1000 docs.
   const runsQuery = useBatchRuns(id, {
     status: statusFilter ?? undefined,
     page,
-    pageSize: RUNS_PAGE_SIZE,
+    pageSize,
   });
   const runs = runsQuery.data?.items ?? [];
   const runsTotal = runsQuery.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(runsTotal / RUNS_PAGE_SIZE));
-
-  const filterBy = (status: string | null) => {
-    setStatusFilter(status);
-    setPage(0);
-  };
+  const pageCount = Math.max(1, Math.ceil(runsTotal / pageSize));
+  // Client-side filter on the current page, so the search box at least
+  // narrows what's visible. (Backend doesn't yet accept `q` on runs — TODO
+  // when this list grows beyond ~1000 per batch.)
+  const visibleRuns = query.trim()
+    ? runs.filter((r) =>
+        `${r.filename} ${r.documentTypeKey ?? ''}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase()),
+      )
+    : runs;
 
   const skipOne = async (runId: string) => {
     const ok = await confirm({
@@ -177,7 +240,7 @@ export function BatchDetailPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {batch.needsReview > 0 && (
             <Button asChild variant="outline" size="sm">
               <Link to={`/review-queue?batch=${id}`} className="gap-1.5">
@@ -188,6 +251,18 @@ export function BatchDetailPage() {
               </Link>
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting || batch.total === 0}
+            onClick={exportJson}
+            className="gap-1.5"
+          >
+            <DownloadIcon />
+            {exporting
+              ? t('intelligence.batches.exporting', 'Exporting…')
+              : t('intelligence.batches.exportJson', 'Export JSON')}
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link to="/batches">{t('common.back', 'Back')}</Link>
           </Button>
@@ -272,21 +347,31 @@ export function BatchDetailPage() {
             key: 'file',
             header: t('intelligence.queue.file', 'File'),
             sortValue: (r) => r.filename.toLowerCase(),
+            // Let the file/title column claim the leftover width — runs in
+            // a batch usually have long filenames that need the room.
+            width: 'min-w-[260px] w-auto',
             cell: (r) => (
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="inline-flex size-8 flex-none items-center justify-center rounded-lg bg-secondary/60 text-foreground/70">
                   <FileTextIcon className="size-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
+                  <p
+                    className="truncate text-sm font-medium text-foreground"
+                    title={r.filename}
+                  >
                     {r.filename}
                   </p>
                   <p className="truncate text-xs text-foreground/45">
-                    {r.documentTypeKey ??
-                      t('intelligence.batches.unclassified', 'unclassified')}
                     {r.status === 'archived' && r.archivedReason
-                      ? ` · ${r.archivedReason}`
-                      : ''}
+                      ? r.archivedReason
+                      : t(
+                          'intelligence.batches.uploaded',
+                          'Uploaded {{when}}',
+                          {
+                            when: new Date(r.updatedAt).toLocaleDateString(),
+                          },
+                        )}
                   </p>
                 </div>
               </div>
@@ -295,20 +380,30 @@ export function BatchDetailPage() {
           {
             key: 'type',
             header: t('intelligence.queue.type', 'Type'),
+            // Was unsized → the badge could clip; pin a sensible min-width
+            // and let it grow up to 12rem before truncating.
+            width: 'min-w-[140px] w-48',
             sortValue: (r) => r.documentTypeKey ?? '',
             cell: (r) =>
               r.documentTypeKey ? (
-                <Badge variant="secondary" outline>
+                <Badge
+                  variant="secondary"
+                  outline
+                  className="max-w-full truncate"
+                  title={r.documentTypeKey}
+                >
                   {r.documentTypeKey}
                 </Badge>
               ) : (
-                <span className="text-foreground/40">—</span>
+                <span className="text-foreground/40">
+                  {t('intelligence.batches.unclassified', 'unclassified')}
+                </span>
               ),
           },
           {
             key: 'status',
             header: t('common.status', 'Status'),
-            width: 'w-32',
+            width: 'w-36',
             sortValue: (r) => r.status,
             cell: (r) => (
               <Badge variant={RUN_VARIANT[r.status] ?? 'secondary'}>
@@ -341,6 +436,7 @@ export function BatchDetailPage() {
               const canReprocess =
                 r.status !== 'running' && r.status !== 'queued';
               const canSkip = ARCHIVABLE.has(r.status);
+              const canCreateDoc = !!r.extractionId && openable;
               return (
                 <div className="flex items-center justify-end gap-0.5">
                   {/* Primary inline icons */}
@@ -351,6 +447,20 @@ export function BatchDetailPage() {
                     >
                       <OpenIcon />
                     </IconLink>
+                  )}
+                  {canCreateDoc && (
+                    <IconButton
+                      title={t(
+                        'intelligence.batches.createDoc',
+                        'Create editable document',
+                      )}
+                      disabled={convert.isPending}
+                      onClick={() =>
+                        r.extractionId && createDoc(r.extractionId)
+                      }
+                    >
+                      <FilePlusIcon />
+                    </IconButton>
                   )}
                   {r.status === 'needs_review' && (
                     <IconButton
@@ -423,10 +533,9 @@ export function BatchDetailPage() {
         return (
           <DataTable
             tableId="intelligence.batchDetail.runs"
-            data={runs}
+            data={visibleRuns}
             columns={columns}
             rowKey={(r) => r.id}
-            search={(r) => `${r.filename} ${r.documentTypeKey ?? ''}`}
             searchPlaceholder={t(
               'intelligence.batches.searchRuns',
               'Search documents in this batch…',
@@ -437,25 +546,47 @@ export function BatchDetailPage() {
               pageCount,
               total: runsTotal,
               onPageChange: setPage,
-              pageSize: RUNS_PAGE_SIZE,
+              pageSize,
+              onPageSizeChange: (n) => {
+                setPageSize(n);
+                setPage(0);
+              },
+              query,
+              onQueryChange: (q) => {
+                setQuery(q);
+                setPage(0);
+              },
               loading: runsQuery.isFetching && runsQuery.isPlaceholderData,
             }}
             toolbar={
               <div className="flex flex-wrap items-center gap-2">
-                <Chip active={!statusFilter} onClick={() => filterBy(null)}>
-                  {t('common.all', 'All')} ({batch.total})
-                </Chip>
-                {RUN_STATUSES.map((status) => (
-                  <Chip
-                    key={status}
-                    active={statusFilter === status}
-                    onClick={() =>
-                      filterBy(statusFilter === status ? null : status)
-                    }
-                  >
-                    {status.replace(/_/g, ' ')}
-                  </Chip>
-                ))}
+                <Select
+                  value={statusFilter ?? '__all'}
+                  onValueChange={(v) => {
+                    setStatusFilter(v === '__all' ? null : v);
+                    setPage(0);
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-44 text-sm">
+                    <SelectValue
+                      placeholder={t(
+                        'intelligence.batches.allStatuses',
+                        'All statuses',
+                      )}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all">
+                      {t('intelligence.batches.allStatuses', 'All statuses')} (
+                      {batch.total})
+                    </SelectItem>
+                    {RUN_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             }
             empty={t(
@@ -545,6 +676,43 @@ function CheckIcon() {
       strokeLinejoin="round"
     >
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function FilePlusIcon() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="12" y1="12" x2="12" y2="18" />
+      <line x1="9" y1="15" x2="15" y2="15" />
     </svg>
   );
 }

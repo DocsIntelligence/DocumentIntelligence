@@ -1,6 +1,7 @@
 import {
   Badge,
   Button,
+  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -13,10 +14,12 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import {
   useApproveRun,
   useBatch,
   useBatchRuns,
+  useBulkRunAction,
   useExtraction,
   useReviewQueue,
 } from './queries';
@@ -111,6 +114,15 @@ export function ReviewQueuePage() {
   const [autoOpened, setAutoOpened] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
+  const bulkAction = useBulkRunAction(batchId);
+
+  // Reset selection when the user leaves multi-select mode.
+  useEffect(() => {
+    if (!selectMode) setSelected(new Set());
+  }, [selectMode]);
 
   const types = useMemo(
     () =>
@@ -153,6 +165,18 @@ export function ReviewQueuePage() {
     else if (current >= count) setCurrent(count - 1);
   }, [count, current]);
 
+  // The approvable subset of the current selection — anything still parked
+  // at needs_review. Already-approved / completed rows are ignored on
+  // bulk-approve so the button can stay one-click. Declared here (not next
+  // to its callsite below) so the hook count stays stable across the early
+  // returns that follow.
+  const approvableIds = useMemo(() => {
+    const byId = new Map(items.map((i) => [i.pipelineRunId, i]));
+    return Array.from(selected).filter(
+      (id) => byId.get(id)?.status === 'needs_review',
+    );
+  }, [items, selected]);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -185,7 +209,109 @@ export function ReviewQueuePage() {
   const openReview = (pipelineRunId: string) =>
     setCurrent(items.findIndex((x) => x.pipelineRunId === pipelineRunId));
 
+  const selectableRows = filtered;
+  const allOnPageSelected =
+    selectableRows.length > 0 &&
+    selectableRows.every((r) => selected.has(r.pipelineRunId));
+  const someOnPageSelected = selectableRows.some((r) =>
+    selected.has(r.pipelineRunId),
+  );
+  const togglePageSelection = (next: boolean) => {
+    setSelected((prev) => {
+      const out = new Set(prev);
+      for (const r of selectableRows) {
+        if (next) out.add(r.pipelineRunId);
+        else out.delete(r.pipelineRunId);
+      }
+      return out;
+    });
+  };
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const out = new Set(prev);
+      if (out.has(id)) out.delete(id);
+      else out.add(id);
+      return out;
+    });
+
+  const onBulkApprove = async () => {
+    if (!approvableIds.length) return;
+    const ok = await confirm({
+      title: t('intelligence.queue.bulkApproveTitle', 'Approve {{n}} run{{s}}?', {
+        n: approvableIds.length,
+        s: approvableIds.length === 1 ? '' : 's',
+      }),
+      description: t(
+        'intelligence.queue.bulkApproveDesc',
+        "We'll mark each run as approved and finalize its export. Run-level errors are tolerated; the toast shows aggregate counts.",
+      ),
+      confirmLabel: t('intelligence.queue.approve', 'Approve'),
+    });
+    if (!ok) return;
+    await bulkAction.mutateAsync({
+      action: 'approve',
+      runIds: approvableIds,
+    });
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
+  const onBulkArchive = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const ok = await confirm({
+      title: t('intelligence.queue.bulkArchiveTitle', 'Skip {{n}} run{{s}}?', {
+        n: ids.length,
+        s: ids.length === 1 ? '' : 's',
+      }),
+      description: t(
+        'intelligence.queue.bulkArchiveDesc',
+        "Archived runs are skipped — no further extraction or export. You can still see them in the batch's archived bucket.",
+      ),
+      confirmLabel: t('intelligence.queue.archive', 'Archive'),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    await bulkAction.mutateAsync({
+      action: 'archive',
+      runIds: ids,
+      reason: 'Bulk skipped from review queue',
+    });
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
   const columns: DataTableColumn<QueueEntry>[] = [
+    ...(selectMode
+      ? [
+          {
+            key: 'select',
+            header: (
+              <Checkbox
+                aria-label={t('common.selectAllOnPage', 'Select all on page')}
+                checked={
+                  allOnPageSelected
+                    ? true
+                    : someOnPageSelected
+                      ? 'indeterminate'
+                      : false
+                }
+                onCheckedChange={(v) => togglePageSelection(Boolean(v))}
+              />
+            ),
+            width: 'w-10',
+            pinned: 'left',
+            cell: (r: QueueEntry) => (
+              <Checkbox
+                aria-label={t('common.selectRow', 'Select row')}
+                checked={selected.has(r.pipelineRunId)}
+                onCheckedChange={() => toggleOne(r.pipelineRunId)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ),
+          } satisfies DataTableColumn<QueueEntry>,
+        ]
+      : []),
     {
       key: 'file',
       header: t('intelligence.queue.file', 'File'),
@@ -358,6 +484,58 @@ export function ReviewQueuePage() {
         </div>
       </div>
 
+      {selectMode && selected.size > 0 && (
+        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+          <span className="text-sm font-medium text-foreground">
+            {t('intelligence.queue.nSelected', '{{n}} selected', {
+              n: selected.size,
+            })}
+            {approvableIds.length !== selected.size && (
+              <span className="ml-2 text-foreground/55">
+                ·{' '}
+                {t(
+                  'intelligence.queue.nApprovable',
+                  '{{n}} can be approved',
+                  { n: approvableIds.length },
+                )}
+              </span>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+            >
+              {t('common.clear', 'Clear')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkAction.isPending}
+              onClick={onBulkArchive}
+            >
+              {bulkAction.isPending && bulkAction.variables?.action === 'archive'
+                ? t('common.archiving', 'Archiving…')
+                : t('intelligence.queue.archiveN', 'Archive {{n}}', {
+                    n: selected.size,
+                  })}
+            </Button>
+            <Button
+              size="sm"
+              disabled={approvableIds.length === 0 || bulkAction.isPending}
+              onClick={onBulkApprove}
+            >
+              {bulkAction.isPending && bulkAction.variables?.action === 'approve'
+                ? t('common.approving', 'Approving…')
+                : t('intelligence.queue.approveN', 'Approve {{n}}', {
+                    n: approvableIds.length,
+                  })}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <DataTable
         tableId={
           batchId
@@ -379,8 +557,9 @@ export function ReviewQueuePage() {
         initialSort={{ key: 'updated', dir: 'desc' }}
         empty={t('intelligence.queue.empty', 'Nothing to review here.')}
         toolbar={
-          types.length > 1 || (batchId && statuses.length > 1) ? (
-            <div className="flex flex-wrap items-center gap-2">
+          (
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
               {batchId && statuses.length > 1 && (
                 <Select
                   value={statusFilter ?? '__any__'}
@@ -441,8 +620,20 @@ export function ReviewQueuePage() {
                   </SelectContent>
                 </Select>
               )}
+              </div>
+              {count > 0 && (
+                <Button
+                  size="sm"
+                  variant={selectMode ? 'secondary' : 'outline'}
+                  onClick={() => setSelectMode((v) => !v)}
+                >
+                  {selectMode
+                    ? t('common.cancel', 'Cancel')
+                    : t('common.selectMultiple', 'Select multiple')}
+                </Button>
+              )}
             </div>
-          ) : undefined
+          )
         }
       />
     </div>

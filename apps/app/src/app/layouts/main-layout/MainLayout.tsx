@@ -17,6 +17,7 @@ import {
 } from 'react-router-dom';
 import { APP_ENV } from '../../../config';
 import { SearchCommandPalette, openSearchPalette } from '../../features/search';
+import { ThemeToggle } from '../../theme/ThemeToggle';
 
 /**
  * Authenticated app shell: a fixed left sidebar on md+ screens, and a
@@ -305,8 +306,9 @@ function Sidebar({
 
         {/* User footer */}
         <div className="border-t border-border p-3">
-          <div className="px-2 pb-2">
-            <LanguageSwitcher className="w-full" />
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <LanguageSwitcher className="flex-1" />
+            <ThemeToggle />
           </div>
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <UserAvatar name={userName} src={userPicture} size="sm" />

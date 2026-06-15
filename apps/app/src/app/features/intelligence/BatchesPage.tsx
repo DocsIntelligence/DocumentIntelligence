@@ -2,6 +2,7 @@ import type { BatchSummary } from '@org/api-client';
 import {
   Badge,
   Button,
+  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -14,7 +15,8 @@ import { cn } from '@org/utils';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useBatches } from './queries';
+import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { useBatches, useBulkDeleteBatches } from './queries';
 import {
   AlertIcon,
   ArchiveIcon,
@@ -59,10 +61,20 @@ export function BatchesPage() {
   );
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
+  const bulkDelete = useBulkDeleteBatches();
 
   useEffect(() => {
     setPage(0);
   }, [query, statusFilter, sort, pageSize]);
+
+  // Drop selections that fell off the current page after a filter / page
+  // change so the sticky action bar count never lies.
+  useEffect(() => {
+    if (!selectMode) setSelected(new Set());
+  }, [selectMode]);
 
   const { data, isFetching, isPlaceholderData } = useBatches({
     page,
@@ -79,7 +91,80 @@ export function BatchesPage() {
   const hasFilters = !!(query.trim() || statusFilter);
   const hasBatches = total > 0;
 
+  const allOnPageSelected =
+    rows.length > 0 && rows.every((b) => selected.has(b.id));
+  const someOnPageSelected = rows.some((b) => selected.has(b.id));
+  const togglePageSelection = (next: boolean) => {
+    setSelected((prev) => {
+      const out = new Set(prev);
+      for (const b of rows) {
+        if (next) out.add(b.id);
+        else out.delete(b.id);
+      }
+      return out;
+    });
+  };
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const out = new Set(prev);
+      if (out.has(id)) out.delete(id);
+      else out.add(id);
+      return out;
+    });
+
+  const onBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const ok = await confirm({
+      title: t('intelligence.batches.deleteTitle', 'Delete {{n}} batch{{s}}?', {
+        n: ids.length,
+        s: ids.length === 1 ? '' : 'es',
+      }),
+      description: t(
+        'intelligence.batches.deleteDesc',
+        "All source documents, runs, and extractions inside these batches will be removed. Documents you've already created from them stay.",
+      ),
+      confirmLabel: t('common.delete', 'Delete'),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    await bulkDelete.mutateAsync(ids);
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
   const columns: DataTableColumn<BatchSummary>[] = [
+    ...(selectMode
+      ? [
+          {
+            key: 'select',
+            header: (
+              <Checkbox
+                aria-label={t('common.selectAllOnPage', 'Select all on page')}
+                checked={
+                  allOnPageSelected
+                    ? true
+                    : someOnPageSelected
+                      ? 'indeterminate'
+                      : false
+                }
+                onCheckedChange={(v) => togglePageSelection(Boolean(v))}
+              />
+            ),
+            width: 'w-10',
+            pinned: 'left',
+            cell: (b: BatchSummary) => (
+              <Checkbox
+                aria-label={t('common.selectRow', 'Select row')}
+                checked={selected.has(b.id)}
+                onCheckedChange={() => toggleOne(b.id)}
+                // Stop the row-expand click from also toggling selection.
+                onClick={(e) => e.stopPropagation()}
+              />
+            ),
+          } satisfies DataTableColumn<BatchSummary>,
+        ]
+      : []),
     {
       key: 'name',
       header: t('intelligence.batches.colName', 'Batch'),
@@ -180,6 +265,35 @@ export function BatchesPage() {
         </Button>
       </div>
 
+      {selectMode && selected.size > 0 && (
+        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+          <span className="text-sm font-medium text-foreground">
+            {t('intelligence.batches.nSelected', '{{n}} selected', {
+              n: selected.size,
+            })}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+            >
+              {t('common.clear', 'Clear')}
+            </Button>
+            <Button
+              variant="error"
+              size="sm"
+              disabled={bulkDelete.isPending}
+              onClick={onBulkDelete}
+            >
+              {bulkDelete.isPending
+                ? t('common.deleting', 'Deleting…')
+                : t('common.deleteN', 'Delete {{n}}', { n: selected.size })}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* KPI tiles — workspace totals (across all batches, any page) */}
       {(hasBatches || hasFilters) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -240,7 +354,7 @@ export function BatchesPage() {
             loading: isFetching && isPlaceholderData,
           }}
           toolbar={
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <Select
                 value={statusFilter ?? '__any__'}
                 onValueChange={(v) =>
@@ -269,6 +383,15 @@ export function BatchesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                size="sm"
+                variant={selectMode ? 'secondary' : 'outline'}
+                onClick={() => setSelectMode((v) => !v)}
+              >
+                {selectMode
+                  ? t('common.cancel', 'Cancel')
+                  : t('common.selectMultiple', 'Select multiple')}
+              </Button>
             </div>
           }
           empty={t('intelligence.batches.noMatch', 'No batches match these filters.')}
