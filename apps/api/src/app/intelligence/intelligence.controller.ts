@@ -37,6 +37,7 @@ import {
   SaveReviewDto,
 } from './intelligence.dto';
 import { AnalysisService } from './analysis.service';
+import { AnalysisQueueService } from './analysis-queue.service';
 import { BatchService } from './batch.service';
 import { IntelligenceService } from './intelligence.service';
 import { PipelineExecutorService } from './pipeline-executor.service';
@@ -63,6 +64,7 @@ export class IntelligenceController {
   constructor(
     private readonly intelligence: IntelligenceService,
     private readonly analysis: AnalysisService,
+    private readonly analysisQueue: AnalysisQueueService,
     private readonly pipelines: PipelineExecutorService,
     private readonly batches: BatchService,
   ) {}
@@ -202,6 +204,41 @@ export class IntelligenceController {
   ) {
     const ids = Array.isArray(body?.documentIds) ? body.documentIds : [];
     return this.analysis.getDocumentsAnalysisStatus(user.id, ids);
+  }
+
+  // ─── Analysis queue (bulk + background) ────────────────────────────────────
+
+  @Post('analysis-queue')
+  @ApiOperation({
+    summary:
+      'Enqueue a batch of documents for background analysis. Returns the batchId + initial item rows.',
+  })
+  enqueueAnalysisBatch(
+    @CurrentUser() user: User,
+    @Body() body: { documentIds: string[]; force?: boolean },
+  ) {
+    const ids = Array.isArray(body?.documentIds) ? body.documentIds : [];
+    return this.analysisQueue.enqueueBatch(user.id, ids, {
+      force: !!body?.force,
+    });
+  }
+
+  @Get('analysis-queue/active')
+  @ApiOperation({
+    summary:
+      'Recent batches with in-flight work (or finished in the last 60s) — powers the queue indicator.',
+  })
+  getActiveAnalysisQueue(@CurrentUser() user: User) {
+    return this.analysisQueue.getActive(user.id);
+  }
+
+  @Get('analysis-queue/:batchId')
+  @ApiOperation({ summary: 'Poll a single batch (items + counts)' })
+  getAnalysisQueueBatch(
+    @CurrentUser() user: User,
+    @Param('batchId') batchId: string,
+  ) {
+    return this.analysisQueue.getBatch(user.id, batchId);
   }
 
   @Get('documents/:id/analysis')

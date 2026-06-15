@@ -1888,3 +1888,114 @@ The previous session added analyse-document infrastructure (`POST /intelligence/
 - "Cached" detection compares run ids — if a `force=false` call somehow yields a fresh run that happens to dedupe to a *different* prior row (unlikely, but theoretically possible if multiple cache entries exist for the same contentHash across subject types), the label could mis-classify. The classification is cosmetic; the analysis itself is correct.
 - The analyze endpoint is synchronous from the client's POV (the server awaits the AI call). With force=true on a long doc that's 10–30s of locked HTTP. The bulk dialog tolerates this (worker pool, progress, cancel), but a single-doc dialog can feel slow on a cold cache. Out-of-scope: switching analyze to a queued/job pattern with polling would be a bigger refactor (parallel to how upload jobs work) and worth doing if users actually complain.
 - The new `Analyze` column adds an extra HTTP round-trip per page. Mitigated by `staleTime: 15s` + `keepPreviousData`, but on a fresh page load it's a small extra latency. Could be folded into the documents list endpoint if it becomes hot.
+
+## 2026-06-15 (cont.) — Server-side analysis queue + editor Legal & AI split
+
+Two related pieces of work: (1) the previous "bulk analyze in the browser via a 2-wide worker pool" was the wrong shape — closing the tab killed the run, refreshes lost progress, and a long doc pinned an HTTP request for minutes. Replaced it with a persistent server queue. (2) the structured (Builder) editor still showed the old single "Legal & AI" panel with internal tabs; the freeform editor was already split into three rail items. Mirrored the freeform layout into BuilderShell so both editors are consistent.
+
+**Server queue**:
+
+1. New Prisma model `AnalysisQueueItem` (`tools/prisma/schema.prisma` + migration `20260615120000_add_analysis_queue`): one row per requested analysis, grouped by `batchId`. Status machine `queued → running → done | cached | failed`. Stores `runId` (the resulting `AnalysisRun.id`), `error` (truncated to 500 chars), `force` (whether the caller asked to bypass the content-hash cache), `userId` (for the access-checked reads), and the usual timestamps. Indexed on `(userId, createdAt)`, `batchId`, and `status` — the three predicates the service uses.
+2. `apps/api/src/app/intelligence/analysis-queue.service.ts` — new `AnalysisQueueService`:
+   - `enqueueBatch(userId, documentIds[], { force })` → filters to docs the user can access (silently drops the rest), creates one row per accessible id with a fresh `randomUUID()` batchId, then dispatches. If BullMQ is up, pushes one job per item (`jobId = item.id` so retries dedupe); else fires a `void this.drainInline()`.
+   - `processItem(itemId)` — the worker entrypoint; idempotent (re-fired retries that already succeeded are a no-op via the `status !== 'queued'` guard). Captures the latest `AnalysisRun.id` for the doc BEFORE calling `analysis.analyzeDocument()` so we can distinguish a fresh `done` from a `cached` (returned the same row).
+   - `getBatch(userId, batchId)` and `getActive(userId)` — user-scoped reads with counts; `getActive` includes batches finished within the last 60s so the "just completed" state surfaces in the indicator before fading out.
+   - Inline drainer is reentrancy-guarded (`inlineDraining` flag) so concurrent enqueues from one process don't spawn parallel loops; the loop re-checks `findFirst({ status: 'queued' })` after each item so a mid-run enqueue gets picked up.
+3. `apps/api/src/app/intelligence/analysis-queue.processor.ts` — thin BullMQ `WorkerHost` that just delegates to `processItem(itemId)`. Same shape as `IntelligenceProcessor` so behaviour is identical inline vs queued (thrown errors surface to BullMQ, which retries per the `attempts: 2` + exponential backoff configured at enqueue).
+4. `intelligence.module.ts` — second queue alongside `INTEL_QUEUE`. New `ANALYSIS_QUEUE` constant + `ANALYSIS_QUEUE_ENABLED` token + `BullModule.registerQueue` in the Redis branch + the inline `useValue: false` in the no-Redis branch.
+5. `intelligence.controller.ts` — three new routes (JwtAuthGuard):
+   - `POST /intelligence/analysis-queue` body `{ documentIds, force }` → returns `AnalysisQueueBatch` (batchId + items + counts + isComplete) immediately.
+   - `GET /intelligence/analysis-queue/active` → list of in-flight (or just-completed) batches for the user.
+   - `GET /intelligence/analysis-queue/:batchId` → single-batch poll.
+
+**Client**:
+
+6. `libs/shared/api-client/src/lib/intelligence.service.ts` — added `enqueueAnalysisBatch / getAnalysisQueueBatch / getActiveAnalysisQueue` plus the `AnalysisQueueBatch`, `AnalysisQueueItem`, `AnalysisQueueItemStatus` types so the UI doesn't redefine them.
+7. `apps/app/.../features/intelligence/queries.ts` — `useEnqueueAnalysisBatch` (mutation, invalidates the `active` query on success), `useAnalysisQueueBatch(batchId)` (polls every 2s while `!isComplete`, then stops), `useActiveAnalysisQueue()` (polls every 2s while any batch is draining, then backs off to 15s).
+8. `BulkAnalyzeDialog.tsx` rewritten: the in-browser worker pool is gone. The dialog now submits the batch once with a "Queue N" button, then polls the batch progress server-side. The footer changes shape mid-run: pre-submit shows Cancel + Queue; mid-run shows "Run in background" (closing the dialog DOES NOT cancel work); on completion shows Done. On `isComplete`, the dialog invalidates the per-doc `analysis-status` + `analysis` query keys so the document-list status pills update.
+9. `AnalysisQueueIndicator.tsx` (new) — small pill rendered in the DocumentsList header. Shows a spinner + "Analyzing N documents…" while batches drain, then ✓ + "Recent analyses" for 60s after completion. Click opens a Popover listing each batch with its progress bar, finished/total, and per-status counts (done / cached / running / queued / failed). Hidden when there's no activity to surface.
+
+**Editor parity (BuilderShell)**:
+
+10. `apps/app/.../features/documents/builder/BuilderShell.tsx` — split the single `legal-ai` rail item into three (`legal-ai-citations` / `legal-ai-insights` / `legal-ai-usage`), grouped under a new "Legal & AI" header. Renders `CitationHealth` / `DocumentInsights` / `AiUsageSummary` directly instead of going through `DocumentSidePanel`. `SidebarTab` union + render switch + header label all updated. Reuses the rail icons added previously (`CitationsIcon` / `InsightsIcon` / `UsageIcon`).
+
+**Verification**: `pnpm nx run-many -t build -p api app api-client` green; `pnpm nx run-many -t lint -p api app api-client` green (0 errors; the 13 warnings are pre-existing). No runtime test; needs the API running + Redis (or no Redis for the inline path) + a doc with extractable text to exercise the queue end-to-end.
+
+**Honest open gaps**:
+- Inline drainer (no-Redis mode) is single-process-only. A multi-instance deployment without Redis would have each instance drain its own enqueues independently — fine until two enqueue concurrently for the same item id, which can't happen because the items themselves are unique-per-row.
+- No reconciler for the analysis queue yet. If a process dies mid-`running`, the row stays `running` forever. The existing `ReconcilerService` (for `IntelligenceJob`) is a model for adding this; out of scope here. Workaround: re-enqueue from the UI.
+- `getActive` returns up to 200 recent items aggregated into batches; very large workloads (hundreds of concurrent batches) would need pagination. Not a real-world risk in v1.
+- The queue indicator polls every 2s while active. Acceptable for a low-N use case but worth folding into a websocket/SSE channel if this becomes a primary surface.
+
+## 2026-06-15 (cont.) — Generic multi-select + bulk actions on documents list
+
+The previous "Select to analyze" mode was single-purpose; the same selection state can drive any bulk action. Generalised it: select toggle + leading checkbox column + a sticky multi-action toolbar. Also fixed the select column rendering on the right edge (a pinning bug), and replaced the standalone `/groups/:id/add` navigation with an inline dialog from the group detail page.
+
+**DataTable**:
+
+1. `libs/shared/ui/src/components/data-table.tsx` — extended `DataTableColumn.pinned` from `boolean` to `boolean | 'left' | 'right'`. `true` and `'right'` flush right (back-compat — that's where the actions column lives); `'left'` flushes left. Updated `effectiveOrder` to prepend left-pinned ids, then persistedNonPinned, then trailing (newly-added columns from this release), then right-pinned ids. All other touch points (`enableResizing`, drag-block, persisted-order writer) already used a truthy check on `pinned`, so they keep working without changes.
+
+**DocumentsList**:
+
+2. Select column moved to `pinned: 'left'` (was implicitly drifting to the right via `pinned: true`, which is what the user was seeing on `/groups/:id/add`). Visuals: `size-5` box with `border-2` for clarity. Column header now hosts a "toggle all visible" checkbox that selects/deselects every row on the current page.
+3. Generic multi-action toolbar in the selection bar. Internal select mode (`!selectable` + `internalSelect`) exposes:
+   - **Analyze** — opens the queue-backed `BulkAnalyzeDialog`.
+   - **Add to group** — opens `AddDocToGroupDialog` (already accepts a `documentIds[]` array; just needed to be wired with the selection set).
+   - **Delete** — confirm dialog, then iterates the existing single-delete mutation. No new server endpoint; if bulk delete ever becomes a hot path, the server-side equivalent is small.
+   - Plus **Clear** to drop the selection.
+   External select mode (`selectable` prop — group add-docs flow) keeps the single **Add N to group** confirm so the GroupAddDocsPage callback contract doesn't change.
+4. Selection bar made sticky (`sticky top-0 z-10`, backdrop blur on the primary tint) so it stays visible while the user scrolls long lists.
+5. Renamed the toolbar entry from "Select to analyze" → "Select" — the action set is now generic.
+
+**Group add-docs flow**:
+
+6. `apps/app/.../features/groups/GroupDetailPage.tsx` — the "+ Add documents" button no longer navigates to `/groups/:id/add`. It opens `AddDocsToCurrentGroupDialog` inline. The `/add` route + `GroupAddDocsPage` stay intact (useful for keyboard-driven flows + URL bookmarks).
+7. `AddToGroupDialog.tsx` — polished `AddDocsToCurrentGroupDialog`:
+   - Bigger leading checkbox (`size-5` + `border-2`); the whole row is the click target.
+   - "Select all on this page" / "Clear selection on this page" toggle above the list.
+   - Count pill (`X selected`) in the dialog title for immediate visibility while picking.
+   - Result count next to the toolbar so users know whether they're at the end of the list.
+   - Sticky footer status line ("Will add N to this group.") so the CTA outcome is obvious.
+
+**Verification**: `pnpm nx build app` green; `pnpm nx lint app ui` green (0 errors; pre-existing warnings only).
+
+**Honest open gaps**:
+- Bulk delete iterates the single-delete mutation client-side, so the toast fires per-document. Fine for handfuls; if users routinely delete 50+ at a time, batch the toast + add a server-side `POST /documents/bulk-delete`.
+- The add-docs dialog still fetches just the 50 most recent documents with no pagination. Search narrows the set. For users with thousands of docs, the legacy `/groups/:id/add` full-page experience is the safety net (it has pagination + status/type filters).
+- Dialog and the in-list selection bar are independent; selection state doesn't survive a navigation away and back. Acceptable — selection is intentionally session-scoped.
+
+## 2026-06-15 (cont.) — Select toggle visibility + single-group invariant
+
+Two follow-ups: (1) the multi-select toggle was only in the standalone /documents header — it didn't appear when the same DocumentsList is rendered inside the group detail page Documents tab. (2) The "add documents to group" flow silently overwrote an existing group assignment, violating the one-doc-one-group rule.
+
+**Select toggle moved into the DataTable toolbar**:
+
+1. `DocumentsList.tsx` — the "Select" button is no longer in the page header. It now sits in the DataTable's `toolbar` slot, alongside the status/type filter chips on /documents and as the sole toolbar control on the group detail Documents tab. Renamed `Select to analyze` → `Select multiple` since the action set is generic. AnalysisQueueIndicator + "New document" stay in the page header (only shown on the standalone /documents view).
+
+**Single-group invariant (server)**:
+
+2. `document-groups.dto.ts` — `AddDocumentsSchema` gained `overwrite?: boolean` (default false).
+3. `document-groups.service.ts` — `addDocuments` rewritten:
+   - Fetches the candidate docs with their current `groupId` (single query, accessible-only).
+   - Splits the input into `eligible` (ungrouped or already-in-target — idempotent), `moved` (in another group, only assigned when `overwrite=true`), `skipped` (in another group, no overwrite), and `inaccessible`.
+   - Performs a single `updateMany` over `eligible ∪ moved`.
+   - Returns `{ ok, added, moved, skipped, inaccessible, skippedIds, movedIds }` so the UI can render a precise outcome.
+4. The previous behaviour (silently moving docs into the new group) is gone — callers must explicitly opt into a move.
+
+**Client (api-client + hook)**:
+
+5. `document-groups.service.ts` (api-client) — `addDocuments(id, ids, { overwrite })` + new `AddDocumentsResult` shape.
+6. `useAddDocumentsToGroup` (`apps/app/.../features/groups/queries.ts`) — mutation accepts `overwrite`. Success toast now reports added/moved/skipped counts (`"Added 3 · Moved 1 · Skipped 2 (already in another group)"`).
+
+**Picker UIs**:
+
+7. `AddDocsToCurrentGroupDialog` (used from the group detail "+ Add documents" button) — picker filters out docs that already have a group. Subtitle explains why ("only ungrouped documents are shown — to move a doc, use Add to group from the documents list").
+8. `AddDocToGroupDialog` (used from the documents list, single + bulk) — refactored to take full doc objects (`AddToGroupTarget[]` with `group: { id, name, kind } | null`) so it can segregate the selection into `eligible` / `alreadyHere` / `inOtherGroup`. Once a target group is chosen, the dialog shows a preview ("X will be added (ungrouped). Y already in this group (no-op). Z are in another group — won't be added unless you choose Move.") plus an explicit `Move the Z doc(s) out of their current group` checkbox that flips `overwrite=true`. The submit button label flips to `Add & move N` accordingly.
+9. `DocumentsList.tsx` — single-row and bulk callsites map the selection (or single doc) through `filteredRows` to extract the full doc with its `group` before passing to the dialog.
+
+**Verification**: `pnpm nx run-many -t build -p api app api-client` green; `pnpm nx run-many -t lint -p api app api-client` green (0 errors; 12 pre-existing warnings only). Not runtime-tested — needs an API + a doc already in another group to exercise the skip / move paths end-to-end.
+
+**Honest open gaps**:
+- The dialog assumes the caller passes the doc's CURRENT `group` snapshot. If the row is stale (someone else moved the doc just before the dialog opens), the preview can lie. The server is the source of truth and still enforces the invariant, so the worst-case is a confusing toast — never bad data.
+- There's no `move` endpoint as such — moves go through `addDocuments` with `overwrite=true`. Equivalent in result; if a future flow needs "move WITHOUT picking a target" (i.e. just remove + reassign at once), it'd need a different shape.
+- The "already in another group" hint in the bulk dialog shows the *count*, not the actual current group names. Could be added if the friction is real, but for a small selection the user usually knows.

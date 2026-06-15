@@ -12,11 +12,13 @@ import {
   ScrollArea,
 } from '@org/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useIntelligenceService } from './services-context';
-
-const CONCURRENCY = 2;
+import { toast } from 'sonner';
+import {
+  useAnalysisQueueBatch,
+  useEnqueueAnalysisBatch,
+} from '../intelligence/queries';
 
 export interface BulkAnalyzeTarget {
   id: string;
@@ -27,184 +29,152 @@ interface BulkAnalyzeDialogProps {
   targets: BulkAnalyzeTarget[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Optional callback fired after the run completes (success or partial). */
-  onComplete?: (summary: { ok: number; failed: number }) => void;
-}
-
-type RowStatus = 'pending' | 'running' | 'analyzed' | 'cached' | 'failed';
-
-interface RowState {
-  status: RowStatus;
-  error?: string;
 }
 
 /**
- * Multi-document analyze runner. Iterates the selected documents with a small
- * concurrency cap, calling the per-doc analyze endpoint and updating each row
- * live. `force` toggles the server-side content-hash cache: off (default)
- * lets unchanged docs short-circuit; on forces a fresh AI run.
+ * Bulk analysis flow backed by the server queue (AnalysisQueueItem +
+ * AnalysisQueueService). The dialog submits a batch once and then polls
+ * `/intelligence/analysis-queue/:batchId` until the queue drains. Closing the
+ * dialog DOES NOT cancel work — the queue indicator on the documents list
+ * continues to surface in-flight batches, and the user can come back to this
+ * dialog (or reload) and still see progress.
+ *
+ * Status transitions (server-driven):
+ *   queued → running → done | cached | failed
+ * `cached` means the document's text was unchanged since its last analysis and
+ * `force` was off — the server returned the existing run without spending AI
+ * tokens.
  */
 export function BulkAnalyzeDialog({
   targets,
   open,
   onOpenChange,
-  onComplete,
 }: BulkAnalyzeDialogProps) {
   const { t } = useTranslation();
-  const svc = useIntelligenceService();
   const qc = useQueryClient();
+  const enqueue = useEnqueueAnalysisBatch();
   const [force, setForce] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-  const [states, setStates] = useState<Record<string, RowState>>({});
-  const cancelRef = useRef(false);
+  const [batchId, setBatchId] = useState<string | null>(null);
 
-  // Reset state every time the dialog opens with a new set.
+  // Map docId → title so we can label rows the server only knows by id.
+  const titleById = new Map(targets.map((tg) => [tg.id, tg.title]));
+
+  const batch = useAnalysisQueueBatch(batchId ?? undefined, open && !!batchId);
+
+  // Reset on open (new dialog session = clean state).
   useEffect(() => {
     if (!open) return;
     setForce(false);
-    setRunning(false);
-    setDone(false);
-    setStates(
-      Object.fromEntries(
-        targets.map((t) => [t.id, { status: 'pending' as RowStatus }]),
-      ),
-    );
-    cancelRef.current = false;
+    setBatchId(null);
   }, [open, targets]);
 
-  const counts = (() => {
-    let ok = 0;
-    let failed = 0;
-    let running = 0;
-    for (const t of targets) {
-      const s = states[t.id]?.status;
-      if (s === 'analyzed' || s === 'cached') ok += 1;
-      else if (s === 'failed') failed += 1;
-      else if (s === 'running') running += 1;
+  // When a poll observes completion, invalidate the per-doc analysis caches so
+  // the documents-list status pills refresh without a manual reload.
+  useEffect(() => {
+    if (batch.data?.isComplete) {
+      qc.invalidateQueries({ queryKey: ['intelligence', 'analysis-status'] });
+      qc.invalidateQueries({ queryKey: ['intelligence', 'analysis'] });
     }
-    return { ok, failed, running };
-  })();
-
-  const total = targets.length;
-  const finished = counts.ok + counts.failed;
-  const progress = total === 0 ? 0 : Math.round((finished / total) * 100);
+  }, [batch.data?.isComplete, qc]);
 
   const start = async () => {
-    if (running || total === 0) return;
-    setRunning(true);
-    setDone(false);
-    cancelRef.current = false;
-
-    let cursor = 0;
-
-    const runOne = async () => {
-      while (!cancelRef.current) {
-        const i = cursor++;
-        if (i >= targets.length) return;
-        const target = targets[i];
-        setStates((prev) => ({
-          ...prev,
-          [target.id]: { status: 'running' },
-        }));
-        try {
-          const before = await svc
-            .getDocumentAnalysis(target.id)
-            .catch(() => null);
-          const beforeId = before?.analysis?.id ?? null;
-          const run = await svc.analyzeDocument(target.id, { force });
-          // If the returned runId equals the previous latest, it was a cached
-          // short-circuit (server returned the existing row). Show that
-          // distinction so the user knows what actually happened.
-          const wasCached = !force && beforeId !== null && run.id === beforeId;
-          setStates((prev) => ({
-            ...prev,
-            [target.id]: { status: wasCached ? 'cached' : 'analyzed' },
-          }));
-        } catch (e) {
-          const err = e as { response?: { data?: { message?: string } } };
-          setStates((prev) => ({
-            ...prev,
-            [target.id]: {
-              status: 'failed',
-              error: err?.response?.data?.message ?? 'Failed',
-            },
-          }));
-        }
-      }
-    };
-
-    const workers = Array.from(
-      { length: Math.min(CONCURRENCY, targets.length) },
-      runOne,
-    );
-    await Promise.all(workers);
-
-    setRunning(false);
-    setDone(true);
-    // Refresh anything that depends on analysis presence.
-    qc.invalidateQueries({ queryKey: ['intelligence', 'analysis-status'] });
-    qc.invalidateQueries({ queryKey: ['intelligence', 'analysis'] });
-    onComplete?.({ ok: counts.ok, failed: counts.failed });
+    try {
+      const res = await enqueue.mutateAsync({
+        documentIds: targets.map((t) => t.id),
+        force,
+      });
+      setBatchId(res.batchId);
+      toast.success(
+        t(
+          'documents.bulk.enqueued',
+          `Queued ${res.counts.total} document${res.counts.total === 1 ? '' : 's'} for analysis`,
+        ),
+      );
+    } catch {
+      // useEnqueueAnalysisBatch already toasts the error.
+    }
   };
 
-  const cancel = () => {
-    cancelRef.current = true;
+  const data = batch.data;
+  const counts = data?.counts ?? {
+    queued: targets.length,
+    running: 0,
+    done: 0,
+    cached: 0,
+    failed: 0,
+    total: targets.length,
   };
+  const finished = counts.done + counts.cached + counts.failed;
+  const progress = counts.total === 0 ? 0 : Math.round((finished / counts.total) * 100);
+  const hasStarted = !!batchId;
+  const isComplete = !!data?.isComplete;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        // Don't allow close-by-overlay while a run is in-flight.
-        if (running && !v) return;
-        onOpenChange(v);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {t('documents.bulk.title', `Analyze ${total} document${total === 1 ? '' : 's'}`)}
+            {t(
+              'documents.bulk.title',
+              `Analyze ${targets.length} document${targets.length === 1 ? '' : 's'}`,
+            )}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'documents.bulk.desc',
-              'Runs AI analysis (summary, parties, key dates, risk flags + cited-law health) on each selected document.',
-            )}
+            {hasStarted
+              ? t(
+                  'documents.bulk.descRunning',
+                  'Your documents are queued — analysis runs on the server. You can close this dialog; work continues in the background.',
+                )
+              : t(
+                  'documents.bulk.desc',
+                  'Submits each document to a server-side queue. AI analysis (summary, parties, dates, risk flags + cited-law health) runs in the background.',
+                )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-secondary/15 p-3 text-sm">
-            <Checkbox
-              checked={force}
-              onCheckedChange={(v) => setForce(v === true)}
-              disabled={running}
-              className="mt-0.5"
-            />
-            <span className="space-y-0.5">
-              <Label className="cursor-pointer text-sm">
-                {t('documents.bulk.force', 'Force re-analyze')}
-              </Label>
-              <p className="text-xs text-foreground/55">
-                {t(
-                  'documents.bulk.forceHelp',
-                  'Off (default): if a document\u2019s text hasn\u2019t changed since its last analysis, the cached result is returned instantly (no AI cost). On: every document gets a fresh AI analysis.',
-                )}
-              </p>
-            </span>
-          </label>
+          {!hasStarted && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-secondary/15 p-3 text-sm">
+              <Checkbox
+                checked={force}
+                onCheckedChange={(v) => setForce(v === true)}
+                className="mt-0.5"
+              />
+              <span className="space-y-0.5">
+                <Label className="cursor-pointer text-sm">
+                  {t('documents.bulk.force', 'Force re-analyze')}
+                </Label>
+                <p className="text-xs text-foreground/55">
+                  {t(
+                    'documents.bulk.forceHelp',
+                    'Off (default): if a document\u2019s text hasn\u2019t changed since its last analysis, the cached result is returned instantly (no AI cost). On: every document gets a fresh AI analysis.',
+                  )}
+                </p>
+              </span>
+            </label>
+          )}
 
           <Progress value={progress} />
           <div className="flex items-center justify-between text-xs text-foreground/55">
             <span>
-              {finished} / {total}{' '}
+              {finished} / {counts.total}{' '}
               {t('documents.bulk.finished', 'finished')}
+              {counts.running > 0 && (
+                <span className="text-primary">
+                  {' '}
+                  · {counts.running} {t('documents.bulk.running', 'running')}
+                </span>
+              )}
             </span>
-            <span>
-              {counts.ok > 0 && (
-                <span className="text-success-foreground mr-2">
-                  ✓ {counts.ok}
+            <span className="flex items-center gap-2">
+              {counts.done > 0 && (
+                <span className="text-success-foreground">
+                  ✓ {counts.done}
+                </span>
+              )}
+              {counts.cached > 0 && (
+                <span className="text-foreground/55">
+                  ↻ {counts.cached}
                 </span>
               )}
               {counts.failed > 0 && (
@@ -215,11 +185,17 @@ export function BulkAnalyzeDialog({
 
           <ScrollArea className="h-56 rounded-md border border-border">
             <ul className="divide-y divide-border/70">
-              {targets.map((t) => (
+              {(data?.items ?? targets.map((tg) => ({
+                id: tg.id,
+                documentId: tg.id,
+                status: 'queued' as const,
+                error: null,
+              }))).map((item) => (
                 <RowItem
-                  key={t.id}
-                  title={t.title}
-                  state={states[t.id]}
+                  key={item.id}
+                  title={titleById.get(item.documentId) ?? ''}
+                  status={item.status}
+                  error={'error' in item ? item.error : null}
                 />
               ))}
             </ul>
@@ -227,7 +203,7 @@ export function BulkAnalyzeDialog({
         </div>
 
         <DialogFooter className="flex-wrap gap-2">
-          {!running && !done && (
+          {!hasStarted && (
             <>
               <Button
                 variant="ghost"
@@ -236,17 +212,30 @@ export function BulkAnalyzeDialog({
               >
                 {t('common.cancel', 'Cancel')}
               </Button>
-              <Button size="sm" onClick={start} disabled={total === 0}>
-                {t('documents.bulk.start', 'Start')}
+              <Button
+                size="sm"
+                onClick={start}
+                disabled={targets.length === 0 || enqueue.isPending}
+              >
+                {enqueue.isPending
+                  ? t('documents.bulk.enqueuing', 'Queuing\u2026')
+                  : t(
+                      'documents.bulk.queue',
+                      `Queue ${targets.length} document${targets.length === 1 ? '' : 's'}`,
+                    )}
               </Button>
             </>
           )}
-          {running && (
-            <Button variant="outline" size="sm" onClick={cancel}>
-              {t('documents.bulk.stop', 'Stop after current')}
+          {hasStarted && !isComplete && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+            >
+              {t('documents.bulk.runInBackground', 'Run in background')}
             </Button>
           )}
-          {done && (
+          {hasStarted && isComplete && (
             <Button size="sm" onClick={() => onOpenChange(false)}>
               {t('common.done', 'Done')}
             </Button>
@@ -259,15 +248,16 @@ export function BulkAnalyzeDialog({
 
 function RowItem({
   title,
-  state,
+  status,
+  error,
 }: {
   title: string;
-  state: RowState | undefined;
+  status: 'queued' | 'running' | 'done' | 'cached' | 'failed';
+  error: string | null;
 }) {
   const { t } = useTranslation();
-  const status = state?.status ?? 'pending';
   const tone =
-    status === 'analyzed'
+    status === 'done'
       ? 'text-success-foreground'
       : status === 'cached'
         ? 'text-foreground/55'
@@ -277,14 +267,14 @@ function RowItem({
             ? 'text-primary'
             : 'text-foreground/40';
   const label =
-    status === 'analyzed'
+    status === 'done'
       ? t('documents.bulk.statusAnalyzed', 'Analyzed')
       : status === 'cached'
         ? t('documents.bulk.statusCached', 'Cached (unchanged)')
         : status === 'failed'
-          ? state?.error ?? t('documents.bulk.statusFailed', 'Failed')
+          ? error ?? t('documents.bulk.statusFailed', 'Failed')
           : status === 'running'
-            ? t('documents.bulk.statusRunning', 'Running…')
+            ? t('documents.bulk.statusRunning', 'Running\u2026')
             : t('documents.bulk.statusPending', 'Queued');
   return (
     <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm">

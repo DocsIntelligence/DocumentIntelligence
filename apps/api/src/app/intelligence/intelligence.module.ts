@@ -11,6 +11,12 @@ import {
   IntelligenceService,
 } from './intelligence.service';
 import { AnalysisService } from './analysis.service';
+import {
+  ANALYSIS_QUEUE,
+  ANALYSIS_QUEUE_ENABLED,
+  AnalysisQueueService,
+} from './analysis-queue.service';
+import { AnalysisQueueProcessor } from './analysis-queue.processor';
 import { BatchService } from './batch.service';
 import { ParsingService } from './parsing.service';
 import { PipelineService } from './pipeline.service';
@@ -26,6 +32,11 @@ import { SchemaResolverService } from './config/schema-resolver.service';
  *   REDIS_URL set     → BullMQ queue + worker (async, retryable, scalable).
  *   REDIS_URL not set → inline pipeline run (fire-and-forget). Same status
  *                       transitions, so the client polls identically.
+ *
+ * Two queues live here:
+ *  • INTEL_QUEUE      — extraction pipeline runs (per source document).
+ *  • ANALYSIS_QUEUE   — bulk "analyse N documents" requests submitted from
+ *                       the documents list (persistent, polled by UI).
  *
  * The reconciler runs in both modes to fail stuck jobs (crash-resilience).
  */
@@ -49,12 +60,14 @@ export class IntelligenceModule {
         imports: [StorageModule, AiModule, PaymentModule, DocumentsModule],
         providers: [
           { provide: INTEL_QUEUE_ENABLED, useValue: false },
+          { provide: ANALYSIS_QUEUE_ENABLED, useValue: false },
           ParsingService,
           SchemaResolverService,
           PipelineService,
           PipelineExecutorService,
           BatchService,
           AnalysisService,
+          AnalysisQueueService,
           IntelligenceService,
           ReconcilerService,
         ],
@@ -71,17 +84,21 @@ export class IntelligenceModule {
         DocumentsModule,
         BullModule.forRoot({ connection: { url: redisUrl } }),
         BullModule.registerQueue({ name: INTEL_QUEUE }),
+        BullModule.registerQueue({ name: ANALYSIS_QUEUE }),
       ],
       providers: [
         { provide: INTEL_QUEUE_ENABLED, useValue: true },
+        { provide: ANALYSIS_QUEUE_ENABLED, useValue: true },
         ParsingService,
         SchemaResolverService,
         PipelineService,
         PipelineExecutorService,
         BatchService,
         AnalysisService,
+        AnalysisQueueService,
         IntelligenceService,
         IntelligenceProcessor,
+        AnalysisQueueProcessor,
         ReconcilerService,
       ],
       exports: [IntelligenceService, SchemaResolverService],

@@ -991,6 +991,31 @@ model AnalysisRun {
   @@index([subjectType, subjectId, createdAt])
 }
 
+/// Persistent queue for "analyse N documents" requests submitted from the
+/// documents list. Each row is one document; rows submitted together share a
+/// `batchId` so the UI can render a single progress bar. A BullMQ worker pulls
+/// queued rows (REDIS_URL set) and runs analysis; without Redis the queue
+/// service drains rows inline (fire-and-forget chain). Status transitions:
+/// queued → running → done|cached|failed.
+model AnalysisQueueItem {
+  id          String    @id @default(cuid())
+  userId      String
+  batchId     String
+  documentId  String
+  subjectType String    @default("document")
+  force       Boolean   @default(false)
+  status      String    @default("queued") // queued | running | done | cached | failed
+  runId       String?
+  error       String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@index([batchId])
+  @@index([status])
+}
+
 /// Phase 2 RAG (docs/05 §7): per-page text chunks + embeddings for "ask this
 /// document" with page-cited answers. Single-document retrieval, so cosine is
 /// computed in-process over the doc's chunks (no pgvector needed for v1); the

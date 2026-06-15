@@ -194,6 +194,28 @@ export const createIntelligenceService = (http: HttpClient) => ({
       )
       .then((r) => r.data),
 
+  /** Submit a bulk-analysis batch to the server queue. Returns the new batch
+   *  with all items in 'queued' state — workers drain it asynchronously. */
+  enqueueAnalysisBatch: (documentIds: string[], opts?: { force?: boolean }) =>
+    http
+      .post<AnalysisQueueBatch>('/intelligence/analysis-queue', {
+        documentIds,
+        force: !!opts?.force,
+      })
+      .then((r) => r.data),
+
+  /** Poll a single batch (items + counts + isComplete). */
+  getAnalysisQueueBatch: (batchId: string) =>
+    http
+      .get<AnalysisQueueBatch>(`/intelligence/analysis-queue/${batchId}`)
+      .then((r) => r.data),
+
+  /** Active (or just-completed) batches — powers the queue indicator. */
+  getActiveAnalysisQueue: () =>
+    http
+      .get<AnalysisQueueBatch[]>('/intelligence/analysis-queue/active')
+      .then((r) => r.data),
+
   askDocument: (documentId: string, question: string) =>
     http
       .post<AskAnswer>(`/intelligence/documents/${documentId}/ask`, { question })
@@ -370,6 +392,40 @@ export interface DocumentAnalysisStatus {
   lastAnalyzedAt: string | null;
   summary: string | null;
   runId: string | null;
+}
+
+export type AnalysisQueueItemStatus =
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'cached'
+  | 'failed';
+
+export interface AnalysisQueueItem {
+  id: string;
+  documentId: string;
+  status: AnalysisQueueItemStatus;
+  runId: string | null;
+  error: string | null;
+  force: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface AnalysisQueueBatch {
+  batchId: string;
+  createdAt: string;
+  items: AnalysisQueueItem[];
+  counts: {
+    queued: number;
+    running: number;
+    done: number;
+    cached: number;
+    failed: number;
+    total: number;
+  };
+  isComplete: boolean;
 }
 
 /** Latest-analysis envelope. Same shape for sources and drafting documents

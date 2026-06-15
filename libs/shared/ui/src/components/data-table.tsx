@@ -50,8 +50,14 @@ export interface DataTableColumn<T> {
   minWidth?: number;
   /** Max pixel width for resize. Defaults to 800. */
   maxWidth?: number;
-  /** Prevent the user from reordering or resizing this column. */
-  pinned?: boolean;
+  /**
+   * Prevent the user from reordering or resizing this column, and flush it
+   * to an edge regardless of persisted order.
+   *   `true`    → flush right (back-compat — actions columns).
+   *   `'right'` → flush right (explicit).
+   *   `'left'`  → flush left (e.g. a leading checkbox column).
+   */
+  pinned?: boolean | 'left' | 'right';
 }
 
 export interface DataTableSort {
@@ -244,19 +250,24 @@ export function DataTable<T>({
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
-  // Effective column order. Pinned columns are always flushed to the right edge
-  // regardless of what's in persisted state — `actions` columns shouldn't drift
-  // into the middle when the column set changes between releases.
+  // Effective column order. Pinned columns are always flushed to their edge
+  // regardless of persisted state — `actions` columns shouldn't drift into the
+  // middle, and a leading checkbox column shouldn't drift off-left.
   const effectiveOrder = useMemo(() => {
     const allIds = userColumns.map((c) => c.key);
-    const pinnedIds = userColumns.filter((c) => c.pinned).map((c) => c.key);
-    const isPinned = new Set(pinnedIds);
+    const leftPinned = userColumns
+      .filter((c) => c.pinned === 'left')
+      .map((c) => c.key);
+    const rightPinned = userColumns
+      .filter((c) => c.pinned === true || c.pinned === 'right')
+      .map((c) => c.key);
+    const isPinned = new Set([...leftPinned, ...rightPinned]);
     const persistedNonPinned = persisted.order.filter(
       (k) => allIds.includes(k) && !isPinned.has(k),
     );
     const seen = new Set(persistedNonPinned);
     const trailing = allIds.filter((k) => !seen.has(k) && !isPinned.has(k));
-    return [...persistedNonPinned, ...trailing, ...pinnedIds];
+    return [...leftPinned, ...persistedNonPinned, ...trailing, ...rightPinned];
   }, [userColumns, persisted.order]);
 
   const table = useReactTable<T>({

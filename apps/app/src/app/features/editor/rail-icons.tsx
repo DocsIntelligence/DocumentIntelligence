@@ -67,3 +67,29 @@ export function ShareIcon() {
     </svg>
   );
 }
+export function CitationsIcon() {
+  return (
+    <svg {...baseProps}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+export function InsightsIcon() {
+  return (
+    <svg {...baseProps}>
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+      <path d="M19 14l.9 2.7 2.7.9-2.7.9-.9 2.7-.9-2.7-2.7-.9 2.7-.9.9-2.7z" />
+    </svg>
+  );
+}
+export function UsageIcon() {
+  return (
+    <svg {...baseProps}>
+      <line x1="3" y1="20" x2="21" y2="20" />
+      <rect x="6" y="10" width="3" height="9" />
+      <rect x="11" y="6" width="3" height="13" />
+      <rect x="16" y="13" width="3" height="6" />
+    </svg>
+  );
+}

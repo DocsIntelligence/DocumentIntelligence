@@ -86,11 +86,23 @@ export function useAddDocumentsToGroup() {
   const svc = useDocumentGroupsService();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { groupId: string; documentIds: string[] }) =>
-      svc.addDocuments(vars.groupId, vars.documentIds),
-    onSuccess: (_, vars) => {
+    mutationFn: (vars: {
+      groupId: string;
+      documentIds: string[];
+      overwrite?: boolean;
+    }) =>
+      svc.addDocuments(vars.groupId, vars.documentIds, {
+        overwrite: !!vars.overwrite,
+      }),
+    onSuccess: (res, vars) => {
       qc.invalidateQueries({ queryKey: groupsKeys.detail(vars.groupId) });
-      toast.success('Documents added to group');
+      qc.invalidateQueries({ queryKey: ['documents'] });
+      const parts: string[] = [];
+      if (res.added > 0) parts.push(`Added ${res.added}`);
+      if (res.moved > 0) parts.push(`Moved ${res.moved}`);
+      if (res.skipped > 0)
+        parts.push(`Skipped ${res.skipped} (already in another group)`);
+      toast.success(parts.length > 0 ? parts.join(' · ') : 'Done');
     },
     onError: () => toast.error('Failed to add documents'),
   });

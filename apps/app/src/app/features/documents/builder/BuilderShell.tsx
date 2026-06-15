@@ -37,17 +37,21 @@ import { useLegalAiService } from '../services-context';
 import { ArtboardIframe } from './ArtboardIframe';
 import { BuilderForm, type BuilderFormHandle } from './BuilderForm';
 import { InlineEditPopover } from './InlineEditPopover';
-import { DocumentSidePanel } from '../../legal-ai/DocumentSidePanel';
+import { CitationHealth } from '../../legal-ai/CitationHealth';
+import { DocumentInsights } from '../../intelligence/DocumentInsights';
+import { AiUsageSummary } from '../../admin/ai-usage/AiUsageSummary';
 import { EditorSideMenu, type RailItem } from '../../editor/EditorActivityRail';
 import { LayoutPresetGroup } from '../../editor/LayoutPresetGroup';
 import {
+  CitationsIcon,
   CommentsIcon,
   FieldsIcon,
   HistoryIcon as RailHistoryIcon,
-  LegalAiIcon as RailLegalAiIcon,
+  InsightsIcon,
   PagesIcon,
   ShareIcon as RailShareIcon,
   SignaturesIcon,
+  UsageIcon,
 } from '../../editor/rail-icons';
 import { RisksPanel } from './RisksPanel';
 import { SectionsTree } from './SectionsTree';
@@ -93,7 +97,9 @@ export function BuilderShell({ documentId }: Props) {
   type SidebarTab =
     | 'sections'
     | 'risks'
-    | 'legal-ai'
+    | 'legal-ai-citations'
+    | 'legal-ai-insights'
+    | 'legal-ai-usage'
     | 'comments'
     | 'history'
     | 'share';
@@ -405,13 +411,31 @@ export function BuilderShell({ documentId }: Props) {
       onClick: () => setSidebarTab('risks'),
     },
     {
-      id: 'legal-ai',
+      id: 'legal-ai-citations',
       kind: 'panel',
-      group: t('builder.group.intelligence', 'AI & Citations'),
-      label: t('editor.toolbar.legalAi', 'Legal & AI'),
-      icon: <RailLegalAiIcon />,
-      active: sidebarTab === 'legal-ai',
-      onClick: () => setSidebarTab('legal-ai'),
+      group: t('builder.group.legalAi', 'Legal & AI'),
+      label: t('editor.toolbar.citations', 'Citations'),
+      icon: <CitationsIcon />,
+      active: sidebarTab === 'legal-ai-citations',
+      onClick: () => setSidebarTab('legal-ai-citations'),
+    },
+    {
+      id: 'legal-ai-insights',
+      kind: 'panel',
+      group: t('builder.group.legalAi', 'Legal & AI'),
+      label: t('editor.toolbar.insights', 'Insights'),
+      icon: <InsightsIcon />,
+      active: sidebarTab === 'legal-ai-insights',
+      onClick: () => setSidebarTab('legal-ai-insights'),
+    },
+    {
+      id: 'legal-ai-usage',
+      kind: 'panel',
+      group: t('builder.group.legalAi', 'Legal & AI'),
+      label: t('editor.toolbar.usage', 'Usage'),
+      icon: <UsageIcon />,
+      active: sidebarTab === 'legal-ai-usage',
+      onClick: () => setSidebarTab('legal-ai-usage'),
     },
     {
       id: 'comments',
@@ -460,8 +484,12 @@ export function BuilderShell({ documentId }: Props) {
         <div className="flex-none border-b border-border px-3 py-2 text-xs font-semibold text-foreground/80">
           {sidebarTab === 'sections' && t('builder.tab.sections', 'Sections')}
           {sidebarTab === 'risks' && t('builder.risks', 'Risks')}
-          {sidebarTab === 'legal-ai' &&
-            t('editor.toolbar.legalAi', 'Legal & AI')}
+          {sidebarTab === 'legal-ai-citations' &&
+            t('editor.toolbar.citations', 'Citations')}
+          {sidebarTab === 'legal-ai-insights' &&
+            t('editor.toolbar.insights', 'Insights')}
+          {sidebarTab === 'legal-ai-usage' &&
+            t('editor.toolbar.usage', 'Usage')}
           {sidebarTab === 'comments' && t('builder.comments', 'Comments')}
           {sidebarTab === 'history' && t('builder.history', 'History')}
           {sidebarTab === 'share' && t('builder.share', 'Share')}
@@ -491,8 +519,20 @@ export function BuilderShell({ documentId }: Props) {
               }}
             />
           )}
-          {sidebarTab === 'legal-ai' && (
-            <DocumentSidePanel documentId={documentId} />
+          {sidebarTab === 'legal-ai-citations' && (
+            <div className="px-3 py-3">
+              <CitationHealth documentId={documentId} />
+            </div>
+          )}
+          {sidebarTab === 'legal-ai-insights' && (
+            <div className="px-3 py-3">
+              <DocumentInsights sourceId={documentId} scope="document" />
+            </div>
+          )}
+          {sidebarTab === 'legal-ai-usage' && (
+            <div className="px-3 py-3">
+              <AiUsageSummary scope={{ kind: 'document', id: documentId }} />
+            </div>
           )}
           {sidebarTab === 'comments' && (
             <CommentsPanel documentId={documentId} />

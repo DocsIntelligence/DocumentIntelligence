@@ -20,6 +20,12 @@ export class PatchGroupDto extends createZodDto(PatchGroupSchema) {}
 
 const AddDocumentsSchema = z.object({
   documentIds: z.array(z.string().min(1)).min(1).max(50),
+  /**
+   * When true, documents currently in a DIFFERENT group are reassigned (moved)
+   * to the target group. Default false — those docs are skipped and reported
+   * back so the UI can prompt the user.
+   */
+  overwrite: z.boolean().optional().default(false),
 });
 
 export class AddDocumentsDto extends createZodDto(AddDocumentsSchema) {}

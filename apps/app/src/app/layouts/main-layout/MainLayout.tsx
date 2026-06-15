@@ -174,15 +174,20 @@ function Sidebar({
             icon={<SearchIcon />}
           />
           <NavItem
+            to="/editor"
+            label={t('nav.quickEditor', 'Quick editor')}
+            icon={<PenIcon />}
+          />
+          <NavItem
             to="/vault"
             label={t('nav.vault', 'Vault')}
             icon={<VaultIcon />}
           />
 
           <NavGroup
-            label={t('nav.create', 'Create')}
-            icon={<PlusSquareIcon />}
-            storageKey="nav.group.create"
+            label={t('nav.documents', 'Documents')}
+            icon={<DocsIcon />}
+            storageKey="nav.group.documents"
             childPaths={['/documents', '/groups']}
           >
             <NavItem
@@ -192,19 +197,9 @@ function Sidebar({
               icon={<PlusIcon />}
             />
             <NavItem
-              to="/documents/draft-ai"
-              label={t('dashboard.draftAiTitle', 'Draft with AI')}
-              icon={<SparklesIcon />}
-            />
-            <NavItem
-              to="/documents/templates"
-              label={t('nav.templates', 'Templates')}
-              icon={<TemplateIcon />}
-            />
-            <NavItem
               to="/documents"
               end
-              label={t('nav.myDocuments', 'My documents')}
+              label={t('nav.myDocuments', 'Documents')}
               icon={<DocsIcon />}
             />
             <NavItem
@@ -229,15 +224,15 @@ function Sidebar({
               icon={<ScanIcon />}
             />
             <NavItem
+              to="/batches/new"
+              label={t('nav.newBatch', 'New batch')}
+              icon={<UploadIcon />}
+            />
+            <NavItem
               to="/batches"
               end
               label={t('nav.batches', 'Batches')}
               icon={<LayersIcon />}
-            />
-            <NavItem
-              to="/batches/new"
-              label={t('nav.newBatch', 'New batch')}
-              icon={<UploadIcon />}
             />
             <NavItem
               to="/review-queue"
@@ -295,11 +290,6 @@ function Sidebar({
             />
           </NavGroup>
 
-          <NavItem
-            to="/editor"
-            label={t('nav.quickEditor', 'Quick editor')}
-            icon={<PenIcon />}
-          />
           <NavItem
             to="/settings"
             label={t('nav.settings', 'Settings')}
@@ -398,15 +388,24 @@ function NavGroup({
     return stored == null ? true : stored === '1';
   });
 
-  // Force-open while a child route is active (without clobbering the stored
-  // preference for when the user navigates away).
-  const expanded = open || hasActiveChild;
+  // Auto-expand on first visit to a child route, but respect explicit collapse.
+  const [userCollapsed, setUserCollapsed] = useState(false);
+  const expanded = userCollapsed ? false : open || hasActiveChild;
+
+  // Reset userCollapsed when navigating away from child routes
+  useEffect(() => {
+    if (!hasActiveChild) setUserCollapsed(false);
+  }, [hasActiveChild]);
 
   const toggle = () => {
-    const next = !expanded;
-    setOpen(next);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, next ? '1' : '0');
+    if (expanded) {
+      setUserCollapsed(true);
+      setOpen(false);
+      localStorage.setItem(storageKey, '0');
+    } else {
+      setUserCollapsed(false);
+      setOpen(true);
+      localStorage.setItem(storageKey, '1');
     }
   };
 

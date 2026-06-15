@@ -1,4 +1,5 @@
 import type {
+  AnalysisQueueBatch,
   EngineMode,
   IntelligenceJob,
   ListBatchesQuery,
@@ -125,6 +126,64 @@ export function useDocumentsAnalysisStatus(documentIds: string[]) {
     enabled: sorted.length > 0,
     staleTime: 15_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+// ─── Analysis queue (bulk + background) ─────────────────────────────────────
+
+export const analysisQueueKeys = {
+  active: ['intelligence', 'analysis-queue', 'active'] as const,
+  batch: (id: string) =>
+    ['intelligence', 'analysis-queue', 'batch', id] as const,
+};
+
+/** Submit a bulk-analyze request to the server queue. */
+export function useEnqueueAnalysisBatch() {
+  const svc = useIntelligenceService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { documentIds: string[]; force?: boolean }) =>
+      svc.enqueueAnalysisBatch(vars.documentIds, { force: vars.force }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: analysisQueueKeys.active });
+    },
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not enqueue analysis')),
+  });
+}
+
+/** Poll a batch's progress. Stops polling once isComplete. */
+export function useAnalysisQueueBatch(
+  batchId: string | undefined,
+  enabled = true,
+) {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: batchId
+      ? analysisQueueKeys.batch(batchId)
+      : ['intelligence', 'analysis-queue', 'batch', 'none'],
+    queryFn: () => svc.getAnalysisQueueBatch(batchId as string),
+    enabled: !!batchId && enabled,
+    refetchInterval: (q) => {
+      const data = q.state.data as AnalysisQueueBatch | undefined;
+      return data?.isComplete ? false : 2000;
+    },
+  });
+}
+
+/** Active batches for the user (drives the queue indicator badge). */
+export function useActiveAnalysisQueue(enabled = true) {
+  const svc = useIntelligenceService();
+  return useQuery({
+    queryKey: analysisQueueKeys.active,
+    queryFn: () => svc.getActiveAnalysisQueue(),
+    enabled,
+    refetchInterval: (q) => {
+      const data = q.state.data as AnalysisQueueBatch[] | undefined;
+      // Keep polling while any batch is still draining.
+      const anyInFlight = (data ?? []).some((b) => !b.isComplete);
+      return anyInFlight ? 2000 : 15_000;
+    },
   });
 }
 

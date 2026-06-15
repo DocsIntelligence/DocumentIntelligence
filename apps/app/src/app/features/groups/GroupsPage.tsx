@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@org/ui';
-import { useEffect, useMemo, useState } from 'react';
+import { cn } from '@org/utils';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
@@ -133,28 +134,26 @@ export function GroupsPage() {
       key: 'actions',
       header: '',
       align: 'right',
-      width: 'w-24',
+      width: 'w-20',
       pinned: true,
       cell: (g) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            title={t('common.open', 'Open')}
             onClick={() => navigate(`/groups/${g.id}`)}
           >
-            {t('common.open', 'Open')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-error"
+            <OpenGlyph />
+          </IconButton>
+          <IconButton
+            danger
+            title={t('common.delete', 'Delete')}
             onClick={(e) => {
               e.stopPropagation();
               handleDelete(g.id, g.name);
             }}
           >
-            {t('common.delete', 'Delete')}
-          </Button>
+            <TrashGlyph />
+          </IconButton>
         </div>
       ),
     },
@@ -318,5 +317,68 @@ function CreateGroupDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function IconButton({
+  title,
+  danger,
+  onClick,
+  children,
+}: {
+  title: string;
+  danger?: boolean;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={cn(
+        'rounded p-1.5 transition hover:bg-secondary',
+        danger
+          ? 'text-error hover:text-error'
+          : 'text-foreground/60 hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OpenGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
+function TrashGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
   );
 }

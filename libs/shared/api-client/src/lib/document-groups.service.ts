@@ -58,6 +58,16 @@ export interface PatchGroupPayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface AddDocumentsResult {
+  ok: boolean;
+  added: number;
+  moved: number;
+  skipped: number;
+  inaccessible: number;
+  skippedIds: string[];
+  movedIds: string[];
+}
+
 export interface GroupSearchPayload {
   q: string;
   sort?: SearchSort;
@@ -103,10 +113,15 @@ export const createDocumentGroupsService = (http: HttpClient) => ({
   remove: (id: string) =>
     http.delete<{ ok: boolean }>(`/groups/${id}`).then((r) => r.data),
 
-  addDocuments: (id: string, documentIds: string[]) =>
+  addDocuments: (
+    id: string,
+    documentIds: string[],
+    opts?: { overwrite?: boolean },
+  ) =>
     http
-      .post<{ ok: boolean; added: number }>(`/groups/${id}/documents`, {
+      .post<AddDocumentsResult>(`/groups/${id}/documents`, {
         documentIds,
+        overwrite: !!opts?.overwrite,
       })
       .then((r) => r.data),
 

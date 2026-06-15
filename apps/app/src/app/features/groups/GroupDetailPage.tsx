@@ -1,11 +1,24 @@
-import { Button, Input } from '@org/ui';
+import {
+  Button,
+  Input,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@org/ui';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { DocumentsList } from '../documents/DocumentsList';
-import { GroupIntelligencePanel } from './GroupIntelligencePanel';
+import { AddDocsToCurrentGroupDialog } from './AddToGroupDialog';
+import {
+  GroupSearchView,
+  GroupSummaryView,
+} from './GroupIntelligencePanel';
 import { useDeleteGroup, useGroup, usePatchGroup } from './queries';
+
+type GroupTab = 'documents' | 'search' | 'summary';
 
 export function GroupDetailPage() {
   const { t } = useTranslation();
@@ -16,8 +29,10 @@ export function GroupDetailPage() {
   const patch = usePatchGroup();
   const del = useDeleteGroup();
 
+  const [tab, setTab] = useState<GroupTab>('documents');
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -105,10 +120,8 @@ export function GroupDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button size="sm" asChild>
-            <Link to={`/groups/${group.id}/add`}>
-              {t('groups.addDocuments', '+ Add documents')}
-            </Link>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            {t('groups.addDocuments', '+ Add documents')}
           </Button>
           <Button variant="outline" size="sm" onClick={startRename}>
             {t('common.rename', 'Rename')}
@@ -124,13 +137,52 @@ export function GroupDetailPage() {
         </div>
       </div>
 
-      <GroupIntelligencePanel
+      <AddDocsToCurrentGroupDialog
         groupId={group.id}
-        documentCount={group.documents.length}
+        existingDocIds={group.documents.map((d) => d.id)}
+        open={addOpen}
+        onOpenChange={setAddOpen}
       />
 
-      {/* Reuse the full DocumentsList with server-side groupId filter */}
-      <DocumentsList groupId={group.id} />
+      {/* Tabs: Documents (table) · Search · Summary */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as GroupTab)}>
+        <TabsList className="w-full max-w-md grid grid-cols-3">
+          <TabsTrigger value="documents">
+            {t('groups.tab.documents', 'Documents')}
+            <span className="ml-1.5 text-[10px] text-foreground/45">
+              {group.documents.length}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="search">
+            {t('groups.tab.search', 'Search')}
+          </TabsTrigger>
+          <TabsTrigger value="summary">
+            {t('groups.tab.summary', 'Summary')}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="documents" className="mt-4">
+          <DocumentsList groupId={group.id} />
+        </TabsContent>
+
+        <TabsContent value="search" className="mt-4">
+          <div className="rounded-xl border border-border bg-background p-4">
+            <GroupSearchView
+              groupId={group.id}
+              documentCount={group.documents.length}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="summary" className="mt-4">
+          <div className="rounded-xl border border-border bg-background p-4">
+            <GroupSummaryView
+              groupId={group.id}
+              documentCount={group.documents.length}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -46,15 +46,19 @@ import { diffText, isUnchanged, type DiffSegment } from './revision-diff';
 import { EditorSideMenu, type RailItem } from './EditorActivityRail';
 import { LayoutPresetGroup } from './LayoutPresetGroup';
 import {
+  CitationsIcon,
   CommentsIcon,
   FieldsIcon,
   HistoryIcon as RailHistoryIcon,
-  LegalAiIcon as RailLegalAiIcon,
+  InsightsIcon,
   PagesIcon,
   ShareIcon as RailShareIcon,
   SignaturesIcon,
+  UsageIcon,
 } from './rail-icons';
-import { DocumentSidePanel } from '../legal-ai/DocumentSidePanel';
+import { CitationHealth } from '../legal-ai/CitationHealth';
+import { DocumentInsights } from '../intelligence/DocumentInsights';
+import { AiUsageSummary } from '../admin/ai-usage/AiUsageSummary';
 import { CommentsPanel } from '../documents/CommentsPanel';
 import { VersionHistoryPanel } from '../documents/VersionHistoryPanel';
 import { SharePanel } from '../documents/SharePanel';
@@ -237,7 +241,9 @@ function TemplateEditorInner({
   type SidebarTab =
     | 'fields'
     | 'pages'
-    | 'legal-ai'
+    | 'legal-ai-citations'
+    | 'legal-ai-insights'
+    | 'legal-ai-usage'
     | 'comments'
     | 'history'
     | 'share';
@@ -805,13 +811,31 @@ function TemplateEditorInner({
     ...(documentId
       ? [
           {
-            id: 'legal-ai',
+            id: 'legal-ai-citations',
             kind: 'panel' as const,
-            group: t('editor.group.intelligence', 'AI & Citations'),
-            label: t('editor.toolbar.legalAi', 'Legal & AI'),
-            icon: <RailLegalAiIcon />,
-            active: sidebarTab === 'legal-ai',
-            onClick: () => setSidebarTab('legal-ai'),
+            group: t('editor.group.legalAi', 'Legal & AI'),
+            label: t('editor.toolbar.citations', 'Citations'),
+            icon: <CitationsIcon />,
+            active: sidebarTab === 'legal-ai-citations',
+            onClick: () => setSidebarTab('legal-ai-citations'),
+          },
+          {
+            id: 'legal-ai-insights',
+            kind: 'panel' as const,
+            group: t('editor.group.legalAi', 'Legal & AI'),
+            label: t('editor.toolbar.insights', 'Insights'),
+            icon: <InsightsIcon />,
+            active: sidebarTab === 'legal-ai-insights',
+            onClick: () => setSidebarTab('legal-ai-insights'),
+          },
+          {
+            id: 'legal-ai-usage',
+            kind: 'panel' as const,
+            group: t('editor.group.legalAi', 'Legal & AI'),
+            label: t('editor.toolbar.usage', 'Usage'),
+            icon: <UsageIcon />,
+            active: sidebarTab === 'legal-ai-usage',
+            onClick: () => setSidebarTab('legal-ai-usage'),
           },
           {
             id: 'comments',
@@ -923,7 +947,12 @@ function TemplateEditorInner({
         <div className="flex-none border-b border-border px-3 py-2 text-xs font-semibold text-foreground/80">
           {sidebarTab === 'fields' && t('editor.tabs.fields', 'Fields')}
           {sidebarTab === 'pages' && t('editor.tabs.pages', 'Pages')}
-          {sidebarTab === 'legal-ai' && t('editor.toolbar.legalAi', 'Legal & AI')}
+          {sidebarTab === 'legal-ai-citations' &&
+            t('editor.toolbar.citations', 'Citations')}
+          {sidebarTab === 'legal-ai-insights' &&
+            t('editor.toolbar.insights', 'Insights')}
+          {sidebarTab === 'legal-ai-usage' &&
+            t('editor.toolbar.usage', 'Usage')}
           {sidebarTab === 'comments' && t('editor.toolbar.comments', 'Comments')}
           {sidebarTab === 'history' && t('editor.toolbar.history', 'History')}
           {sidebarTab === 'share' && t('editor.toolbar.share', 'Share')}
@@ -964,8 +993,20 @@ function TemplateEditorInner({
               onRemovePage={handleRemovePage}
             />
           )}
-          {sidebarTab === 'legal-ai' && documentId && (
-            <DocumentSidePanel documentId={documentId} />
+          {sidebarTab === 'legal-ai-citations' && documentId && (
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
+              <CitationHealth documentId={documentId} />
+            </div>
+          )}
+          {sidebarTab === 'legal-ai-insights' && documentId && (
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
+              <DocumentInsights sourceId={documentId} scope="document" />
+            </div>
+          )}
+          {sidebarTab === 'legal-ai-usage' && documentId && (
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
+              <AiUsageSummary scope={{ kind: 'document', id: documentId }} />
+            </div>
           )}
           {sidebarTab === 'comments' && documentId && (
             <CommentsPanel documentId={documentId} />

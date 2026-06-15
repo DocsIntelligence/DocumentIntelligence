@@ -130,7 +130,10 @@ export class DocumentGroupsService {
     if (!group) throw new NotFoundException('Group not found');
     await this.assertAccess(userId, group);
 
-    await this.db.document.updateMany({
+    // Single-group invariant: a Document can only belong to one DocumentGroup
+    // at a time. We refuse to silently overwrite an existing assignment; the
+    // caller must opt in via `overwrite=true` to MOVE docs from another group.
+    const docs = await this.db.document.findMany({
       where: {
         id: { in: dto.documentIds },
         OR: [
@@ -138,10 +141,53 @@ export class DocumentGroupsService {
           { ownerOrg: { members: { some: { userId } } } },
         ],
       },
-      data: { groupId },
+      select: { id: true, groupId: true },
     });
+    const accessibleIds = new Set(docs.map((d) => d.id));
 
-    return { ok: true, added: dto.documentIds.length };
+    const eligibleIds: string[] = []; // ungrouped or already-in-this-group
+    const movedIds: string[] = []; // in a different group — assigned only with overwrite
+    const skippedIds: string[] = []; // in a different group — skipped (no overwrite)
+    const inaccessibleIds: string[] = []; // not accessible to this user
+
+    for (const id of dto.documentIds) {
+      if (!accessibleIds.has(id)) {
+        inaccessibleIds.push(id);
+        continue;
+      }
+      const doc = docs.find((d) => d.id === id);
+      if (!doc) {
+        inaccessibleIds.push(id);
+        continue;
+      }
+      if (doc.groupId === null || doc.groupId === groupId) {
+        eligibleIds.push(id);
+      } else if (dto.overwrite) {
+        movedIds.push(id);
+      } else {
+        skippedIds.push(id);
+      }
+    }
+
+    const updateIds = [...eligibleIds, ...movedIds];
+    if (updateIds.length > 0) {
+      await this.db.document.updateMany({
+        where: { id: { in: updateIds } },
+        data: { groupId },
+      });
+    }
+
+    return {
+      ok: true,
+      added: eligibleIds.length,
+      moved: movedIds.length,
+      skipped: skippedIds.length,
+      inaccessible: inaccessibleIds.length,
+      // Surface the ids the caller can use to render a precise "X moved, Y
+      // skipped" toast / dialog.
+      skippedIds,
+      movedIds,
+    };
   }
 
   async removeDocument(userId: string, groupId: string, documentId: string) {
