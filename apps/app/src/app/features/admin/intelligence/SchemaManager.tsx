@@ -161,13 +161,13 @@ export function SchemaManager() {
   const purge = usePurgeSchema();
   const setActive = useSetSchemaActive();
 
-  const startCreate = () => navigate('/admin/intelligence/types/new');
+  const startCreate = () => navigate('/config/document-types/new');
   const startEdit = (key: string) =>
-    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/edit`);
+    navigate(`/config/document-types/${encodeURIComponent(key)}/edit`);
   const startClone = (key: string) =>
-    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/clone`);
+    navigate(`/config/document-types/${encodeURIComponent(key)}/clone`);
   const openMapping = (key: string) =>
-    navigate(`/admin/intelligence/types/${encodeURIComponent(key)}/mapping`);
+    navigate(`/config/document-types/${encodeURIComponent(key)}/mapping`);
 
   const onDelete = async (key: string) => {
     const ok = await confirm({

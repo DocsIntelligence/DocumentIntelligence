@@ -241,50 +241,50 @@ function Sidebar({
             />
           </NavGroup>
 
-          {/* Configuration / admin (catalogs + settings) */}
+          {/* Configuration — catalogs + settings, all under /config/* */}
           <NavGroup
             label={t('nav.configuration', 'Configuration')}
             icon={<GearIcon />}
             storageKey="nav.group.config"
-            childPaths={['/admin/intelligence', '/admin']}
+            childPaths={['/config']}
           >
             <NavItem
-              to="/admin/intelligence/types"
+              to="/config/document-types"
               label={t('nav.docTypes', 'Document types')}
               icon={<DocsIcon />}
             />
             <NavItem
-              to="/admin/intelligence/pipelines"
+              to="/config/pipelines"
               label={t('nav.pipelines', 'Pipelines')}
               icon={<FlowIcon />}
             />
             <NavItem
-              to="/admin/intelligence/lookups"
+              to="/config/lookups"
               label={t('nav.lookups', 'Lookups')}
               icon={<ListIcon />}
             />
             <NavItem
-              to="/admin/intelligence/search"
+              to="/config/search"
               label={t('nav.searchSettings', 'Search settings')}
               icon={<SearchIcon />}
             />
             <NavItem
-              to="/admin/intelligence/vault"
+              to="/config/vault"
               label={t('nav.vaultConfig', 'Vault fields')}
               icon={<VaultIcon />}
             />
             <NavItem
-              to="/admin/legal-reference"
+              to="/config/legal-reference"
               label={t('nav.legalReference', 'Legal references')}
               icon={<BookIcon />}
             />
             <NavItem
-              to="/admin/ai-usage"
+              to="/config/ai-usage"
               label={t('nav.aiUsage', 'AI usage')}
               icon={<ChartIcon />}
             />
             <NavItem
-              to="/admin/settings"
+              to="/config/settings"
               label={t('nav.platformSettings', 'Platform settings')}
               icon={<GearIcon />}
             />
@@ -296,8 +296,9 @@ function Sidebar({
             icon={<GearIcon />}
           />
           <NavItem
-            to="/admin"
-            label={t('nav.admin', 'Admin')}
+            to="/config"
+            end
+            label={t('nav.admin', 'Configuration')}
             icon={<ShieldIcon />}
           />
         </nav>
@@ -582,32 +583,6 @@ function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg {...iconProps} className={className}>
       <path d="m9 6 6 6-6 6" />
-    </svg>
-  );
-}
-function PlusSquareIcon() {
-  return (
-    <svg {...iconProps}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <line x1="12" y1="8" x2="12" y2="16" />
-      <line x1="8" y1="12" x2="16" y2="12" />
-    </svg>
-  );
-}
-function SparklesIcon() {
-  return (
-    <svg {...iconProps}>
-      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
-      <path d="M19 14l.9 2.7 2.7.9-2.7.9-.9 2.7-.9-2.7-2.7-.9 2.7-.9.9-2.7z" />
-    </svg>
-  );
-}
-function TemplateIcon() {
-  return (
-    <svg {...iconProps}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <line x1="3" y1="9" x2="21" y2="9" />
-      <line x1="9" y1="21" x2="9" y2="9" />
     </svg>
   );
 }

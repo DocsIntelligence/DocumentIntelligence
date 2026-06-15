@@ -92,7 +92,7 @@ export function CitationEditor({ mode }: Props) {
   useEffect(() => {
     if (mode === 'new') return;
     if (!paramId) {
-      navigate('/admin/legal-reference', { replace: true });
+      navigate('/config/legal-reference', { replace: true });
       return;
     }
     setLoading(true);
@@ -104,7 +104,7 @@ export function CitationEditor({ mode }: Props) {
       .then((c) => {
         if (!c || !c.id) {
           toast.error(t('legalRefs.notFound', 'Citation not found'));
-          navigate('/admin/legal-reference', { replace: true });
+          navigate('/config/legal-reference', { replace: true });
           return;
         }
         const base: CitationForm = {
@@ -131,7 +131,7 @@ export function CitationEditor({ mode }: Props) {
       })
       .catch(() => {
         toast.error(t('legalRefs.loadFailed', 'Failed to load citation'));
-        navigate('/admin/legal-reference', { replace: true });
+        navigate('/config/legal-reference', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, paramId, navigate, t]);
@@ -139,7 +139,7 @@ export function CitationEditor({ mode }: Props) {
   const patch = <K extends keyof CitationForm>(k: K, v: CitationForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const goBack = () => navigate('/admin/legal-reference');
+  const goBack = () => navigate('/config/legal-reference');
 
   const save = async () => {
     if (!form.id.trim()) {
@@ -183,7 +183,7 @@ export function CitationEditor({ mode }: Props) {
       );
       if (!res.ok) throw new Error(await res.text());
       toast.success(t('legalRefs.saved', 'Citation saved'));
-      navigate('/admin/legal-reference');
+      navigate('/config/legal-reference');
     } catch (err) {
       toast.error(`Save failed: ${(err as Error).message}`);
     } finally {

@@ -5,6 +5,10 @@ import {
   Button,
   DataTable,
   type DataTableColumn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useState, type ReactNode } from 'react';
@@ -218,28 +222,39 @@ function RowActions({ row: e }: { row: VaultEntitySummary }) {
         <EditGlyph />
       </IconButton>
       <IconButton
-        title={t('vault.duplicate', 'Duplicate')}
-        disabled={duplicate.isPending}
-        onClick={() => duplicate.mutate(e.id)}
-      >
-        <CopyGlyph />
-      </IconButton>
-      <IconButton
-        title={
-          e.isActive ? t('vault.disable', 'Disable') : t('vault.enable', 'Enable')
-        }
-        disabled={update.isPending}
-        onClick={onToggleActive}
-      >
-        {e.isActive ? <EyeGlyph /> : <EyeOffGlyph />}
-      </IconButton>
-      <IconButton
         danger
         title={t('common.delete', 'Delete')}
         onClick={onDelete}
       >
         <TrashGlyph />
       </IconButton>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={t('common.actions', 'Actions')}
+            className="rounded p-1.5 text-foreground/55 transition hover:bg-secondary hover:text-foreground"
+          >
+            ⋯
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            disabled={duplicate.isPending}
+            onSelect={() => duplicate.mutate(e.id)}
+          >
+            {t('vault.duplicate', 'Duplicate')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={update.isPending}
+            onSelect={onToggleActive}
+          >
+            {e.isActive
+              ? t('vault.disable', 'Disable')
+              : t('vault.enable', 'Enable')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

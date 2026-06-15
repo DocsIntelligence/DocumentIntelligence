@@ -27,7 +27,7 @@ function ConfigShell({
   );
 }
 
-/** /admin/legal-reference — citation catalog list. */
+/** /config/legal-reference — citation catalog list. */
 export function AdminLegalReferencePage() {
   const { t } = useTranslation();
   return (
@@ -43,7 +43,7 @@ export function AdminLegalReferencePage() {
   );
 }
 
-/** /admin/legal-reference/new */
+/** /config/legal-reference/new */
 export function NewCitationPage() {
   const { t } = useTranslation();
   return (
@@ -59,7 +59,7 @@ export function NewCitationPage() {
   );
 }
 
-/** /admin/legal-reference/:id/edit */
+/** /config/legal-reference/:id/edit */
 export function EditCitationPage() {
   const { t } = useTranslation();
   return (
@@ -75,7 +75,7 @@ export function EditCitationPage() {
   );
 }
 
-/** /admin/legal-reference/:id/clone */
+/** /config/legal-reference/:id/clone */
 export function CloneCitationPage() {
   const { t } = useTranslation();
   return (

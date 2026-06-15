@@ -62,7 +62,7 @@ export function AdminSettingsPage() {
         credentials: 'include',
       })
         .then((r) => r.json())
-        .then((data: SettingRow[]) => setRows(data))
+        .then((data: unknown) => setRows(Array.isArray(data) ? (data as SettingRow[]) : []))
         .catch(() => toast.error(t('settings.loadFailed', 'Failed to load settings')))
         .finally(() => setLoading(false));
     },

@@ -70,15 +70,15 @@ function VaultConfigTabs() {
   const { pathname } = useLocation();
   const tabs = [
     {
-      to: '/admin/intelligence/vault',
+      to: '/config/vault',
       label: t('vaultAdmin.entityKinds', 'Entity kinds'),
     },
     {
-      to: '/admin/intelligence/vault/fields',
+      to: '/config/vault/fields',
       label: t('vaultAdmin.fields', 'Fields'),
     },
     {
-      to: '/admin/intelligence/vault/doc-kinds',
+      to: '/config/vault/doc-kinds',
       label: t('vaultAdmin.docKinds', 'Document kinds'),
     },
   ];
@@ -147,9 +147,9 @@ export function EntityKindsManager() {
   const del = useDeleteVaultEntityKind();
 
   const openKind = (id: string) =>
-    navigate(`/admin/intelligence/vault/entity-kinds/${encodeURIComponent(id)}/edit`);
+    navigate(`/config/vault/entity-kinds/${encodeURIComponent(id)}/edit`);
   const newKind = () =>
-    navigate('/admin/intelligence/vault/entity-kinds/new');
+    navigate('/config/vault/entity-kinds/new');
 
   const onDelete = async (r: VaultEntityKindConfig) => {
     if (r.isSystem) {
@@ -335,8 +335,8 @@ export function VaultFieldsManager() {
   const delField = useDeleteVaultField();
 
   const openField = (id: string) =>
-    navigate(`/admin/intelligence/vault/fields/${encodeURIComponent(id)}/edit`);
-  const newField = () => navigate('/admin/intelligence/vault/fields/new');
+    navigate(`/config/vault/fields/${encodeURIComponent(id)}/edit`);
+  const newField = () => navigate('/config/vault/fields/new');
 
   // Build a "used by" map: fieldId → kind labels/badges. Requires fetching
   // each kind's field-link list (kept off the hot path since the kind list
@@ -578,9 +578,9 @@ export function VaultDocKindsManager() {
 
   const openDocKind = (id: string) =>
     navigate(
-      `/admin/intelligence/vault/doc-kinds/${encodeURIComponent(id)}/edit`,
+      `/config/vault/doc-kinds/${encodeURIComponent(id)}/edit`,
     );
-  const newDocKind = () => navigate('/admin/intelligence/vault/doc-kinds/new');
+  const newDocKind = () => navigate('/config/vault/doc-kinds/new');
 
   const onDeleteDocKind = async (r: VaultDocKindConfig) => {
     const ok = await confirm({
@@ -936,7 +936,7 @@ export function VaultEntityKindForm({
     });
     // After create, land on the edit page so the user can immediately map
     // fields. After update, return to the list.
-    if (!k.id) navigate(`/admin/intelligence/vault/entity-kinds/${saved.id}/edit`);
+    if (!k.id) navigate(`/config/vault/entity-kinds/${saved.id}/edit`);
     else onClose();
   };
 
@@ -1038,7 +1038,7 @@ export function VaultEntityKindForm({
 /**
  * Field-map editor: a checklist of all global fields with an order column
  * and an optional group override per kind. "+ Add new field" sends the
- * user to /admin/intelligence/vault/fields/new and they come back after
+ * user to /config/vault/fields/new and they come back after
  * saving (the cache invalidation refreshes the list). Save batches the
  * desired set as a single PUT.
  */
@@ -1150,7 +1150,7 @@ function KindFieldsEditor({
             variant="outline"
             size="sm"
             onClick={() =>
-              navigate('/admin/intelligence/vault/fields/new')
+              navigate('/config/vault/fields/new')
             }
           >
             {t('vaultAdmin.newFieldLink', '+ Create new field')}

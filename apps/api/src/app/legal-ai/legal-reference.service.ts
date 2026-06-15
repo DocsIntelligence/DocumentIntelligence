@@ -147,6 +147,12 @@ export class LegalReferenceService {
     pageSize?: number;
     sort?: 'id' | 'title' | 'act';
     dir?: 'asc' | 'desc';
+    /** Tri-state: true=only active, false=only inactive, undefined=any. */
+    active?: boolean;
+    /** Tri-state: true=only public, false=only private, undefined=any. */
+    isPublic?: boolean;
+    /** Filter to citations whose `act` matches exactly (string equality). */
+    act?: string;
   } = {}): Promise<{
     items: Array<
       Citation & { isActive: boolean; isPublic: boolean; source: 'db' | 'code' }
@@ -154,6 +160,9 @@ export class LegalReferenceService {
     total: number;
     page: number;
     pageSize: number;
+    /** Distinct acts present in the (q-filtered) result set — drives the
+     *  admin UI's "Code" dropdown so it stays in sync with the data. */
+    facets: { acts: string[] };
   }> {
     const dbRows = await this.db.legalCitation.findMany({});
     const dbById = new Map(dbRows.map((r) => [r.id, r]));
@@ -204,6 +213,23 @@ export class LegalReferenceService {
       );
     }
 
+    // Distinct acts from the q-filtered set (drives the "Code" dropdown so it
+    // tracks the visible data, not the entire corpus).
+    const acts = Array.from(new Set(filtered.map((c) => c.act))).sort();
+
+    // Active / public / act filters — applied after `q` so facets reflect the
+    // search context but not the user's own filter picks (matches the usual
+    // dropdown semantics).
+    if (query.active !== undefined) {
+      filtered = filtered.filter((c) => c.isActive === query.active);
+    }
+    if (query.isPublic !== undefined) {
+      filtered = filtered.filter((c) => c.isPublic === query.isPublic);
+    }
+    if (query.act) {
+      filtered = filtered.filter((c) => c.act === query.act);
+    }
+
     // Sort.
     const sortKey = query.sort ?? 'id';
     const dir = query.dir ?? 'asc';
@@ -217,7 +243,13 @@ export class LegalReferenceService {
     const page = Math.max(0, query.page ?? 0);
     const pageSize = Math.min(200, Math.max(1, query.pageSize ?? 50));
     const items = filtered.slice(page * pageSize, (page + 1) * pageSize);
-    return { items, total: filtered.length, page, pageSize };
+    return {
+      items,
+      total: filtered.length,
+      page,
+      pageSize,
+      facets: { acts },
+    };
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

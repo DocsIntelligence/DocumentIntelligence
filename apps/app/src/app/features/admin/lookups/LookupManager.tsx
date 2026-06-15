@@ -79,9 +79,9 @@ export function LookupManager() {
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const startCreate = () => navigate('/admin/intelligence/lookups/new');
+  const startCreate = () => navigate('/config/lookups/new');
   const openGroup = (id: string) =>
-    navigate(`/admin/intelligence/lookups/${encodeURIComponent(id)}`);
+    navigate(`/config/lookups/${encodeURIComponent(id)}`);
 
   // Duplicate: fetch the group's values on demand (not held in the list).
   const onDuplicate = async (g: LookupGroupSummary) => {

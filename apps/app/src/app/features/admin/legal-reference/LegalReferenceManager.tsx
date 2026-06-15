@@ -6,6 +6,11 @@ import {
   Badge,
   Button,
   DataTable,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Spinner,
   Switch,
   type DataTableColumn,
@@ -42,6 +47,7 @@ interface ListResp {
   total: number;
   page: number;
   pageSize: number;
+  facets?: { acts: string[] };
 }
 
 /**
@@ -57,10 +63,22 @@ export function LegalReferenceManager() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'any' | 'true' | 'false'>(
+    'any',
+  );
+  const [publicFilter, setPublicFilter] = useState<'any' | 'true' | 'false'>(
+    'any',
+  );
+  const [actFilter, setActFilter] = useState<string>('__any__');
   const [data, setData] = useState<ListResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Whenever a filter changes, reset to page 0. (Sort + search already do.)
+  useEffect(() => {
+    setPage(0);
+  }, [activeFilter, publicFilter, actFilter]);
 
   const reload = useMemo(
     () => () => {
@@ -70,6 +88,9 @@ export function LegalReferenceManager() {
         pageSize: String(pageSize),
       });
       if (query.trim()) params.set('q', query.trim());
+      if (activeFilter !== 'any') params.set('active', activeFilter);
+      if (publicFilter !== 'any') params.set('public', publicFilter);
+      if (actFilter !== '__any__') params.set('act', actFilter);
       fetch(`${API_BASE_URL}/legal-ai/admin/citations?${params.toString()}`, {
         credentials: 'include',
       })
@@ -83,13 +104,24 @@ export function LegalReferenceManager() {
           setFetching(false);
         });
     },
-    [page, pageSize, query, t],
+    [page, pageSize, query, activeFilter, publicFilter, actFilter, t],
   );
 
   useEffect(reload, [reload]);
 
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const acts = data?.facets?.acts ?? [];
+  const hasFilters =
+    activeFilter !== 'any' ||
+    publicFilter !== 'any' ||
+    actFilter !== '__any__';
+
+  const clearFilters = () => {
+    setActiveFilter('any');
+    setPublicFilter('any');
+    setActFilter('__any__');
+  };
 
   const toggleActive = async (row: AdminCitation, isActive: boolean) => {
     setBusyId(row.id);
@@ -164,7 +196,7 @@ export function LegalReferenceManager() {
       sortValue: (r) => r.id,
       cell: (r) => (
         <Link
-          to={`/admin/legal-reference/${encodeURIComponent(r.id)}/edit`}
+          to={`/config/legal-reference/${encodeURIComponent(r.id)}/edit`}
           className="group block min-w-0"
         >
           <div className="font-mono text-xs text-foreground/80">{r.id}</div>
@@ -251,7 +283,7 @@ export function LegalReferenceManager() {
             title={t('common.edit', 'Edit')}
             onClick={() =>
               navigate(
-                `/admin/legal-reference/${encodeURIComponent(r.id)}/edit`,
+                `/config/legal-reference/${encodeURIComponent(r.id)}/edit`,
               )
             }
           >
@@ -261,7 +293,7 @@ export function LegalReferenceManager() {
             title={t('legalRefs.clone', 'Duplicate')}
             onClick={() =>
               navigate(
-                `/admin/legal-reference/${encodeURIComponent(r.id)}/clone`,
+                `/config/legal-reference/${encodeURIComponent(r.id)}/clone`,
               )
             }
           >
@@ -317,7 +349,7 @@ export function LegalReferenceManager() {
               {t('legalRefs.openPublic', 'Public catalog ↗')}
             </Link>
           </Button>
-          <Button onClick={() => navigate('/admin/legal-reference/new')}>
+          <Button onClick={() => navigate('/config/legal-reference/new')}>
             {t('legalRefs.add', '+ Add citation')}
           </Button>
         </div>
@@ -334,6 +366,81 @@ export function LegalReferenceManager() {
         )}
         pageSizeOptions={[10, 25, 50, 100]}
         empty={t('legalRefs.empty', 'No citations match your filters.')}
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={activeFilter}
+              onValueChange={(v) =>
+                setActiveFilter(v as 'any' | 'true' | 'false')
+              }
+            >
+              <SelectTrigger className="h-9 w-36 text-sm">
+                <SelectValue
+                  placeholder={t('legalRefs.filter.activeAny', 'Any status')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">
+                  {t('legalRefs.filter.activeAny', 'Any status')}
+                </SelectItem>
+                <SelectItem value="true">
+                  {t('legalRefs.filter.activeTrue', 'Active')}
+                </SelectItem>
+                <SelectItem value="false">
+                  {t('legalRefs.filter.activeFalse', 'Inactive')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={publicFilter}
+              onValueChange={(v) =>
+                setPublicFilter(v as 'any' | 'true' | 'false')
+              }
+            >
+              <SelectTrigger className="h-9 w-40 text-sm">
+                <SelectValue
+                  placeholder={t(
+                    'legalRefs.filter.visibilityAny',
+                    'Any visibility',
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">
+                  {t('legalRefs.filter.visibilityAny', 'Any visibility')}
+                </SelectItem>
+                <SelectItem value="true">
+                  {t('legalRefs.filter.publicTrue', 'Public')}
+                </SelectItem>
+                <SelectItem value="false">
+                  {t('legalRefs.filter.publicFalse', 'Private')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={actFilter} onValueChange={setActFilter}>
+              <SelectTrigger className="h-9 w-56 text-sm">
+                <SelectValue
+                  placeholder={t('legalRefs.filter.codeAny', 'All codes')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__any__">
+                  {t('legalRefs.filter.codeAny', 'All codes')}
+                </SelectItem>
+                {acts.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                {t('common.clearAll', 'Clear all')}
+              </Button>
+            )}
+          </div>
+        }
         server={{
           page,
           pageCount,

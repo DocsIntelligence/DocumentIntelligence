@@ -2,7 +2,11 @@ import type { BatchSummary } from '@org/api-client';
 import {
   Badge,
   Button,
-  Chip,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   DataTable,
   type DataTableColumn,
 } from '@org/ui';
@@ -237,18 +241,34 @@ export function BatchesPage() {
           }}
           toolbar={
             <div className="flex flex-wrap items-center gap-2">
-              <Chip active={!statusFilter} onClick={() => setStatusFilter(null)}>
-                {t('common.all', 'All')}
-              </Chip>
-              {BATCH_STATUSES.map((s) => (
-                <Chip
-                  key={s}
-                  active={statusFilter === s}
-                  onClick={() => setStatusFilter(statusFilter === s ? null : s)}
-                >
-                  {s.replace(/_/g, ' ')}
-                </Chip>
-              ))}
+              <Select
+                value={statusFilter ?? '__any__'}
+                onValueChange={(v) =>
+                  setStatusFilter(v === '__any__' ? null : v)
+                }
+              >
+                <SelectTrigger className="h-9 w-44 text-sm">
+                  <SelectValue
+                    placeholder={t(
+                      'intelligence.batches.filter.allStatuses',
+                      'All statuses',
+                    )}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__any__">
+                    {t(
+                      'intelligence.batches.filter.allStatuses',
+                      'All statuses',
+                    )}
+                  </SelectItem>
+                  {BATCH_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s.replace(/_/g, ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           }
           empty={t('intelligence.batches.noMatch', 'No batches match these filters.')}

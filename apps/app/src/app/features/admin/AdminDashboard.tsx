@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { selectUser, useAppSelector } from '@org/store';
 import { Button, Card, Spinner } from '@org/ui';
 import { toast } from 'sonner';
-import { AdminLookups } from './AdminLookups';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { APP_ENV } from '../../../config';
 
@@ -202,7 +201,7 @@ export function AdminDashboard() {
             pipelines (classify → extract → review → export).
           </p>
         </div>
-        <Link to="/admin/intelligence">
+        <Link to="/config">
           <Button size="sm">Configure</Button>
         </Link>
       </Card>
@@ -216,7 +215,7 @@ export function AdminDashboard() {
             by user, model, operation, document, batch.
           </p>
         </div>
-        <Link to="/admin/ai-usage">
+        <Link to="/config/ai-usage">
           <Button size="sm">Open dashboard</Button>
         </Link>
       </Card>
@@ -230,14 +229,23 @@ export function AdminDashboard() {
             tracking on/off, retention, and budget enforcement.
           </p>
         </div>
-        <Link to="/admin/settings">
+        <Link to="/config/settings">
           <Button size="sm">Manage</Button>
         </Link>
       </Card>
 
-      {/* Lookups Management */}
-      <Card className="rounded-xl p-6">
-        <AdminLookups />
+      {/* Lookups */}
+      <Card className="rounded-xl p-6 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-foreground">Lookups</h3>
+          <p className="text-foreground/60 text-sm mt-1">
+            Manage the dropdown option sets (jurisdictions, document statuses,
+            risk severities, etc.) consumed across the app.
+          </p>
+        </div>
+        <Link to="/config/lookups">
+          <Button size="sm">Manage</Button>
+        </Link>
       </Card>
     </div>
   );

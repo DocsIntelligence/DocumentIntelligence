@@ -1,7 +1,11 @@
 import {
   Badge,
   Button,
-  Chip,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   DataTable,
   type DataTableColumn,
   Spinner,
@@ -378,51 +382,64 @@ export function ReviewQueuePage() {
           types.length > 1 || (batchId && statuses.length > 1) ? (
             <div className="flex flex-wrap items-center gap-2">
               {batchId && statuses.length > 1 && (
-                <>
-                  <Chip
-                    active={!statusFilter}
-                    onClick={() => setStatusFilter(null)}
-                  >
-                    {t('common.all', 'All')}
-                  </Chip>
-                  {statuses.map((s) => (
-                    <Chip
-                      key={s}
-                      active={statusFilter === s}
-                      onClick={() =>
-                        setStatusFilter(statusFilter === s ? null : s)
-                      }
-                    >
-                      {s.replace(/_/g, ' ')}
-                    </Chip>
-                  ))}
-                  {types.length > 1 && (
-                    <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-                  )}
-                </>
+                <Select
+                  value={statusFilter ?? '__any__'}
+                  onValueChange={(v) =>
+                    setStatusFilter(v === '__any__' ? null : v)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-44 text-sm">
+                    <SelectValue
+                      placeholder={t(
+                        'intelligence.queue.filter.allStatuses',
+                        'All statuses',
+                      )}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">
+                      {t(
+                        'intelligence.queue.filter.allStatuses',
+                        'All statuses',
+                      )}
+                    </SelectItem>
+                    {statuses.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               {types.length > 1 && (
-                <>
-                  {!batchId && (
-                    <Chip
-                      active={!typeFilter}
-                      onClick={() => setTypeFilter(null)}
-                    >
-                      {t('common.all', 'All')}
-                    </Chip>
-                  )}
-                  {types.map((ty) => (
-                    <Chip
-                      key={ty}
-                      active={typeFilter === ty}
-                      onClick={() =>
-                        setTypeFilter(typeFilter === ty ? null : ty)
-                      }
-                    >
-                      {ty}
-                    </Chip>
-                  ))}
-                </>
+                <Select
+                  value={typeFilter ?? '__any__'}
+                  onValueChange={(v) =>
+                    setTypeFilter(v === '__any__' ? null : v)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-48 text-sm">
+                    <SelectValue
+                      placeholder={t(
+                        'intelligence.queue.filter.allTypes',
+                        'All types',
+                      )}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">
+                      {t(
+                        'intelligence.queue.filter.allTypes',
+                        'All types',
+                      )}
+                    </SelectItem>
+                    {types.map((ty) => (
+                      <SelectItem key={ty} value={ty}>
+                        {ty}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           ) : undefined

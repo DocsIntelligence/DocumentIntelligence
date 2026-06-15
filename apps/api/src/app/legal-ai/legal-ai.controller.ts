@@ -120,13 +120,21 @@ export class LegalAiController {
     @Query('pageSize') pageSize?: string,
     @Query('sort') sort?: string,
     @Query('dir') dir?: string,
+    @Query('active') active?: string,
+    @Query('public') isPublic?: string,
+    @Query('act') act?: string,
   ) {
+    const triState = (v: string | undefined) =>
+      v === 'true' ? true : v === 'false' ? false : undefined;
     return this.refs.listAdmin({
       q: q || undefined,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
       sort: (sort as 'id' | 'title' | 'act') ?? undefined,
       dir: (dir as 'asc' | 'desc') ?? undefined,
+      active: triState(active),
+      isPublic: triState(isPublic),
+      act: act || undefined,
     });
   }
 

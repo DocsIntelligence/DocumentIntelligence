@@ -1,6 +1,5 @@
 import {
   Button,
-  Chip,
   DataTable,
   type DataTableColumn,
   Dialog,
@@ -18,7 +17,7 @@ import {
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { useCreateGroup, useDeleteGroup, useGroupsPage } from './queries';
@@ -29,7 +28,6 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 export function GroupsPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const confirm = useConfirm();
   const del = useDeleteGroup();
 
@@ -89,15 +87,11 @@ export function GroupsPage() {
       header: t('groups.colName', 'Name'),
       sortValue: (g) => g.name.toLowerCase(),
       cell: (g) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/groups/${g.id}`)}
-          className="group block min-w-0 text-left"
-        >
+        <Link to={`/groups/${g.id}`} className="group block min-w-0">
           <span className="block truncate font-medium text-foreground group-hover:text-primary">
             {kindIcon(g.kind)} {g.name}
           </span>
-        </button>
+        </Link>
       ),
     },
     {
@@ -134,16 +128,10 @@ export function GroupsPage() {
       key: 'actions',
       header: '',
       align: 'right',
-      width: 'w-20',
+      width: 'w-12',
       pinned: true,
       cell: (g) => (
         <div className="flex items-center justify-end gap-0.5">
-          <IconButton
-            title={t('common.open', 'Open')}
-            onClick={() => navigate(`/groups/${g.id}`)}
-          >
-            <OpenGlyph />
-          </IconButton>
           <IconButton
             danger
             title={t('common.delete', 'Delete')}
@@ -201,20 +189,28 @@ export function GroupsPage() {
         }}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
-            <Chip active={!kindFilter} onClick={() => setKindFilter(null)}>
-              {t('common.all', 'All')}
-            </Chip>
-            {kindOptions.map((opt) => (
-              <Chip
-                key={opt.value}
-                active={kindFilter === opt.value}
-                onClick={() =>
-                  setKindFilter(kindFilter === opt.value ? null : opt.value)
-                }
-              >
-                {opt.label}
-              </Chip>
-            ))}
+            <Select
+              value={kindFilter ?? '__any__'}
+              onValueChange={(v) =>
+                setKindFilter(v === '__any__' ? null : v)
+              }
+            >
+              <SelectTrigger className="h-9 w-44 text-sm">
+                <SelectValue
+                  placeholder={t('groups.filter.allKinds', 'All kinds')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__any__">
+                  {t('groups.filter.allKinds', 'All kinds')}
+                </SelectItem>
+                {kindOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         }
         empty={t('groups.noMatch', 'No groups match these filters.')}
@@ -346,24 +342,6 @@ function IconButton({
     >
       {children}
     </button>
-  );
-}
-
-function OpenGlyph() {
-  return (
-    <svg
-      className="size-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
   );
 }
 

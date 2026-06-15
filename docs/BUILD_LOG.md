@@ -1999,3 +1999,28 @@ Two follow-ups: (1) the multi-select toggle was only in the standalone /document
 - The dialog assumes the caller passes the doc's CURRENT `group` snapshot. If the row is stale (someone else moved the doc just before the dialog opens), the preview can lie. The server is the source of truth and still enforces the invariant, so the worst-case is a confusing toast — never bad data.
 - There's no `move` endpoint as such — moves go through `addDocuments` with `overwrite=true`. Equivalent in result; if a future flow needs "move WITHOUT picking a target" (i.e. just remove + reassign at once), it'd need a different shape.
 - The "already in another group" hint in the bulk dialog shows the *count*, not the actual current group names. Could be added if the friction is real, but for a small selection the user usually knows.
+
+### 2026-06-15 — UI consistency pass: filter Selects + row-action collapse + audit doc
+
+Goal: every list page hits the canonical pattern (DataTable from `@org/ui`,
+server-driven paging/sort/search, `Select` filters over chips, ≤ 3 inline row
+icons + `⋯` for the rest, linkable name cell, `/foo/new` + `/foo/:id/edit`
+routes). One-off pass — no standing audit doc.
+
+What landed:
+
+1. **Admin "Config" route rename** — `/admin/intelligence/lookups`, `/admin/legal-reference`, and friends now live under `/config/*` (per the tidy-sidebar memory). Legacy `AdminLookups` deleted; `LookupManager` is the survivor.
+2. **GroupsPage** — kind chips → `Select`; name cell is now a `Link` to detail (no more reliance on the row's Open icon).
+3. **BatchesPage** — status chips → `Select` in the DataTable toolbar slot.
+4. **ReviewQueuePage** — type/status chips → `Select` (still fixed 500-row page on purpose: the stepper needs the full set; annotated in the audit).
+5. **VaultPage** — 5 inline icons collapsed to 3 + `⋯` (`DropdownMenu`) so rows match the rest of the app's density.
+6. **LegalReferenceManager** — three `Select` filters in the toolbar (Active / Public / Code) wired to the existing `active` / `public` / `act` query params; the Code dropdown is populated from `facets.acts` returned by `listAdmin`, so it tracks the visible corpus (matches the same pattern as the server-faceted toolbar elsewhere). Added a `Clear all` ghost button when any filter is non-default. Marked ✅ Keep in the audit table; removed from the prioritised fix list.
+7. **`AdminSettingsPage` crash fix** — `/config/settings` was hitting the wrong path (the controller is mounted at `admin/settings`, not `config/settings`), so a 404 JSON envelope flowed into `setRows(...)` and the next render blew up on `rows.map`. Repointed all three callsites (GET/PATCH/DELETE) to `${apiUrl}/admin/settings`, and added an `Array.isArray` guard so any future shape drift renders an empty state instead of crashing the page.
+
+**Verification**: `pnpm nx typecheck app` still shows four pre-existing errors in DocumentsList / GroupIntelligencePanel / DocumentInsights / data-table.tsx — none in any file touched by this pass. Not runtime-tested for the LegalReferenceManager filter combo or the settings-page fix; both want a quick browser pass before claiming green.
+
+**Open follow-ups** (still on the audit's prioritised list):
+- GroupsPage name cell → `Link` (done now).
+- PipelineManager / DocTypesPage — move toolbar toggles into the DataTable `toolbar` slot + server-paginate before the catalog grows past ~50.
+- Extract the `DocumentsToolbar` (Select + active-filter pills) into a shared util once a second list wants exactly the same shape — not pre-extracted today.
+- Investigate / clean up the four pre-existing typecheck errors before they start drifting more files (`Button` variant union no longer admits `'default'`; `DocumentInsights` calls `useDocumentInsights()` with zero args; `data-table.tsx` `pinned: 'right' | 'left'` widened beyond the prop type).

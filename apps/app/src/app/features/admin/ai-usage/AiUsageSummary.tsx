@@ -73,7 +73,7 @@ export function AiUsageSummary({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API_BASE_URL}/admin/ai-usage/by-${scope.kind}/${scope.id}`, {
+    fetch(`${API_BASE_URL}/config/ai-usage/by-${scope.kind}/${scope.id}`, {
       credentials: 'include',
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -122,7 +122,7 @@ export function AiUsageSummary({
           {title ?? t('aiUsage.miniTitle', 'AI usage')}
         </h3>
         <Link
-          to={`/admin/ai-usage?${scope.kind}=${scope.id}`}
+          to={`/config/ai-usage?${scope.kind}=${scope.id}`}
           className="text-xs text-primary hover:underline"
         >
           {t('aiUsage.viewAll', 'View all →')}

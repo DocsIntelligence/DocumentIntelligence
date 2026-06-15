@@ -161,11 +161,11 @@ export function PipelineManager() {
   const setActive = useSetPipelineActive();
   const purge = usePurgePipeline();
 
-  const startCreate = () => navigate('/admin/intelligence/pipelines/new');
+  const startCreate = () => navigate('/config/pipelines/new');
   const startEdit = (key: string) =>
-    navigate(`/admin/intelligence/pipelines/${encodeURIComponent(key)}/edit`);
+    navigate(`/config/pipelines/${encodeURIComponent(key)}/edit`);
   const startClone = (key: string) =>
-    navigate(`/admin/intelligence/pipelines/${encodeURIComponent(key)}/clone`);
+    navigate(`/config/pipelines/${encodeURIComponent(key)}/clone`);
 
   const onDelete = async (key: string) => {
     const ok = await confirm({

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   fetchMeThunk,
   selectAuthStatus,
@@ -138,108 +138,103 @@ export function App() {
         <Route path="/batches/:id" element={<BatchDetailPage />} />
         <Route path="/review-queue" element={<ReviewQueuePage />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/ai-usage" element={<AiUsagePage />} />
-        <Route path="/admin/settings" element={<AdminSettingsPage />} />
+
+        {/*
+         * Config (app-wide configuration) — was split between /admin/* and
+         * /admin/intelligence/*. Everything now lives under a flat /config/*
+         * namespace. Legacy /admin/* paths redirect via the wildcard below.
+         */}
+        <Route path="/config" element={<AdminDashboard />} />
+        <Route path="/config/ai-usage" element={<AiUsagePage />} />
+        <Route path="/config/settings" element={<AdminSettingsPage />} />
         <Route
-          path="/admin/legal-reference"
+          path="/config/legal-reference"
           element={<AdminLegalReferencePage />}
         />
         <Route
-          path="/admin/legal-reference/new"
+          path="/config/legal-reference/new"
           element={<NewCitationPage />}
         />
         <Route
-          path="/admin/legal-reference/:id/edit"
+          path="/config/legal-reference/:id/edit"
           element={<EditCitationPage />}
         />
         <Route
-          path="/admin/legal-reference/:id/clone"
+          path="/config/legal-reference/:id/clone"
           element={<CloneCitationPage />}
         />
+        <Route path="/config/document-types" element={<DocTypesPage />} />
         <Route
-          path="/admin/intelligence"
-          element={<Navigate to="/admin/intelligence/types" replace />}
-        />
-        <Route path="/admin/intelligence/types" element={<DocTypesPage />} />
-        <Route
-          path="/admin/intelligence/types/new"
+          path="/config/document-types/new"
           element={<NewDocTypePage />}
         />
         <Route
-          path="/admin/intelligence/types/:schemaKey/edit"
+          path="/config/document-types/:schemaKey/edit"
           element={<EditDocTypePage />}
         />
         <Route
-          path="/admin/intelligence/types/:schemaKey/clone"
+          path="/config/document-types/:schemaKey/clone"
           element={<CloneDocTypePage />}
         />
         <Route
-          path="/admin/intelligence/types/:schemaKey/mapping"
+          path="/config/document-types/:schemaKey/mapping"
           element={<FieldMappingPage />}
         />
+        <Route path="/config/pipelines" element={<PipelinesPage />} />
+        <Route path="/config/pipelines/new" element={<NewPipelinePage />} />
         <Route
-          path="/admin/intelligence/pipelines"
-          element={<PipelinesPage />}
-        />
-        <Route
-          path="/admin/intelligence/pipelines/new"
-          element={<NewPipelinePage />}
-        />
-        <Route
-          path="/admin/intelligence/pipelines/:pipelineKey/edit"
+          path="/config/pipelines/:pipelineKey/edit"
           element={<EditPipelinePage />}
         />
         <Route
-          path="/admin/intelligence/pipelines/:pipelineKey/clone"
+          path="/config/pipelines/:pipelineKey/clone"
           element={<ClonePipelinePage />}
         />
-        <Route path="/admin/intelligence/lookups" element={<LookupsPage />} />
+        <Route path="/config/lookups" element={<LookupsPage />} />
         <Route
-          path="/admin/intelligence/lookups/new"
+          path="/config/lookups/new"
           element={<NewLookupGroupPage />}
         />
         <Route
-          path="/admin/intelligence/lookups/:groupId"
+          path="/config/lookups/:groupId"
           element={<EditLookupGroupPage />}
         />
+        <Route path="/config/search" element={<SearchConfigPage />} />
+        <Route path="/config/vault" element={<VaultConfigPage />} />
         <Route
-          path="/admin/intelligence/search"
-          element={<SearchConfigPage />}
-        />
-        <Route path="/admin/intelligence/vault" element={<VaultConfigPage />} />
-        <Route
-          path="/admin/intelligence/vault/entity-kinds/new"
+          path="/config/vault/entity-kinds/new"
           element={<NewVaultEntityKindPage />}
         />
         <Route
-          path="/admin/intelligence/vault/entity-kinds/:kindId/edit"
+          path="/config/vault/entity-kinds/:kindId/edit"
           element={<EditVaultEntityKindPage />}
         />
+        <Route path="/config/vault/fields" element={<VaultFieldsPage />} />
         <Route
-          path="/admin/intelligence/vault/fields"
-          element={<VaultFieldsPage />}
-        />
-        <Route
-          path="/admin/intelligence/vault/fields/new"
+          path="/config/vault/fields/new"
           element={<NewVaultFieldPage />}
         />
         <Route
-          path="/admin/intelligence/vault/fields/:fieldId/edit"
+          path="/config/vault/fields/:fieldId/edit"
           element={<EditVaultFieldPage />}
         />
         <Route
-          path="/admin/intelligence/vault/doc-kinds"
+          path="/config/vault/doc-kinds"
           element={<VaultDocKindsPage />}
         />
         <Route
-          path="/admin/intelligence/vault/doc-kinds/new"
+          path="/config/vault/doc-kinds/new"
           element={<NewVaultDocKindPage />}
         />
         <Route
-          path="/admin/intelligence/vault/doc-kinds/:kindId/edit"
+          path="/config/vault/doc-kinds/:kindId/edit"
           element={<EditVaultDocKindPage />}
         />
+
+        {/* Back-compat: redirect any /admin/* bookmark to its /config/*
+         *  equivalent. The "intelligence" middle segment is dropped, and the
+         *  former "intelligence/types" becomes "document-types". */}
+        <Route path="/admin/*" element={<AdminLegacyRedirect />} />
       </Route>
 
       {/* Editors run full-bleed (no app shell) for max working area. */}
@@ -274,3 +269,41 @@ export function App() {
 }
 
 export default App;
+
+/**
+ * Map any /admin/* path to its /config/* equivalent. Handles bookmarks from
+ * the previous route layout where intelligence-flavoured config lived under
+ * /admin/intelligence/* and the rest under /admin/*. Pure derivation — no
+ * server roundtrip; falls back to /config (the dashboard) for unknown shapes.
+ */
+function AdminLegacyRedirect() {
+  const loc = useLocation();
+  const target = mapAdminToConfig(loc.pathname) + loc.search + loc.hash;
+  return <Navigate to={target} replace />;
+}
+
+function mapAdminToConfig(pathname: string): string {
+  // Strip leading "/admin", then map the known sub-prefixes. Order matters —
+  // longer prefixes first so we never partially match.
+  let rest = pathname.replace(/^\/admin/, '');
+  if (rest === '' || rest === '/') return '/config';
+
+  const mappings: Array<[RegExp, string]> = [
+    [/^\/intelligence\/types(\b|$)/, '/document-types'],
+    [/^\/intelligence\/pipelines(\b|$)/, '/pipelines'],
+    [/^\/intelligence\/lookups(\b|$)/, '/lookups'],
+    [/^\/intelligence\/search(\b|$)/, '/search'],
+    [/^\/intelligence\/vault(\b|$)/, '/vault'],
+    [/^\/intelligence(\b|$)/, '/document-types'], // bare /admin/intelligence
+    [/^\/legal-reference(\b|$)/, '/legal-reference'],
+    [/^\/ai-usage(\b|$)/, '/ai-usage'],
+    [/^\/settings(\b|$)/, '/settings'],
+  ];
+  for (const [pattern, replacement] of mappings) {
+    if (pattern.test(rest)) {
+      rest = rest.replace(pattern, replacement);
+      return '/config' + rest;
+    }
+  }
+  return '/config';
+}

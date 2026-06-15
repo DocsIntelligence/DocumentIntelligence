@@ -42,7 +42,7 @@ import { usePipeline, useSchema } from './queries';
  * document types + extraction fields, compose processing pipelines, and manage
  * lookups.
  *
- * Each concern is its own routed page (/admin/intelligence/{types,pipelines,
+ * Each concern is its own routed page (/config/{types,pipelines,
  * lookups}) reached from the sidebar — no in-page tab strip. Each page renders
  * its own titled shell.
  *
@@ -129,7 +129,7 @@ export function SearchConfigPage() {
   );
 }
 
-/** `/admin/intelligence/vault` — Entity-kinds tab (the default landing). */
+/** `/config/vault` — Entity-kinds tab (the default landing). */
 export function VaultConfigPage() {
   const { t } = useTranslation();
   return (
@@ -181,7 +181,7 @@ export function FieldMappingPage() {
   const navigate = useNavigate();
   const { schemaKey } = useParams<{ schemaKey: string }>();
   if (!schemaKey) {
-    navigate('/admin/intelligence/types', { replace: true });
+    navigate('/config/document-types', { replace: true });
     return null;
   }
   return (
@@ -194,7 +194,7 @@ export function FieldMappingPage() {
     >
       <FieldMapEditor
         schemaKey={schemaKey}
-        onClose={() => navigate('/admin/intelligence/types')}
+        onClose={() => navigate('/config/document-types')}
       />
     </ConfigShell>
   );
@@ -204,7 +204,7 @@ export function FieldMappingPage() {
 export function NewDocTypePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/types');
+  const goBack = () => navigate('/config/document-types');
   return (
     <ConfigShell
       title={t('adminIntel.schema.createTitle', 'New document type')}
@@ -226,11 +226,11 @@ function DocTypeEditOrClonePage({ clone }: { clone: boolean }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { schemaKey } = useParams<{ schemaKey: string }>();
-  const goBack = () => navigate('/admin/intelligence/types');
+  const goBack = () => navigate('/config/document-types');
   const { data: loaded, isLoading } = useSchema(schemaKey ?? null);
 
   if (!schemaKey) {
-    navigate('/admin/intelligence/types', { replace: true });
+    navigate('/config/document-types', { replace: true });
     return null;
   }
 
@@ -277,7 +277,7 @@ export function CloneDocTypePage() {
 export function NewPipelinePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/pipelines');
+  const goBack = () => navigate('/config/pipelines');
   return (
     <ConfigShell
       title={t('adminIntel.pipeline.createTitle', 'New pipeline')}
@@ -295,10 +295,10 @@ function PipelineEditOrClonePage({ clone }: { clone: boolean }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pipelineKey } = useParams<{ pipelineKey: string }>();
-  const goBack = () => navigate('/admin/intelligence/pipelines');
+  const goBack = () => navigate('/config/pipelines');
   const { data: loaded, isLoading } = usePipeline(pipelineKey ?? null);
   if (!pipelineKey) {
-    navigate('/admin/intelligence/pipelines', { replace: true });
+    navigate('/config/pipelines', { replace: true });
     return null;
   }
   const title = clone
@@ -343,7 +343,7 @@ export function ClonePipelinePage() {
 export function NewLookupGroupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/lookups');
+  const goBack = () => navigate('/config/lookups');
   return (
     <ConfigShell
       title={t('adminLookups.newTitle', 'New lookup group')}
@@ -363,7 +363,7 @@ export function NewLookupGroupPage() {
 export function NewVaultEntityKindPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/vault');
+  const goBack = () => navigate('/config/vault');
   return (
     <ConfigShell
       title={t('vaultAdmin.addKindTitle', 'Add entity kind')}
@@ -382,10 +382,10 @@ export function EditVaultEntityKindPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { kindId } = useParams<{ kindId: string }>();
-  const goBack = () => navigate('/admin/intelligence/vault');
+  const goBack = () => navigate('/config/vault');
   const { data: allKinds, isLoading } = useVaultEntityKinds();
   if (!kindId) {
-    navigate('/admin/intelligence/vault', { replace: true });
+    navigate('/config/vault', { replace: true });
     return null;
   }
   const kind = allKinds?.find((k) => k.id === kindId);
@@ -415,7 +415,7 @@ export function EditVaultEntityKindPage() {
 export function NewVaultFieldPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/vault/fields');
+  const goBack = () => navigate('/config/vault/fields');
   return (
     <ConfigShell
       title={t('vaultAdmin.addField', 'Add field')}
@@ -433,10 +433,10 @@ export function EditVaultFieldPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { fieldId } = useParams<{ fieldId: string }>();
-  const goBack = () => navigate('/admin/intelligence/vault/fields');
+  const goBack = () => navigate('/config/vault/fields');
   const { data: all, isLoading } = useVaultFields();
   if (!fieldId) {
-    navigate('/admin/intelligence/vault/fields', { replace: true });
+    navigate('/config/vault/fields', { replace: true });
     return null;
   }
   const field = all?.find((f) => f.id === fieldId);
@@ -466,7 +466,7 @@ export function EditVaultFieldPage() {
 export function NewVaultDocKindPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const goBack = () => navigate('/admin/intelligence/vault');
+  const goBack = () => navigate('/config/vault');
   const { data: allFields } = useVaultFields();
   return (
     <ConfigShell
@@ -489,11 +489,11 @@ export function EditVaultDocKindPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { kindId } = useParams<{ kindId: string }>();
-  const goBack = () => navigate('/admin/intelligence/vault');
+  const goBack = () => navigate('/config/vault');
   const { data: allKinds, isLoading } = useVaultDocKinds();
   const { data: allFields } = useVaultFields();
   if (!kindId) {
-    navigate('/admin/intelligence/vault', { replace: true });
+    navigate('/config/vault', { replace: true });
     return null;
   }
   const kind = allKinds?.find((k) => k.id === kindId);
@@ -528,10 +528,10 @@ export function EditLookupGroupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { groupId } = useParams<{ groupId: string }>();
-  const goBack = () => navigate('/admin/intelligence/lookups');
+  const goBack = () => navigate('/config/lookups');
   const groupQuery = useAdminGroup(groupId ?? null);
   if (!groupId) {
-    navigate('/admin/intelligence/lookups', { replace: true });
+    navigate('/config/lookups', { replace: true });
     return null;
   }
   return (
