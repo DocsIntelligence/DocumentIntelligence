@@ -330,6 +330,113 @@ async function main() {
 
   console.log('✅ Lookups seeded');
 
+  // ─── Vault catalog (entity kinds + global field pool + join) ───────────
+  // Mirrors `VaultConfigService.ensureSeeded()` so a fresh DB has the
+  // catalog ready before the API boots. Idempotent: existing rows are
+  // left alone; new system kinds/fields/links land on re-seed.
+  {
+    const {
+      VAULT_ENTITY_KINDS,
+      VAULT_FIELDS,
+      VAULT_KIND_FIELDS,
+      VAULT_DOC_KINDS,
+    } = await import('../../apps/api/src/app/vault/vault.fields');
+
+    // 1. Entity kinds (system rows; ownerOrgId = null).
+    for (const k of VAULT_ENTITY_KINDS) {
+      const exists = await prisma.vaultEntityKindConfig.findFirst({
+        where: { ownerOrgId: null, key: k.key },
+      });
+      if (exists) continue;
+      await prisma.vaultEntityKindConfig.create({
+        data: {
+          ownerOrgId: null,
+          key: k.key,
+          label: k.label,
+          badgeVariant: k.badgeVariant,
+          sortOrder: k.sortOrder,
+          isSystem: true,
+          isActive: true,
+        },
+      });
+      console.log(`  ✓ Vault: seeded entity kind "${k.key}"`);
+    }
+
+    // 2. Global field pool.
+    for (const f of VAULT_FIELDS) {
+      const exists = await prisma.vaultFieldConfig.findFirst({
+        where: { ownerOrgId: null, key: f.key },
+      });
+      if (exists) continue;
+      await prisma.vaultFieldConfig.create({
+        data: {
+          ownerOrgId: null,
+          key: f.key,
+          label: f.label,
+          type: f.type ?? 'text',
+          group: f.group ?? null,
+          options: f.options ?? [],
+          lookupKey: f.lookupKey ?? null,
+          sensitive: f.sensitive ?? false,
+          revealLast: f.revealLast ?? null,
+          placeholder: f.placeholder ?? null,
+          isActive: true,
+        },
+      });
+    }
+
+    // 3. Kind → field links. Only seed if the kind has zero links — once
+    //    an admin has customised the map, we don't want to clobber it.
+    for (const [kindKey, links] of Object.entries(VAULT_KIND_FIELDS)) {
+      const kind = await prisma.vaultEntityKindConfig.findFirst({
+        where: { ownerOrgId: null, key: kindKey },
+      });
+      if (!kind) continue;
+      const have = await prisma.vaultEntityKindField.count({
+        where: { entityKindId: kind.id },
+      });
+      if (have > 0) continue;
+      for (let i = 0; i < links.length; i++) {
+        const link = links[i];
+        const field = await prisma.vaultFieldConfig.findFirst({
+          where: { ownerOrgId: null, key: link.key },
+        });
+        if (!field) continue;
+        await prisma.vaultEntityKindField.create({
+          data: {
+            entityKindId: kind.id,
+            fieldId: field.id,
+            sortOrder: i,
+            groupOverride: link.group ?? null,
+            isActive: true,
+          },
+        });
+      }
+      console.log(
+        `  ✓ Vault: ${links.length} field link(s) for kind "${kindKey}"`,
+      );
+    }
+
+    // 4. Document kinds (scan-autofill catalog).
+    for (const d of VAULT_DOC_KINDS) {
+      const exists = await prisma.vaultDocKindConfig.findFirst({
+        where: { ownerOrgId: null, kind: d.kind },
+      });
+      if (exists) continue;
+      await prisma.vaultDocKindConfig.create({
+        data: {
+          ownerOrgId: null,
+          kind: d.kind,
+          label: d.label,
+          fills: d.fills,
+          scannable: d.fills.length > 0,
+          sortOrder: VAULT_DOC_KINDS.indexOf(d),
+        },
+      });
+    }
+  }
+  console.log('✅ Vault catalog seeded');
+
   // ─── Document Types & Templates ────────────────────────────────────────
   for (const type of documentTypes) {
     const dt = await prisma.documentType.upsert({

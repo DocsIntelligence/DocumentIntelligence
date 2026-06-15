@@ -1,19 +1,22 @@
 import { z } from 'zod';
 
-export const vaultEntityKinds = [
-  'person',
-  'company',
-  'lawyer',
-  'court',
-  'case',
-  'property',
-  'other',
-] as const;
+/**
+ * `kind` is now a free-form string that resolves against the DB-driven
+ * VaultEntityKindConfig table (system rows seed the 7 defaults — person,
+ * company, lawyer, court, case, property, other — and admins can add
+ * org-specific kinds). Validation is shape-only here; existence is
+ * enforced by the API when creating a VaultEntity.
+ */
+const kindKey = z
+  .string()
+  .min(1, 'Entity kind is required')
+  .max(40)
+  .regex(/^[a-z0-9_]+$/, 'Use lowercase letters, numbers, underscores');
 
 /** Create a vault entity. `fields` is a canonical key→value map (values are
  *  strings; the server encrypts the whole map at rest). */
 export const createVaultEntitySchema = z.object({
-  kind: z.enum(vaultEntityKinds).default('person'),
+  kind: kindKey.default('person'),
   label: z.string().min(1, 'Give this entity a name').max(120, 'Too long'),
   fields: z.record(z.string(), z.string()).default({}),
 });
@@ -27,15 +30,22 @@ export const updateVaultEntitySchema = z.object({
 });
 export type UpdateVaultEntityDto = z.infer<typeof updateVaultEntitySchema>;
 
-// ── Admin: configurable field catalog + doc kinds (docs/10) ─────────────────
+// ── Admin: configurable field catalog + doc kinds + entity kinds (docs/10) ─
 
 export const vaultFieldTypes = [
   'text', 'textarea', 'date', 'number', 'tel', 'email', 'select', 'lookup',
 ] as const;
 
+export const vaultBadgeVariants = [
+  'primary', 'secondary', 'info', 'warning', 'success',
+] as const;
+
+/**
+ * Global field row. Belongs to no specific entity kind — many-to-many
+ * linked via VaultEntityKindField. Key must stay stable (autofill keys to it).
+ */
 export const vaultFieldConfigSchema = z.object({
   id: z.string().optional(),
-  entityKind: z.enum(vaultEntityKinds),
   key: z
     .string()
     .min(1, 'Key is required')
@@ -49,10 +59,35 @@ export const vaultFieldConfigSchema = z.object({
   sensitive: z.boolean().default(false),
   revealLast: z.number().int().min(0).max(8).nullish(),
   placeholder: z.string().max(120).nullish(),
-  sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });
 export type VaultFieldConfigDto = z.infer<typeof vaultFieldConfigSchema>;
+
+/** Entity-kind row. */
+export const vaultEntityKindConfigSchema = z.object({
+  id: z.string().optional(),
+  key: kindKey,
+  label: z.string().min(1, 'Label is required').max(120),
+  badgeVariant: z.enum(vaultBadgeVariants).default('secondary'),
+  sortOrder: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+});
+export type VaultEntityKindConfigDto = z.infer<typeof vaultEntityKindConfigSchema>;
+
+/** Replace-set body for kind → field links. Order in the array IS the
+ *  display order — server assigns sortOrder by index. */
+export const vaultEntityKindFieldsSchema = z.object({
+  links: z
+    .array(
+      z.object({
+        fieldId: z.string().min(1),
+        groupOverride: z.string().max(60).nullish(),
+        isActive: z.boolean().default(true),
+      }),
+    )
+    .default([]),
+});
+export type VaultEntityKindFieldsDto = z.infer<typeof vaultEntityKindFieldsSchema>;
 
 export const vaultDocKindConfigSchema = z.object({
   id: z.string().optional(),

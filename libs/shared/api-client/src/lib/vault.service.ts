@@ -1,13 +1,29 @@
 import type { HttpClient } from './http';
 
-export type VaultEntityKind =
-  | 'person'
-  | 'company'
-  | 'lawyer'
-  | 'court'
-  | 'case'
-  | 'property'
-  | 'other';
+/**
+ * Entity kind keys are stored as free-form strings now — the DB-driven
+ * VaultEntityKindConfig table seeds the 7 defaults below and admins can
+ * add more. The literal union below is kept for documentation only; use
+ * `KNOWN_VAULT_KINDS` for the static fallback list.
+ */
+export type VaultEntityKind = string;
+
+export const KNOWN_VAULT_KINDS = [
+  'person',
+  'company',
+  'lawyer',
+  'court',
+  'case',
+  'property',
+  'other',
+] as const;
+
+export type VaultBadgeVariant =
+  | 'primary'
+  | 'secondary'
+  | 'info'
+  | 'warning'
+  | 'success';
 
 export type VaultFieldType =
   | 'text'
@@ -94,6 +110,11 @@ export interface UpdateVaultEntityPayload {
 }
 
 export const createVaultService = (http: HttpClient) => ({
+  /** Active entity kinds — drives the create-entity picker. */
+  entityKinds: () =>
+    http
+      .get<VaultEntityKindConfig[]>('/vault/entity-kinds')
+      .then((r) => r.data),
   list: (query?: ListVaultEntitiesQuery) =>
     http
       .get<VaultEntityListResult>('/vault/entities', { params: query })
@@ -155,7 +176,6 @@ export const createVaultService = (http: HttpClient) => ({
 export interface VaultFieldConfig {
   id: string;
   ownerOrgId: string | null;
-  entityKind: VaultEntityKind;
   key: string;
   label: string;
   type: VaultFieldType;
@@ -165,7 +185,6 @@ export interface VaultFieldConfig {
   sensitive: boolean;
   revealLast: number | null;
   placeholder: string | null;
-  sortOrder: number;
   isActive: boolean;
 }
 
@@ -180,15 +199,82 @@ export interface VaultDocKindConfig {
   isActive: boolean;
 }
 
+export interface VaultEntityKindConfig {
+  id: string;
+  ownerOrgId: string | null;
+  key: string;
+  label: string;
+  badgeVariant: VaultBadgeVariant;
+  sortOrder: number;
+  isSystem: boolean;
+  isActive: boolean;
+}
+
+/** A row in the kind ↔ field join table, hydrated with the joined field. */
+export interface VaultEntityKindFieldLink {
+  id: string;
+  entityKindId: string;
+  fieldId: string;
+  sortOrder: number;
+  groupOverride: string | null;
+  isActive: boolean;
+  field: VaultFieldConfig;
+}
+
 export type VaultFieldConfigInput = Omit<VaultFieldConfig, 'id' | 'ownerOrgId'> & {
   id?: string;
 };
 export type VaultDocKindConfigInput = Omit<VaultDocKindConfig, 'id' | 'ownerOrgId'> & {
   id?: string;
 };
+export type VaultEntityKindConfigInput = Omit<
+  VaultEntityKindConfig,
+  'id' | 'ownerOrgId' | 'isSystem'
+> & {
+  id?: string;
+};
+
+/** Body for PUT /admin/vault/entity-kinds/:id/fields — replaces the link set. */
+export interface VaultEntityKindFieldsBody {
+  links: Array<{
+    fieldId: string;
+    groupOverride?: string | null;
+    isActive?: boolean;
+  }>;
+}
 
 /** Admin config for the vault catalog (system defaults; pass orgId for overrides). */
 export const createVaultAdminService = (http: HttpClient) => ({
+  // ── Entity kinds ─────────────────────────────────────────────────────
+  listEntityKinds: (orgId?: string) =>
+    http
+      .get<VaultEntityKindConfig[]>('/admin/vault/entity-kinds', {
+        params: orgId ? { orgId } : undefined,
+      })
+      .then((r) => r.data),
+  upsertEntityKind: (body: VaultEntityKindConfigInput, orgId?: string) =>
+    http
+      .post<VaultEntityKindConfig>('/admin/vault/entity-kinds', body, {
+        params: orgId ? { orgId } : undefined,
+      })
+      .then((r) => r.data),
+  deleteEntityKind: (id: string) =>
+    http
+      .delete<{ id: string }>(`/admin/vault/entity-kinds/${id}`)
+      .then((r) => r.data),
+  listEntityKindFields: (id: string) =>
+    http
+      .get<VaultEntityKindFieldLink[]>(`/admin/vault/entity-kinds/${id}/fields`)
+      .then((r) => r.data),
+  setEntityKindFields: (id: string, body: VaultEntityKindFieldsBody) =>
+    http
+      .put<VaultEntityKindFieldLink[]>(
+        `/admin/vault/entity-kinds/${id}/fields`,
+        body,
+      )
+      .then((r) => r.data),
+
+  // ── Fields ───────────────────────────────────────────────────────────
   listFields: (orgId?: string) =>
     http
       .get<VaultFieldConfig[]>('/admin/vault/fields', {
@@ -203,6 +289,8 @@ export const createVaultAdminService = (http: HttpClient) => ({
       .then((r) => r.data),
   deleteField: (id: string) =>
     http.delete<{ id: string }>(`/admin/vault/fields/${id}`).then((r) => r.data),
+
+  // ── Document kinds ───────────────────────────────────────────────────
   listDocKinds: (orgId?: string) =>
     http
       .get<VaultDocKindConfig[]>('/admin/vault/doc-kinds', {

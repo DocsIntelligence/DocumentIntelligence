@@ -1,4 +1,3 @@
-import type { VaultEntityKind } from '@org/api-client';
 import {
   Button,
   Card,
@@ -14,7 +13,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useCreateVaultEntity } from './queries';
+import { useCreateVaultEntity, useVaultEntityKindsActive } from './queries';
 import { KIND_LABEL, KIND_ORDER } from './kinds';
 
 /**
@@ -23,19 +22,33 @@ import { KIND_LABEL, KIND_ORDER } from './kinds';
  * schemas, pipelines, lookups): list → "+ New" routes to a dedicated
  * page, save routes back to list (or detail). Pre-fills `kind` from a
  * `?kind=` query param when the user clicked a kind-specific shortcut.
+ *
+ * The kind picker is DB-driven via `useVaultEntityKindsActive()` so any
+ * admin-added kind shows up here without a code change. While that
+ * request is in flight (or if it fails), the static system list from
+ * `KIND_ORDER` is used as a fallback so the user can still create.
  */
 export function VaultNewEntityPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const create = useCreateVaultEntity();
-  const initialKind = (params.get('kind') ?? 'person') as VaultEntityKind;
-  const [kind, setKind] = useState<VaultEntityKind>(
-    KIND_ORDER.includes(initialKind) ? initialKind : 'person',
+  const dynamicKinds = useVaultEntityKindsActive();
+
+  // Prefer the DB list, fall back to the static one until the query lands.
+  const kindOptions =
+    dynamicKinds.data && dynamicKinds.data.length > 0
+      ? dynamicKinds.data.map((k) => ({ value: k.key, label: k.label }))
+      : KIND_ORDER.map((k) => ({ value: k, label: KIND_LABEL[k] ?? k }));
+
+  const initialKind = params.get('kind') ?? '';
+  const fallback = kindOptions[0]?.value ?? 'person';
+  const [kind, setKind] = useState<string>(
+    kindOptions.find((k) => k.value === initialKind)?.value ?? fallback,
   );
   const [label, setLabel] = useState('');
 
-  const canSave = !!label.trim() && !create.isPending;
+  const canSave = !!label.trim() && !!kind && !create.isPending;
 
   const submit = async () => {
     if (!canSave) return;
@@ -44,8 +57,6 @@ export function VaultNewEntityPage() {
       label: label.trim(),
       fields: {},
     });
-    // Land on the detail page so the user immediately sees their entity
-    // — they can hit Edit from there to fill in the fields.
     navigate(`/vault/${entity.id}`);
   };
 
@@ -70,17 +81,14 @@ export function VaultNewEntityPage() {
 
       <Card className="space-y-4 p-5">
         <FormField label={t('vault.kind', 'Type')}>
-          <Select
-            value={kind}
-            onValueChange={(v) => setKind(v as VaultEntityKind)}
-          >
+          <Select value={kind} onValueChange={setKind}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {KIND_ORDER.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {KIND_LABEL[k]}
+              {kindOptions.map((k) => (
+                <SelectItem key={k.value} value={k.value}>
+                  {k.label}
                 </SelectItem>
               ))}
             </SelectContent>

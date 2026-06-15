@@ -1169,20 +1169,47 @@ model VaultDocument {
   @@index([entityId])
 }
 
-/// Admin-configurable vault field catalog (docs/10): the canonical fields shown
-/// per entity kind. `ownerOrgId = null` is the system default (seeded from code
-/// on first use); org rows override it. `key` stays a stable identifier so
-/// document autofill keeps working. Process-as-data, like Pipeline/SearchConfig.
+/// Admin-configurable vault entity kind catalog (docs/10). A kind is the
+/// "person / company / lawyer / court / case / property / other" notion
+/// — what the user is storing. Fields are global and many-to-many linked
+/// to kinds via VaultEntityKindField so e.g. `aadhaar_number` is one row
+/// reused by Person + Lawyer + … instead of duplicated per kind.
+model VaultEntityKindConfig {
+  id           String   @id @default(cuid())
+  ownerOrgId   String?
+  /// Stable key (e.g. 'person', 'lawyer'). Lowercase, [a-z0-9_].
+  key          String
+  label        String
+  /// One of: 'primary' | 'secondary' | 'info' | 'warning' | 'success'.
+  /// Drives the row/detail badge colour in the UI.
+  badgeVariant String   @default("secondary")
+  sortOrder    Int      @default(0)
+  /// System kinds (seeded from code) can be disabled but not deleted.
+  isSystem     Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  fieldLinks VaultEntityKindField[]
+
+  @@unique([ownerOrgId, key])
+  @@index([ownerOrgId, sortOrder])
+}
+
+/// Admin-configurable vault field catalog (docs/10): the global pool of
+/// canonical fields. A field row exists once and is mapped to one or more
+/// entity kinds via VaultEntityKindField — so `pan` is a single row used
+/// by Person + Company + Lawyer + Other (no duplication). `key` stays a
+/// stable identifier so document autofill keeps working.
 model VaultFieldConfig {
   id          String   @id @default(cuid())
   ownerOrgId  String?
-  /// 'person' | 'company' | 'lawyer' | 'court' | 'case' | 'property' | 'other'
-  entityKind  String
   /// Stable canonical key (e.g. 'aadhaar_number'). Don't rename — autofill maps to it.
   key         String
   label       String
-  /// 'text'|'textarea'|'date'|'number'|'tel'|'email'|'select'
+  /// 'text'|'textarea'|'date'|'number'|'tel'|'email'|'select'|'lookup'
   type        String   @default("text")
+  /// Default group label; per-kind overrides live on VaultEntityKindField.
   group       String?
   options     String[] @default([])
   /// When type='lookup', the LookupGroup key to pull options from (e.g. 'country').
@@ -1190,12 +1217,34 @@ model VaultFieldConfig {
   sensitive   Boolean  @default(false)
   revealLast  Int?
   placeholder String?
-  sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([ownerOrgId, entityKind, sortOrder])
+  kindLinks VaultEntityKindField[]
+
+  @@unique([ownerOrgId, key])
+  @@index([ownerOrgId])
+}
+
+/// Many-to-many join: which fields each entity kind exposes, in what order,
+/// optionally re-grouped per kind. `groupOverride` lets one canonical field
+/// (e.g. `pan`) sit under "Identity" for a person and "Practice" for a lawyer
+/// without forking the field row.
+model VaultEntityKindField {
+  id            String   @id @default(cuid())
+  entityKindId  String
+  fieldId       String
+  sortOrder     Int      @default(0)
+  groupOverride String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  entityKind VaultEntityKindConfig @relation(fields: [entityKindId], references: [id], onDelete: Cascade)
+  field      VaultFieldConfig      @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([entityKindId, fieldId])
+  @@index([entityKindId, sortOrder])
 }
 
 /// Admin-configurable document kinds (Aadhaar/PAN/…) + which canonical fields a

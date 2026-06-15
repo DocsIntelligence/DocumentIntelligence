@@ -18,7 +18,19 @@ export const vaultKeys = {
   page: (params: ListVaultEntitiesQuery) =>
     ['vault', 'entities', params] as const,
   entity: (id: string) => ['vault', 'entity', id] as const,
+  entityKinds: ['vault', 'entity-kinds'] as const,
 };
+
+/** Active entity kinds the user can create — DB-driven, falls back to
+ *  the static KNOWN_VAULT_KINDS on query failure. */
+export function useVaultEntityKindsActive() {
+  const svc = useVaultService();
+  return useQuery({
+    queryKey: vaultKeys.entityKinds,
+    queryFn: () => svc.entityKinds(),
+    staleTime: 60_000,
+  });
+}
 
 export function useVaultEntities(params: ListVaultEntitiesQuery = {}) {
   const svc = useVaultService();

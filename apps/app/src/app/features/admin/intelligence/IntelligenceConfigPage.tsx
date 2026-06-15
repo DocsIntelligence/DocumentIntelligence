@@ -10,13 +10,18 @@ import {
 import { useAdminGroup } from '../lookups/queries';
 import { SearchSettingsManager } from '../search/SearchSettingsManager';
 import {
-  VAULT_KINDS,
+  EntityKindsManager,
   VaultDocKindForm,
   VaultDocKindsManager,
+  VaultEntityKindForm,
   VaultFieldForm,
   VaultFieldsManager,
 } from '../vault/VaultConfigManager';
-import { useVaultDocKinds, useVaultFields } from '../vault/queries';
+import {
+  useVaultDocKinds,
+  useVaultEntityKinds,
+  useVaultFields,
+} from '../vault/queries';
 import { FieldMapEditor } from './FieldMapEditor';
 import {
   blankPipeline,
@@ -124,14 +129,30 @@ export function SearchConfigPage() {
   );
 }
 
+/** `/admin/intelligence/vault` — Entity-kinds tab (the default landing). */
 export function VaultConfigPage() {
   const { t } = useTranslation();
   return (
     <ConfigShell
       title={t('vaultAdmin.title', 'Vault catalog')}
       subtitle={t(
-        'vaultAdmin.subtitle',
-        'Configure the entity fields and document kinds the Document Vault offers — no code. Canonical keys stay stable so autofill keeps working.',
+        'vaultAdmin.entityKindsSubtitle',
+        'Pick which entity kinds your Vault supports (Person, Lawyer, Court …) and which fields each one uses. Fields live in a shared global pool — Aadhaar is one row reused by every kind that needs it.',
+      )}
+    >
+      <EntityKindsManager />
+    </ConfigShell>
+  );
+}
+
+export function VaultFieldsPage() {
+  const { t } = useTranslation();
+  return (
+    <ConfigShell
+      title={t('vaultAdmin.title', 'Vault catalog')}
+      subtitle={t(
+        'vaultAdmin.fieldsSubtitle',
+        'The canonical field pool — used by every entity kind via the field map. Stable keys keep document autofill working.',
       )}
     >
       <VaultFieldsManager />
@@ -338,26 +359,72 @@ export function NewLookupGroupPage() {
 
 // ── Vault config (fields + doc kinds) ───────────────────────────────────
 
-export function NewVaultFieldPage() {
+/** Routed create-page for a new entity kind. */
+export function NewVaultEntityKindPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const goBack = () => navigate('/admin/intelligence/vault');
-  // ?kind=<any-supported-kind> (passed by the manager's "Add field" button
-  // so the form pre-selects the kind currently filtered in the list).
-  const kind = ((): (typeof VAULT_KINDS)[number] => {
-    const v = new URLSearchParams(window.location.search).get('kind') ?? '';
-    const allowed = VAULT_KINDS as readonly string[];
-    return allowed.includes(v) ? (v as (typeof VAULT_KINDS)[number]) : 'person';
-  })();
+  return (
+    <ConfigShell
+      title={t('vaultAdmin.addKindTitle', 'Add entity kind')}
+      subtitle={t(
+        'vaultAdmin.addKindSubtitle',
+        'Define a new kind of Vault entity (e.g. "Witness", "Notary"). Once saved you can map fields to it.',
+      )}
+    >
+      <VaultEntityKindForm initial={{ isActive: true }} onClose={goBack} />
+    </ConfigShell>
+  );
+}
+
+/** Routed edit-page for an entity kind — includes the field-map editor. */
+export function EditVaultEntityKindPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { kindId } = useParams<{ kindId: string }>();
+  const goBack = () => navigate('/admin/intelligence/vault');
+  const { data: allKinds, isLoading } = useVaultEntityKinds();
+  if (!kindId) {
+    navigate('/admin/intelligence/vault', { replace: true });
+    return null;
+  }
+  const kind = allKinds?.find((k) => k.id === kindId);
+  return (
+    <ConfigShell
+      title={t('vaultAdmin.editKindTitle', 'Edit entity kind')}
+      subtitle={t(
+        'vaultAdmin.editKindSubtitle',
+        'Update label, badge colour, and which fields this kind exposes.',
+      )}
+    >
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
+      ) : kind ? (
+        <VaultEntityKindForm initial={kind} onClose={goBack} />
+      ) : (
+        <p className="text-sm text-foreground/60">
+          {t('vaultAdmin.kindNotFound', 'Entity kind not found.')}
+        </p>
+      )}
+    </ConfigShell>
+  );
+}
+
+export function NewVaultFieldPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const goBack = () => navigate('/admin/intelligence/vault/fields');
   return (
     <ConfigShell
       title={t('vaultAdmin.addField', 'Add field')}
       subtitle={t(
         'vaultAdmin.addFieldSubtitle',
-        'Define a new field on a vault entity type (person / company / other).',
+        'Add a new canonical field to the global pool. Any entity kind can then link to it.',
       )}
     >
-      <VaultFieldForm initial={{ entityKind: kind, type: 'text' }} onClose={goBack} />
+      <VaultFieldForm initial={{ type: 'text' }} onClose={goBack} />
     </ConfigShell>
   );
 }
@@ -366,10 +433,10 @@ export function EditVaultFieldPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { fieldId } = useParams<{ fieldId: string }>();
-  const goBack = () => navigate('/admin/intelligence/vault');
+  const goBack = () => navigate('/admin/intelligence/vault/fields');
   const { data: all, isLoading } = useVaultFields();
   if (!fieldId) {
-    navigate('/admin/intelligence/vault', { replace: true });
+    navigate('/admin/intelligence/vault/fields', { replace: true });
     return null;
   }
   const field = all?.find((f) => f.id === fieldId);

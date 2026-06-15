@@ -31,11 +31,14 @@ import {
   NewLookupGroupPage,
   NewPipelinePage,
   NewVaultDocKindPage,
+  NewVaultEntityKindPage,
+  EditVaultEntityKindPage,
   NewVaultFieldPage,
   PipelinesPage,
   SearchConfigPage,
   VaultConfigPage,
   VaultDocKindsPage,
+  VaultFieldsPage,
 } from './features/admin/intelligence/IntelligenceConfigPage';
 import { AuthCallback } from './features/auth/callback/AuthCallback';
 import { ForgotPassword } from './features/auth/forgot-password/ForgotPassword';
@@ -192,6 +195,18 @@ export function App() {
         <Route
           path="/admin/intelligence/vault"
           element={<VaultConfigPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/entity-kinds/new"
+          element={<NewVaultEntityKindPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/entity-kinds/:kindId/edit"
+          element={<EditVaultEntityKindPage />}
+        />
+        <Route
+          path="/admin/intelligence/vault/fields"
+          element={<VaultFieldsPage />}
         />
         <Route
           path="/admin/intelligence/vault/fields/new"

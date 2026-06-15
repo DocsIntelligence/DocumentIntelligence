@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,13 +17,19 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VaultConfigService } from './vault-config.service';
-import { VaultDocKindConfigDto, VaultFieldConfigDto } from './vault-admin.dto';
+import {
+  VaultDocKindConfigDto,
+  VaultEntityKindConfigDto,
+  VaultEntityKindFieldsDto,
+  VaultFieldConfigDto,
+} from './vault-admin.dto';
 
 /**
- * Admin config for the vault catalog (docs/10): the field catalog per entity
- * kind + the document kinds. `?orgId=` targets an org's overrides; omit for the
- * system defaults. Open to any authenticated user for now (mirrors the other
- * admin surfaces; re-add a RolesGuard to lock it).
+ * Admin config for the vault catalog (docs/10): entity kinds, the global
+ * field pool, the entity-kind → field links, and document kinds. `?orgId=`
+ * targets an org's overrides; omit for the system defaults. Open to any
+ * authenticated user for now (mirrors the other admin surfaces; re-add a
+ * RolesGuard to lock it).
  */
 @ApiTags('vault-admin')
 @Controller('admin/vault')
@@ -31,6 +38,46 @@ import { VaultDocKindConfigDto, VaultFieldConfigDto } from './vault-admin.dto';
 @ApiCookieAuth('access_token')
 export class VaultAdminController {
   constructor(private readonly config: VaultConfigService) {}
+
+  // ── Entity kinds ──────────────────────────────────────────────────────
+
+  @Get('entity-kinds')
+  @ApiOperation({ summary: 'List configured entity kinds (system or ?orgId=)' })
+  listEntityKinds(@Query('orgId') orgId?: string) {
+    return this.config.listEntityKinds(orgId ?? null);
+  }
+
+  @Post('entity-kinds')
+  @ApiOperation({ summary: 'Create or update an entity kind' })
+  upsertEntityKind(
+    @Body() body: VaultEntityKindConfigDto,
+    @Query('orgId') orgId?: string,
+  ) {
+    return this.config.upsertEntityKind(orgId ?? null, body);
+  }
+
+  @Delete('entity-kinds/:id')
+  @ApiOperation({ summary: 'Delete an entity kind (non-system only)' })
+  deleteEntityKind(@Param('id') id: string) {
+    return this.config.deleteEntityKind(id);
+  }
+
+  @Get('entity-kinds/:id/fields')
+  @ApiOperation({ summary: 'List the field links for an entity kind' })
+  listEntityKindFields(@Param('id') id: string) {
+    return this.config.listEntityKindFields(id);
+  }
+
+  @Put('entity-kinds/:id/fields')
+  @ApiOperation({ summary: 'Replace the field-link set for an entity kind' })
+  setEntityKindFields(
+    @Param('id') id: string,
+    @Body() body: VaultEntityKindFieldsDto,
+  ) {
+    return this.config.setEntityKindFields(id, body.links);
+  }
+
+  // ── Field pool ────────────────────────────────────────────────────────
 
   @Get('fields')
   @ApiOperation({ summary: 'List configured vault fields (system or ?orgId=)' })
@@ -49,6 +96,8 @@ export class VaultAdminController {
   deleteField(@Param('id') id: string) {
     return this.config.deleteField(id);
   }
+
+  // ── Document kinds ────────────────────────────────────────────────────
 
   @Get('doc-kinds')
   @ApiOperation({ summary: 'List configured document kinds' })

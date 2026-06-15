@@ -28,6 +28,7 @@ import {
   UpdateVaultEntityDto,
 } from './vault.dto';
 import { VaultService } from './vault.service';
+import { VaultConfigService } from './vault-config.service';
 
 /** Document Vault (docs/10): entities + their documents, encrypted + owner-scoped. */
 @ApiTags('vault')
@@ -36,7 +37,20 @@ import { VaultService } from './vault.service';
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class VaultController {
-  constructor(private readonly vault: VaultService) {}
+  constructor(
+    private readonly vault: VaultService,
+    private readonly config: VaultConfigService,
+  ) {}
+
+  @Get('entity-kinds')
+  @ApiOperation({
+    summary: 'List active entity kinds (drives the create-entity picker)',
+  })
+  entityKinds() {
+    // For now we expose the system rows directly; org-scoped overrides
+    // would resolve here once we surface orgId on the user principal.
+    return this.config.listEntityKindsActive(null);
+  }
 
   @Get('entities')
   @ApiOperation({ summary: 'List my vault entities, paginated (fields masked)' })
