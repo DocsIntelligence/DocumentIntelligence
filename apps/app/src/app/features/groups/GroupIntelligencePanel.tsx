@@ -52,10 +52,7 @@ export function GroupSearchView({ groupId, documentCount }: ViewProps) {
         onChange={(e) => setQuery(e.target.value)}
         placeholder={
           empty
-            ? t(
-                'groups.intelSearchDisabled',
-                'Add documents to enable search…',
-              )
+            ? t('groups.intelSearchDisabled', 'Add documents to enable search…')
             : t(
                 'groups.intelSearchPlaceholder',
                 'Search clauses, parties, dates, obligations…',
@@ -73,7 +70,7 @@ export function GroupSearchView({ groupId, documentCount }: ViewProps) {
         />
       )}
       {!debouncedQuery && !empty && (
-        <p className="rounded-md border border-dashed border-border bg-secondary/15 px-3 py-8 text-center text-xs text-foreground/50">
+        <p className="rounded-md border border-dashed border-border bg-secondary/35 px-3 py-8 text-center text-xs text-foreground/50">
           {t(
             'groups.intelSearchHint',
             'Type to search across the documents in this group.',
@@ -175,7 +172,7 @@ function SearchResults({
   }
   if (hits.length === 0) {
     return (
-      <p className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-6 text-center text-sm text-foreground/55">
+      <p className="rounded-md border border-dashed border-border bg-secondary/40 px-3 py-6 text-center text-sm text-foreground/55">
         {t('groups.intelNoHits', `No matches for "${q}" in this group.`)}
       </p>
     );
@@ -242,7 +239,7 @@ function SummaryBody({
   }
   if (!summary) {
     return (
-      <p className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-8 text-center text-sm text-foreground/55">
+      <p className="rounded-md border border-dashed border-border bg-secondary/40 px-3 py-8 text-center text-sm text-foreground/55">
         {t(
           'groups.intelNoSummary',
           'No summary yet. Click \u201cGenerate summary\u201d to build one from the documents\u2019 analyses.',
@@ -251,7 +248,7 @@ function SummaryBody({
     );
   }
   return (
-    <div className="space-y-2 rounded-md border border-border bg-secondary/15 p-3 text-sm leading-relaxed text-foreground">
+    <div className="space-y-2 rounded-md border border-border bg-secondary/35 p-3 text-sm leading-relaxed text-foreground">
       <p className="whitespace-pre-wrap">{summary}</p>
       <p className="pt-1 text-[11px] text-foreground/50">
         {generatedAt

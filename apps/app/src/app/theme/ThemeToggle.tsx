@@ -2,12 +2,15 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@org/utils';
 import { type ThemePreference, useTheme } from './ThemeProvider';
 
-const OPTIONS: ReadonlyArray<{ value: ThemePreference; labelKey: string; fallback: string }> =
-  [
-    { value: 'light', labelKey: 'theme.light', fallback: 'Light' },
-    { value: 'system', labelKey: 'theme.system', fallback: 'System' },
-    { value: 'dark', labelKey: 'theme.dark', fallback: 'Dark' },
-  ];
+const OPTIONS: ReadonlyArray<{
+  value: ThemePreference;
+  labelKey: string;
+  fallback: string;
+}> = [
+  { value: 'light', labelKey: 'theme.light', fallback: 'Light' },
+  { value: 'system', labelKey: 'theme.system', fallback: 'System' },
+  { value: 'dark', labelKey: 'theme.dark', fallback: 'Dark' },
+];
 
 /**
  * Segmented Light / System / Dark switcher. Stores user preference in
@@ -22,7 +25,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       role="radiogroup"
       aria-label={t('theme.label', 'Theme')}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg border border-border bg-secondary/30 p-0.5',
+        'inline-flex items-center gap-0.5 rounded-lg border border-border bg-secondary/40 p-0.5',
         className,
       )}
     >

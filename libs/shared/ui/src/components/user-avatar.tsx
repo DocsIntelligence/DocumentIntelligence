@@ -32,7 +32,7 @@ export const UserAvatar = ({
 }: UserAvatarProps) => (
   <Avatar className={cn(sizeClass[size], className)}>
     {src && <AvatarImage src={src} alt={name ?? 'Avatar'} />}
-    <AvatarFallback className="bg-primary/10 text-primary font-medium">
+    <AvatarFallback className="bg-primary/50 text-primary font-medium">
       {getInitials(name)}
     </AvatarFallback>
   </Avatar>

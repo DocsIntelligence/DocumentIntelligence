@@ -150,6 +150,28 @@ export function useScanVaultDocument(id: string) {
   });
 }
 
+/** Bulk: upload many KYC docs → classify + extract + attach + autofill (server). */
+export function useBulkScanVaultDocuments(id: string) {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) => svc.bulkScanDocuments(id, files),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
+      const ok = res.results.filter((r) => r.status === 'scanned').length;
+      const failed = res.results.length - ok;
+      toast.success(
+        `Scanned ${ok} doc(s), filled ${res.filledCount} field(s)` +
+          (failed > 0 ? ` · ${failed} failed` : ''),
+      );
+    },
+    onError: () =>
+      toast.error(
+        'Bulk scan failed — needs a vision-capable AI provider (e.g. ANTHROPIC_API_KEY)',
+      ),
+  });
+}
+
 export function useRemoveVaultDocument(id: string) {
   const svc = useVaultService();
   const qc = useQueryClient();

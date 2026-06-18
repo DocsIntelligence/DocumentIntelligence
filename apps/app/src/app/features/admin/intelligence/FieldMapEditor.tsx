@@ -142,7 +142,7 @@ function MapForm({
       </div>
 
       {!docTypeKey ? (
-        <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+        <p className="rounded-md bg-warning/50 px-3 py-2 text-sm text-warning-foreground">
           {t(
             'adminIntel.map.noDocType',
             'This is a read-only type (no drafting key), so there is nothing to map — extractions are reviewed but not converted to a structured document.',

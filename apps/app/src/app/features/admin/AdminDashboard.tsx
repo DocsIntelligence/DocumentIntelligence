@@ -160,7 +160,7 @@ export function AdminDashboard() {
                 </td>
                 <td className="py-2">
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'}`}
+                    className={`text-xs px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-primary/50 text-primary' : 'bg-secondary text-secondary-foreground'}`}
                   >
                     {user.role}
                   </span>

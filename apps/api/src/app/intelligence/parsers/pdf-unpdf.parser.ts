@@ -22,7 +22,10 @@ export class UnpdfParser implements IParser {
 
   async parse(input: SourceInput): Promise<NormalizedDocument> {
     const bytes = new Uint8Array(Buffer.from(input.data, 'base64'));
-    const pdf = await getDocumentProxy(bytes);
+    const pdf = await getDocumentProxy(
+      bytes,
+      input.password ? { password: input.password } : undefined,
+    );
     const { totalPages, text } = await extractText(pdf, { mergePages: false });
     const pages = text.map((t, i) => ({ page: i + 1, text: (t ?? '').trim() }));
     this.logger.debug(

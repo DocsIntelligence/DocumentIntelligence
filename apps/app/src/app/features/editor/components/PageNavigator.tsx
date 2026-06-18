@@ -50,13 +50,13 @@ export function PageNavigator({
             key={i}
             className={cn(
               'group flex items-stretch overflow-hidden rounded-md border border-border bg-background transition-colors',
-              activePage === i && 'border-primary/60 ring-1 ring-primary/30',
+              activePage === i && 'border-primary/60 ring-1 ring-primary/40',
             )}
           >
             <button
               type="button"
               onClick={() => onJumpToPage(i)}
-              className="flex flex-1 items-start gap-2 px-2 py-2 text-left hover:bg-secondary/30"
+              className="flex flex-1 items-start gap-2 px-2 py-2 text-left hover:bg-secondary/40"
             >
               <span className="flex size-7 flex-none items-center justify-center rounded bg-secondary/60 text-[11px] font-semibold text-foreground/70">
                 {i + 1}
@@ -75,7 +75,7 @@ export function PageNavigator({
               <button
                 type="button"
                 onClick={() => onRemovePage(i)}
-                className="flex w-7 flex-none items-center justify-center text-foreground/40 opacity-0 transition-all hover:bg-error/10 hover:text-error group-hover:opacity-100"
+                className="flex w-7 flex-none items-center justify-center text-foreground/40 opacity-0 transition-all hover:bg-error/50 hover:text-error group-hover:opacity-100"
                 title={t('editor.pages.remove', 'Remove page')}
                 aria-label={t('editor.pages.removeN', 'Remove page {{n}}', {
                   n: i + 1,

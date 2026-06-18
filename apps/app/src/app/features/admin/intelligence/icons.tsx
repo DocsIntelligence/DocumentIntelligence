@@ -99,7 +99,7 @@ export function IconButton({
       onClick={onClick}
       className={cn(
         'rounded-md p-1.5 text-foreground/55 transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
-        danger && 'hover:bg-error/10 hover:text-error',
+        danger && 'hover:bg-error/50 hover:text-error',
       )}
     >
       {children}

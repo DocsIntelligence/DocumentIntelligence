@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/page-header';
 import { useDocumentList } from '../documents/queries';
 import { documentHref } from '../documents/document-href';
 
@@ -24,18 +25,14 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {greeting(t)}
-          {user?.name ? `, ${user.name.split(' ')[0]}` : ''}
-        </h1>
-        <p className="mt-1 text-foreground/60">
-          {t(
-            'dashboard.subtitle',
-            'Draft, edit, and export legal documents — with AI assistance.',
-          )}
-        </p>
-      </div>
+      <PageHeader
+        back={false}
+        title={`${greeting(t)}${user?.name ? `, ${user.name.split(' ')[0]}` : ''}`}
+        subtitle={t(
+          'dashboard.subtitle',
+          'Draft, edit, and export legal documents — with AI assistance.',
+        )}
+      />
 
       {/* Quick actions */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -210,15 +207,15 @@ function ActionCard({
       className={cn(
         'group flex flex-col rounded-xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md',
         accent
-          ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
-          : 'border-border bg-background hover:border-primary/30',
+          ? 'border-primary/40 bg-primary/5 hover:border-primary/50'
+          : 'border-border bg-background hover:border-primary/40',
       )}
     >
       <span
         className={cn(
           'inline-flex size-9 items-center justify-center rounded-lg',
           accent
-            ? 'bg-primary/15 text-primary'
+            ? 'bg-primary/35 text-primary'
             : 'bg-secondary/60 text-foreground/70 group-hover:text-primary',
         )}
       >
@@ -237,13 +234,13 @@ function StatusPill({ status }: { status: string }) {
     in_review: 'bg-blue-100 text-blue-800',
     ready: 'bg-emerald-100 text-emerald-800',
     signed: 'bg-emerald-100 text-emerald-800',
-    archived: 'bg-foreground/10 text-foreground/60',
+    archived: 'bg-foreground/50 text-foreground/60',
   };
   return (
     <span
       className={cn(
         'flex-none rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-        tone[status] ?? 'bg-foreground/10 text-foreground/60',
+        tone[status] ?? 'bg-foreground/50 text-foreground/60',
       )}
     >
       {t(`status.${status}`, status.replace(/_/g, ' '))}

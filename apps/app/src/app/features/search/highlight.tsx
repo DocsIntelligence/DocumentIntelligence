@@ -39,8 +39,10 @@ export function Highlighted({ text }: { text: string }) {
 }
 
 /** Route for a search hit. */
-export function hrefForHit(hit: { kind: 'document' | 'source'; refId: string }): string {
-  return hit.kind === 'document'
-    ? `/documents/${hit.refId}/edit`
-    : `/analyze/${hit.refId}`;
+export function hrefForHit(hit: {
+  kind: 'document' | 'source';
+  refId: string;
+}): string {
+  if (hit.kind === 'document') return `/documents/${hit.refId}/edit`;
+  return `/analyze/${hit.refId}`;
 }

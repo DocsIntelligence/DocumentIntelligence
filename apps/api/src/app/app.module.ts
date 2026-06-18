@@ -14,6 +14,7 @@ import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { DocumentGroupsModule } from './document-groups/document-groups.module';
 import { DocumentsModule } from './documents/documents.module';
+import { EstateVaultModule } from './estate-vault/estate-vault.module';
 import { HealthModule } from './health/health.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { IntelligenceAdminModule } from './intelligence-admin/intelligence-admin.module';
@@ -55,6 +56,7 @@ import { UsersModule } from './users/users.module';
     IntelligenceAdminModule,
     SearchModule.forRootAsync(),
     VaultModule,
+    EstateVaultModule.forRoot(),
     SharesModule,
     CommentsModule,
     SignersModule,

@@ -1334,6 +1334,362 @@ model VaultAccessLog {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// ESTATE & WEALTH VAULT (docs/13) — asset inventory + net worth + history
+// Self-contained, toggleable module (ESTATE_VAULT_ENABLED). M1+M2 scope:
+// inventory + valuations + document versioning. Nominee/release (M5) and
+// per-asset envelope encryption (M4) land later — for now sensitive
+// identifiers reuse VaultCryptoService (single key); monetary amounts are
+// stored as plaintext minor-unit integers so net worth / reports can
+// aggregate and sort in the DB. Owner/org-scoped like VaultEntity.
+// ═══════════════════════════════════════════════════════════════════
+
+/// A single asset the user owns (FD, mutual fund, insurance policy, property,
+/// gold, crypto, …). `type` is a free-form key resolved against the
+/// EstateVaultConfig asset-type catalog (no Prisma enum → new types ship
+/// without migrations). Account/policy numbers and notes are encrypted in
+/// `dataEncrypted`; the *amount* (`currentValueMinor`) is queryable plaintext.
+model Asset {
+  id          String   @id @default(cuid())
+  ownerUserId String?
+  ownerOrgId  String?
+  /// The EstateProfile (person-vault) this asset belongs to. Estate queries
+  /// scope by this. Nullable for pre-multi-profile rows (backfilled to self).
+  profileId   String?
+  /// Asset-type key, e.g. 'fixed_deposit' | 'mutual_fund' | 'insurance' |
+  /// 'property' | 'gold' | 'crypto' | 'epf' | 'nps' | 'bank' | 'other'.
+  type        String   @default("other")
+  /// User-facing label (e.g. "HDFC FD — emergency", "LIC Jeevan Anand"). Not secret.
+  label       String
+  /// Institution / issuer (bank, AMC, insurer, exchange). Not secret.
+  institution String?
+  /// ISO 4217. Net worth is reported in the user's base currency (INR default).
+  currency    String   @default("INR")
+  /// Latest known value in MINOR units (paise). Denormalised from the newest
+  /// AssetValuation for fast net-worth/sorting. Null = value unknown.
+  currentValueMinor BigInt?
+  /// Quantity held — mutual-fund/ETF units, demat shares, grams of gold, etc.
+  /// Only meaningful for unit-bearing asset types (config `tracksUnits`). Not
+  /// secret. Decimal(28,8) covers fractional MF units. Null = N/A or unknown.
+  unitsHeld   Decimal? @db.Decimal(28, 8)
+  /// Masked identifier for display (e.g. "XXXX1234"). Safe to show in lists.
+  identifierMasked  String?
+  /// AES-256-GCM ciphertext of the sensitive blob (full account/folio number,
+  /// notes, extra fields): "iv:tag:ciphertext" (base64). Null = nothing sensitive.
+  /// M4 envelope: encrypted under a per-asset DEK (not the master key directly);
+  /// the DEK is wrapped per principal in `dataKeys`. Presence of an owner DataKey
+  /// row marks the new scheme; its absence means a legacy master-key blob.
+  dataEncrypted     String?
+  /// 'active' | 'matured' | 'closed'. Lifecycle, distinct from soft-delete.
+  status      String   @default("active")
+  /// For FD/bond/insurance/PPF: when it matures (drives the maturity calendar).
+  maturityDate DateTime?
+  /// Non-secret, per-asset-type structured fields driven by a static registry
+  /// in the app — a flat JSON map of {fieldKey: value} (e.g. FD interestRate,
+  /// insurance sumAssured/validTill, MF fundHouse, property city/RERA). Kept
+  /// here (not in `dataEncrypted`) so it stays queryable + displayable; only
+  /// truly sensitive numbers (full account/policy no.) go in the encrypted blob.
+  details     Json?
+  /// Last seen activity (drives dormancy / orphan-risk nudges, §10.2).
+  lastActivityAt DateTime?
+  /// Optional link to the SourceDocument this asset was extracted from (M3).
+  sourceDocumentId String?
+  /// Soft-delete: inactive assets are hidden from lists + net worth.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  valuations  AssetValuation[]
+  documents   AssetDocument[]
+  nominations AssetNomination[]
+  dataKeys    DataKey[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerOrgId, updatedAt])
+  @@index([ownerUserId, isActive])
+  @@index([profileId, isActive])
+}
+
+/// Append-only valuation history for an asset (never overwrite). Each periodic
+/// statement / manual update / AA sync adds a row → powers value-over-time,
+/// net-worth-over-time, and the "as of <date>" time-machine (docs/13 §10.2).
+model AssetValuation {
+  id        String   @id @default(cuid())
+  assetId   String
+  /// Value in MINOR units (paise) at `asOf`.
+  valueMinor BigInt
+  currency  String   @default("INR")
+  /// The value's effective/as-of date (the statement's date — not upload time).
+  asOf      DateTime
+  /// 'manual' | 'extracted' | 'aa'.
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, asOf])
+}
+
+/// A document attached to an asset, versioned over time (docs/13 §2.3). Periodic
+/// re-uploads (Jan CAS, Feb CAS) share a `slotKey` → versions of one statement,
+/// not duplicate assets. Latest = max(periodAsOf). Bytes live in private storage.
+model AssetDocument {
+  id          String   @id @default(cuid())
+  assetId     String?
+  ownerUserId String?
+  ownerOrgId  String?
+  /// Groups periodic versions of the same logical document (e.g. "cams_cas").
+  slotKey     String   @default("default")
+  /// 'cas' | 'bank_statement' | 'policy' | 'deed' | 'other'.
+  kind        String   @default("other")
+  filename    String
+  contentType String
+  byteSize    Int?
+  s3Key       String
+  checksum    String?
+  /// AES-256-GCM (master-key) ciphertext "iv:tag:ct" of the statement's OPEN
+  /// password, when it was a protected PDF — lets the owner re-open / re-extract
+  /// the original later without re-typing it. Null = not protected / no password.
+  passwordEnc String?
+  /// The statement's as-of/period date (extracted), used for latest-version + sort.
+  periodAsOf  DateTime?
+  /// Cached parsed plaintext of the document (populated when analyzed), so the
+  /// asset can be full-text indexed without re-parsing / decrypting on index.
+  searchText  String?
+  uploadedAt  DateTime @default(now())
+
+  asset Asset? @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, periodAsOf])
+  @@index([slotKey])
+}
+
+/// Cached net-worth snapshot (docs/13 §2.1). Net worth is computed live from
+/// active assets; a snapshot row is written on demand so the time-machine has
+/// portfolio-level history even before per-asset valuations are dense.
+model WealthSnapshot {
+  id            String   @id @default(cuid())
+  ownerUserId   String?
+  ownerOrgId    String?
+  /// The EstateProfile (person-vault) this snapshot is for.
+  profileId     String?
+  asOf          DateTime @default(now())
+  /// Net worth in MINOR units (paise) in `currency`.
+  netWorthMinor BigInt   @default(0)
+  currency      String   @default("INR")
+  /// { "<assetType>": <minorUnits>, ... } breakdown for allocation charts.
+  totalsByType  Json?
+  createdAt     DateTime @default(now())
+
+  @@index([ownerUserId, asOf])
+  @@index([ownerOrgId, asOf])
+  @@index([profileId, asOf])
+}
+
+/// Per-org (or system, ownerOrgId=null) configuration for the estate-vault
+/// module — config-as-data (docs/13 §0.3). One JSON blob holds the enabled
+/// asset types, liveness cadence, proof requirements, max nominees, and
+/// sub-surface toggles. Resolved org-row → system-row → code default.
+model EstateVaultConfig {
+  id         String   @id @default(cuid())
+  ownerOrgId String?
+  enabled    Boolean  @default(true)
+  /// EstateVaultConfig JSON (asset types, cadences, toggles). Shape lives in @org/dto.
+  config     Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([ownerOrgId])
+}
+
+/// A managed person-vault (docs/13): one Wealth Vault per PERSON, so a single
+/// account can manage several (self, spouse, parent…). Each profile is backed
+/// by a Vault PERSON entity (the subject) and owns its own assets / nominees /
+/// net worth / release plan. `ownerUserId` is the account that created it;
+/// access can be shared with other accounts (e.g. a 3rd-party wealth manager)
+/// via EstateProfileAccess. Estate data is scoped by `profileId`, NOT by the
+/// acting user — the acting user's right to a profile is checked separately.
+model EstateProfile {
+  id            String   @id @default(cuid())
+  ownerUserId   String
+  /// The Vault PERSON entity this profile represents (the subject's KYC + docs).
+  vaultEntityId String
+  label         String
+  /// True for the creator's own profile (auto-created on first use).
+  isSelf        Boolean  @default(false)
+  /// Privacy default: when true, monetary amounts are masked on screen until
+  /// the viewer reveals them. Defaults to true so the vault doesn't show every
+  /// amount by default.
+  maskAmounts   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  access EstateProfileAccess[]
+
+  @@index([ownerUserId])
+  @@index([vaultEntityId])
+  // NOTE: a PARTIAL unique index — `UNIQUE (ownerUserId) WHERE isSelf = true` —
+  // guarantees at most one self profile per user (so concurrent `ensureSelf`
+  // calls can't create duplicates). Prisma's schema can't express a partial
+  // unique index, so it lives in migration 20260618170000_estate_self_profile_dedupe.
+  // Do NOT add a plain @@unique([ownerUserId, isSelf]) — that would also forbid a
+  // user owning multiple non-self profiles, breaking multi-profile.
+}
+
+/// Grants another account access to a profile — e.g. a 3rd-party wealth manager,
+/// or the original person whose wealth a manager set up. Resolution: a user can
+/// act on a profile if they own it OR have an access row here.
+model EstateProfileAccess {
+  id        String   @id @default(cuid())
+  profileId String
+  /// The account being granted access.
+  userId    String
+  /// 'manager' (read/write) | 'viewer' (read-only).
+  role      String   @default("manager")
+  createdAt DateTime @default(now())
+
+  profile EstateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, userId])
+  @@index([userId])
+}
+
+// ── M5: nominee handover / dead-man-switch (docs/13 §1.2, §2.1) ──────────────
+// v1 release is SERVER-MEDIATED + human-verified (§11.6): the server decrypts
+// the owner's scoped assets for a nominee only once a ReleaseGrant is `released`.
+// Per-nominee envelope encryption (M4) is a later hardening that doesn't change
+// this surface.
+
+/// A person the owner designates to find/claim assets after death/incapacity.
+/// `email` is plaintext (needed to send the invite). A nominee is a custodian,
+/// NOT the legal heir — succession follows the will (docs/13 §9).
+model Nominee {
+  id           String   @id @default(cuid())
+  ownerUserId  String
+  name         String
+  email        String
+  /// Optional encrypted phone (AES-256-GCM blob) — LEGACY (pre-Vault-link rows).
+  phoneEnc     String?
+  relationship String?
+  /// The Vault PERSON entity that is the source of truth for this nominee's KYC
+  /// (DOB / Aadhaar / PAN / phone / address / documents) — no duplication on the
+  /// Nominee. Always set by the service (linked to an existing person or created
+  /// from the nominee form). Nullable only for legacy rows.
+  vaultEntityId String?
+  /// The EstateProfile (person-vault) this nominee belongs to.
+  profileId    String?
+  /// 'invited' | 'active'.
+  status       String   @default("invited")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  nominations AssetNomination[]
+  grants      ReleaseGrant[]
+
+  @@index([ownerUserId])
+  @@index([vaultEntityId])
+  @@index([profileId])
+}
+
+/// Which nominee(s) are designated for an asset, in priority order (the 2025
+/// Banking Laws amendment allows up to 4). `priority` 1 = primary.
+model AssetNomination {
+  id           String   @id @default(cuid())
+  assetId      String
+  nomineeId    String
+  priority     Int      @default(1)
+  sharePercent Int?
+  createdAt    DateTime @default(now())
+
+  asset   Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  nominee Nominee @relation(fields: [nomineeId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, nomineeId])
+  @@index([nomineeId])
+}
+
+/// The dead-man-switch grant for one (owner, nominee). State machine:
+/// active → pinged → escalated → released (or revoked). v1 release is
+/// human-verified; `accessToken` lets a released nominee open a read-only view.
+model ReleaseGrant {
+  id           String    @id @default(cuid())
+  ownerUserId  String
+  nomineeId    String
+  /// The EstateProfile (person-vault) this grant releases. The nominee view is
+  /// scoped to this profile's assets.
+  profileId    String?
+  /// 'all' | 'nominated' — whether the nominee sees every asset or only theirs.
+  scope        String    @default("nominated")
+  /// 'active' | 'pinged' | 'escalated' | 'released' | 'revoked'.
+  status       String    @default("active")
+  /// Liveness cadence in days (seeded from EstateVaultConfig).
+  cadenceDays  Int       @default(90)
+  lastCheckInAt DateTime @default(now())
+  nextPingAt   DateTime
+  missedCount  Int       @default(0)
+  /// Opaque token for the released nominee's read-only view (reuses the share pattern).
+  accessToken  String    @unique
+  /// Submitted proof references (death certificate doc keys, etc.).
+  proofRefs    Json?
+  releasedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  nominee Nominee @relation(fields: [nomineeId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, nomineeId])
+  @@index([status, nextPingAt])
+  @@index([ownerUserId])
+}
+
+/// Audit trail for liveness pings, escalations, releases, and nominee access.
+model EstateAccessLog {
+  id          String   @id @default(cuid())
+  ownerUserId String?
+  nomineeId   String?
+  grantId     String?
+  /// 'checkin' | 'ping' | 'escalate' | 'release' | 'revoke' | 'nominee_view'.
+  action      String
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  @@index([ownerUserId, createdAt])
+  @@index([grantId, createdAt])
+}
+
+/// M4 envelope encryption (docs/13 §1.1): one wrapped copy of an asset's
+/// data-encryption key (DEK) per principal allowed to read it. The DEK
+/// (AES-256-GCM-encrypts `Asset.dataEncrypted`) is itself AES-256-GCM-wrapped
+/// under a KEK derived per principal (HKDF over the master `VAULT_ENCRYPTION_KEY`
+/// — swappable for a hosted KMS later without a schema change). Removing a
+/// nominee rotates the DEK and rebuilds these rows, killing the old wrapped key.
+model DataKey {
+  id            String   @id @default(cuid())
+  assetId       String
+  /// 'owner' | 'nominee' — the kind of principal this copy is wrapped for.
+  principalType String
+  /// The principal's id (owner userId, or nomineeId).
+  principalId   String
+  /// AES-256-GCM(DEK) under the principal's derived KEK: "iv:tag:ciphertext".
+  wrappedDek    String
+  createdAt     DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, principalType, principalId])
+  @@index([principalType, principalId])
+}
+
+/// Cross-instance scheduler lease (multi-replica safety). A periodic job claims
+/// its lease with an atomic conditional UPDATE (set lockedUntil = now+interval
+/// WHERE lockedUntil < now), so exactly one API replica runs a given sweep per
+/// cycle. Generic — keyed by `name` (e.g. 'estate_liveness').
+model SchedulerLease {
+  name        String   @id
+  lockedUntil DateTime
+  updatedAt   DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // AI USAGE LEDGER — one row per LLM/vendor call (success or failure)
 // ═══════════════════════════════════════════════════════════════════
 

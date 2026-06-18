@@ -33,10 +33,10 @@ export function ForgotPassword() {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold text-foreground">
           {t('auth.forgot.title', 'Forgot password')}
         </h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           {t(
             'auth.forgot.subtitle',
             "Enter your email and we'll send you a reset link",

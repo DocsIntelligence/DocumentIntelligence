@@ -31,6 +31,10 @@
   --color-accent: oklch(var(--accent));
   --color-accent-foreground: oklch(var(--accent-foreground));
 
+  /* Side navigation surface (use bg-sidebar / text-sidebar-foreground). */
+  --color-sidebar: oklch(var(--sidebar));
+  --color-sidebar-foreground: oklch(var(--sidebar-foreground));
+
   --color-error: oklch(var(--error));
   --color-error-accent: oklch(var(--error-accent));
   --color-error-foreground: oklch(var(--error-foreground));
@@ -57,10 +61,10 @@
 /* ─── Theme Variables (Light) ─── */
 @layer base {
   :root {
-    --background: 0.97 0.01 240;
+    --background: 0.95 0.028 255;
     --foreground: 0.14 0.02 260;
-    --border: 0.91 0.01 260;
-    --input: 0.91 0.01 260;
+    --border: 0.88 0.018 255;
+    --input: 0.88 0.018 255;
 
     --primary: 0.55 0.18 230;
     --primary-accent: 0.42 0.15 235;
@@ -73,12 +77,22 @@
     /* Neutral aliases — by default we share the secondary family. */
     --muted: 0.95 0.02 250;
     --muted-foreground: 0.45 0.03 260;
-    --card: 1 0 0;
+    /* Cards/popovers are the brightest surface — a near-white panel that
+       pops *above* the tinted canvas (that's the elevation cue). Keep chroma
+       low so they read as clean surfaces, not coloured. Tune these to re-skin
+       every card/table/popover. */
+    --card: 0.995 0.005 255;
     --card-foreground: 0.14 0.02 260;
-    --popover: 1 0 0;
+    --popover: 0.995 0.005 255;
     --popover-foreground: 0.14 0.02 260;
     --accent: 0.92 0.04 250;
     --accent-foreground: 0.2 0.05 260;
+
+    /* Side navigation surface — its own token so the nav rail can be
+       re-skinned independently. Sits *below* the bright cards (more tint,
+       lower L) so it reads as a distinct panel, not another white sheet. */
+    --sidebar: 0.965 0.024 255;
+    --sidebar-foreground: 0.2 0.04 260;
 
     --error: 0.58 0.22 15;
     --error-accent: 0.7 0.19 15;
@@ -113,12 +127,18 @@
 
     --muted: 0.22 0.02 260;
     --muted-foreground: 0.7 0.02 260;
-    --card: 0.18 0.02 260;
+    /* Cards sit *above* the canvas in dark mode too — lighter than the
+       background, not darker (that's the elevation cue). */
+    --card: 0.215 0.022 260;
     --card-foreground: 0.95 0.01 260;
-    --popover: 0.18 0.02 260;
+    --popover: 0.215 0.022 260;
     --popover-foreground: 0.95 0.01 260;
     --accent: 0.27 0.02 260;
     --accent-foreground: 0.95 0.01 260;
+
+    /* Sidebar sits below the cards — the darkest panel. */
+    --sidebar: 0.155 0.02 260;
+    --sidebar-foreground: 0.95 0.01 260;
 
     --error: 0.5 0.2 15;
     --error-accent: 0.4 0.18 15;

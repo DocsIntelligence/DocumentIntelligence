@@ -2,6 +2,334 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+## 2026-06-18 — M4: app-managed envelope encryption (per-asset DEK)
+
+Replaces the single-master-key path for estate assets with envelope encryption
+(docs/13 §1.1), the security debt M5's release path was built on.
+
+- **Model** `DataKey` (`tools/prisma/schema.prisma`, migration `20260618120000_estate_data_keys`):
+  one wrapped copy of an asset's DEK per principal — `(assetId, principalType, principalId)`
+  unique, `wrappedDek` = AES-256-GCM(DEK) under that principal's KEK. `Asset.dataKeys` relation
+  added. Presence of an `owner` DataKey row = new scheme; its absence = legacy master-key blob.
+- **Crypto primitives** (`VaultCryptoService`): refactored encrypt/decrypt onto key-parameterized
+  `encryptWith`/`decryptWith`; added `randomKey` (DEK), `deriveKek` (HKDF-SHA256 over the master
+  `VAULT_ENCRYPTION_KEY`, per-principal info), `wrapKey`/`unwrapKey`. KMS swap later = change
+  these three methods only; NO schema change.
+- **`EstateEnvelopeService`**: owns the DEK lifecycle. `write` (fresh DEK, encrypt blob, rebuild
+  wrapped-DEK rows for owner + current nominees — always rotates), `revealOwner` (+ lazy upgrade
+  of legacy blobs), `revealNominee` (scoped to the nominee's wrapped DEK), `syncNominations`
+  (re-key after nomination/removal changes), and an idempotent boot `backfill()` (`OnModuleInit`)
+  that migrates legacy rows (`dataEncrypted` set, no owner DataKey).
+- **Wiring**: `AssetService` create/bulk/update/reveal seal/read via the envelope (no more direct
+  master-key use); `EstateReportService.nomineeView` decrypts via the nominee's wrapped DEK;
+  `NomineeService` calls `syncNominations` on `setNominations` and rotates affected assets on
+  nominee delete. Provider registered.
+- **Security posture**: NOT zero-knowledge — the server can derive any KEK (accepted v1 trade-off,
+  docs/13 §1.1). The win is the access *structure* (per-principal wrapped DEKs + rotation-on-
+  removal) so a hosted KMS later bounds blast radius as a pure ops change.
+
+**Verification**: `prisma generate` ok; `nx build @org/api` (webpack) green; lint 0 errors. NOT
+runtime-tested (needs DB migrate + a release walkthrough).
+
+## 2026-06-18 — Vault: bulk KYC upload → classify + extract + attach + autofill
+
+Document Vault (docs/10): one flow to drop several identity docs (Aadhaar/PAN/…) at once.
+`POST /vault/entities/:id/documents/bulk-scan` (`FilesInterceptor`, ≤20) →
+`VaultService.bulkIngest`: per file, ONE AI pass both classifies the `documentKind` and extracts
+the entity's canonical fields (schema = union of scannable doc-kind `fills` ∩ entity field defs +
+a documentKind classifier); the file is attached with the detected kind; values merge across files
+and **autofill only currently-empty fields** (never clobbers user input). Per-file results +
+`filledCount` returned; bad files skipped, not fatal. api-client `bulkScanDocuments` +
+`useBulkScanVaultDocuments`; "Upload & autofill" multi-file button on `VaultEntityPage`. Needs a
+vision-capable AI provider.
+
+**Provider-agnostic OCR**: vault `scanDocument` + `bulkIngest` are now TEXT-FIRST (parse a PDF's
+text layer → send text; images/scanned → vision `sourcePart`), matching the estate path. So OCR
+works on whichever vision/extract provider `AiService.extract` selects (claude/gemini/openai) with
+its existing capability-negotiation + fallback — including OpenAI, which can't read PDF bytes
+directly but handles the parsed text + image vision. `ParsingService` added to `VaultModule`.
+
+**Verification**: build (api webpack, app) green; lint 0 errors. NOT runtime-tested (needs a vision/AI key).
+
+## 2026-06-18 — M5 hardening: proof-of-death, multi-instance scheduler, legal-review entry
+
+- **Proof of death + verification** (docs/13 §11.6): nominee uploads a death cert via the public
+  token before release — `GET/POST /estate/nominee-access/:token/{status,proof}` (no auth, token-
+  guarded; never reveals assets pre-release). `ReleaseService.submitProof` stores the file, appends
+  to `ReleaseGrant.proofRefs`, advances active/pinged→`escalated`, audits; `tick()` emails the
+  nominee a submission link (`FRONTEND_URL/n/:token`) on escalation. Admin verification: grants list
+  now carries `proofs[]`, `GET /admin/estate-vault/grants/:id/proof/:index` returns a presigned URL,
+  and a new **`EstateGrantsPage`** (`/config/estate-vault/grants`) lists grants + proof links + the
+  manual Release button. `NomineeAccessPage` shows the proof-upload form pre-release, the register
+  post-release.
+- **Multi-instance-safe scheduler**: `SchedulerLease` model (migration `20260618150000_scheduler_lease`).
+  `EstateLivenessService` claims the `estate_liveness` lease with an atomic conditional UPDATE
+  (lockedUntil < now → now+interval) so exactly one replica runs `tick()` per cycle (no double-advance
+  / duplicate emails). Generic + reusable.
+- **Legal-review tracking entry** (no workflow, per request): `legalReview {status, note, reviewedBy,
+  reviewedAt}` in the estate config (default `pending`); a card in the admin config page to flip status
+  + jot a note for manual follow-up.
+
+**Verification**: `prisma migrate` applied; build (api webpack, app) green; lint 0 errors. NOT runtime-tested.
+
+## 2026-06-18 — Assets list: bulk selection + delete
+
+`EstateAssetsPage` — left-pinned select column (per-row + select-all-visible header checkbox),
+`selected` Set state, and a `toolbar` bulk bar ("N selected" + Delete + Clear) shown when any row
+is selected. Bulk delete confirms then soft-deletes via `useBulkDeleteAssets` (parallel
+`deleteAsset` + single invalidate/toast). Mirrors the DocumentsList selection pattern. (Server-side
+search + Select type filter already existed.) Build + lint green.
+
+## 2026-06-18 — Estate Report as a rendered PDF + CAS dedupe fix
+
+- **Estate Report PDF** (docs/13 §10.3): `GET /estate/report.pdf` streams a real PDF (masked,
+  owner-facing). Self-contained — `EstateReportPdfService` builds a print-styled HTML string and
+  rasterises it with headless Chrome (`setContent`→`pdf()`); NO Document row / artboard template /
+  S3 / queue. Extracted `HeadlessBrowserService` (common, reusable; `PdfRendererService` keeps its
+  private copy for now). "Download PDF" button on `EstateReportPage` (blob download). Needs
+  `CHROME_URL` or `PUPPETEER_EXECUTABLE_PATH` (same as document exports).
+- **CAS dedupe fix** (`AssetService.findDuplicate`): added `label` to the match key. One MF folio
+  number spans every scheme in an AMC, so matching on (type, institution, masked-id) alone wrongly
+  collapsed distinct schemes (a 10-fund CAS imported as 6 created + 4 wrongly "updated", overwriting
+  siblings' values). Now (type, institution, masked-id, label) — re-importing the same CAS heals the
+  earlier merge (6 update, 4 create).
+
+**Verification**: build (api webpack, app) green; lint 0 errors. NOT runtime-tested (PDF needs Chrome).
+
+## 2026-06-18 — Nominee backed by a Vault person (single source of truth)
+
+Per user: stop duplicating KYC between Nominee and Vault — every nominee is backed by a
+Vault PERSON entity that owns DOB / Aadhaar / PAN / phone / address + documents.
+
+- **Schema**: dropped the duplicated Nominee columns (`dob`, `dataEncrypted`, `aadhaarMasked`,
+  `panMasked`) — migration `20260618140000_nominee_vault_source`. `vaultEntityId` is now the
+  source of truth (nullable in DB for legacy rows; always set by the service).
+- **`NomineeService`** now uses `VaultService` (estate module imports `VaultModule`):
+  - create → `resolveVaultEntity`: link the chosen Vault person, else mint one (`kind:'person'`,
+    fields mapped to canonical keys `full_name`/`dob`/`aadhaar_number`/`pan`/`phone`/`address_line1`).
+  - update → KYC edits merge into the linked entity via `vault.reveal`+`vault.update`; can re-link.
+  - `present` hydrates masked DOB/Aadhaar/PAN from `vault.get` (vault does the masking); `reveal`
+    delegates to `vault.reveal`. Delete leaves the Vault person intact (may be shared).
+- **Frontend** (`NomineesPage`): a "New person / Link Vault person" toggle. New → inline KYC fields
+  create the profile; Link → pick an existing Vault entity (KYC hidden, sourced from it) with an
+  "Open profile" link. List rows still show masked KYC + a Vault-profile link.
+
+**Verification**: `prisma generate` ok; build (api webpack, app) green; lint 0 errors. NOT runtime-tested.
+
+> Migrate note: the estate module is migrations-first. A `DataKey does not exist` 500 on
+> `/estate/assets/*` means the M4 migration isn't applied — run `pnpm prisma:migrate`.
+
+## 2026-06-18 — Nominee enrichment: KYC + relationship lookup + Vault link
+
+Richer nominees (docs/13 §9), closer to a Vault person profile.
+
+- **Schema** (`Nominee`): + `dob`, `dataEncrypted` (AES-GCM blob of {phone, aadhaar, pan,
+  address}), `aadhaarMasked`, `panMasked`, `vaultEntityId` (optional link to a Vault person
+  entity that holds full KYC + documents). Legacy `phoneEnc` kept + read as a fallback.
+  Migration `20260618130000_nominee_kyc`.
+- **DTO**: create/update nominee schemas gain dob/phone/aadhaar/pan/address/vaultEntityId;
+  exported `RELATIONSHIP_OPTIONS` fallback list.
+- **Service**: encrypts the KYC set, derives masks (`XXXX XXXX 1234`, `XXXXXX234F`), merges
+  on partial update, `reveal()` for unmasked values; `GET /estate/nominees/:id/reveal`.
+- **Lookup**: seeded a public `relationship` lookup group (admin-editable via /config/lookups);
+  the form prefers it, falls back to `RELATIONSHIP_OPTIONS`.
+- **Frontend** (`NomineesPage`): relationship dropdown, DOB, Aadhaar/PAN/phone/address, and a
+  "Link Vault profile" picker (lists Vault entities). List rows show relationship badge, DOB,
+  masked IDs, and a link to the linked Vault profile. api-client `Nominee`/payloads extended +
+  `revealNominee`.
+
+**Verification**: build (api webpack, app) green; lint 0 errors.
+
+## 2026-06-18 — Wealth Vault nav submenu + multi-file bulk import
+
+- **Nav submenu**: the single "Wealth Vault" sidebar item is now a `NavGroup`
+  (`MainLayout.tsx`, estate-gated) with children: Overview, Assets, Add asset, Import
+  statement, Bulk file import, Nominees, Release plan, Estate report.
+- **Multi-file bulk import** (docs/13 §11.3): drop N files (e.g. 10 insurance PDFs) →
+  one asset created per file with the file attached as its document, extracted
+  automatically. Per-file isolation: a locked/failed file is flagged
+  (`password_required` / `password_incorrect` / `failed`) without sinking the batch.
+  - Backend: `POST /estate/import-files` (`FilesInterceptor`, ≤50) + `passwords` JSON
+    array (aligned by file order); `AssetDocumentService.importFiles` reuses the
+    text-first `suggest` → `AssetService.create` → `addDocument`, mapping asset type to a
+    doc kind. Defensive DTO build (truncate, ISO-date guard) so one weird extraction
+    can't throw.
+  - Frontend: `EstateBulkImportPage` (`/estate/import-files`) — multi-file picker,
+    per-file password inputs shown when flagged, status badges, "Import remaining" retry
+    that only re-sends not-yet-created files (no duplicates). api-client `importFiles` +
+    `useImportFiles`.
+
+**Verification**: build (api webpack, app) green; lint 0 errors.
+
+## 2026-06-18 — Estate extract: text-first parsing + password-protected PDFs
+
+Fixes a runtime 500 on `/estate/extract-holdings` (`OpenAI chat cannot read PDFs directly`)
+and adds support for password-locked statements (CAMS/KFintech CAS are PAN-locked).
+
+- **Text-first** (`AssetDocumentService.sourceParts`): for PDFs/DOCX, parse the text layer
+  via `ParsingService` and send TEXT to the AI (works with text-only providers, cheaper +
+  more accurate on born-digital docs). Only scanned PDFs (no text layer) and images fall
+  back to `sourcePart` (vision). Mirrors the doc-intelligence text-first fix.
+- **Passwords**: `SourceInput.password` threaded into both PDF parsers (unpdf
+  `getDocumentProxy(_, {password})`, pdf-parse `new PDFParse({data, password})`).
+  `ParsingService` now surfaces a typed `PdfPasswordRequiredError` (needs vs. incorrect)
+  instead of mislabelling a protected PDF as "scanned"; the estate service maps it to a 400
+  `{code: PDF_PASSWORD_REQUIRED|PDF_PASSWORD_INCORRECT}`.
+- **Wire-through**: `/estate/extract`, `/estate/extract-holdings`, `.../extract` accept a
+  `password` form/body field; api-client `extractFromUpload/extractHoldings/extractFromDocument`
+  pass it. `EstateImportPage` shows a password field + retry, driven by `isPdfPasswordError`.
+- Registered `ParsingService` as an estate-vault provider (dependency-free).
+
+**Verification**: build (api, app, api-client, doc-intelligence) green; lint 0 errors.
+
+## 2026-06-18 — Estate & Wealth Vault, Admin config UI (`/config/estate-vault`)
+
+Resume task #1 from `docs/14` §5 — frontend for the existing `/admin/estate-vault/config`
+backend (config-as-data, docs/13 §0.3). No new endpoints.
+
+- **api-client** (`estate.service.ts`): added `EstateVaultConfig` / `EstateConfigAssetType` /
+  `EstateVaultToggles` / `UpdateEstateVaultConfig` types + `adminGetConfig` (GET) +
+  `adminUpdateConfig` (PUT). Targets system defaults (no `orgId`) for now.
+- **Queries** (`features/admin/estate/queries.ts`): `useEstateAdminConfig` +
+  `useUpdateEstateAdminConfig` — on save, invalidates owner-facing `capability` +
+  `asset-types` (both derive from this config).
+- **Page** (`features/admin/estate/EstateVaultConfigPage.tsx`): one editor for the whole
+  config — module on/off + base currency + max-nominees; liveness/release cadence
+  (check-in / missed-pings / cooling-off); gap-nudge thresholds (stale / dormant); the 4
+  surface toggles; and an inline editable **asset-type catalog** (key/label/category/
+  valuation/active, add/remove). Stable keys lock once persisted (referenced by existing
+  assets) → disable, don't delete (confirm on removing a locked key); client-side
+  unique-key + non-blank validation gates Save; whole-config PUT (server does the merge).
+- **Wiring**: route `/config/estate-vault` in `app.tsx`; nav item under the Configuration
+  group in `MainLayout.tsx`, gated by `estateOn` (the admin route is in the same
+  flag-gated module, so it 404s when the module is off).
+
+**Deviation**: form uses direct `useState` (not react-hook-form) to match the other
+`/config/*` editors (VaultConfigManager etc.) — same standing deviation logged for M2.
+
+**Verification**: `nx build @org/api-client @org/app @org/api` green; `nx lint @org/api
+@org/app @org/dto @org/api-client` 0 errors (15 pre-existing warnings, none in new files).
+NOT runtime-tested.
+
+## 2026-06-17 — Estate & Wealth Vault, M6 gap nudges + freshness + dedupe (internal-only)
+
+User: skip 3rd-party (DigiLocker / lawyer-physical); do all our-side digital tasks first.
+
+- **Gap nudges + freshness/dormancy** (`services/gap.service.ts`, `GET /estate/nudges`):
+  descriptive (no-nominee / no-value / stale / dormant) — NOT advice (§3.2). Driven
+  by `lastActivityAt` vs new config `freshnessThresholdDays` (180) + `dormancyThresholdDays`
+  (365). "Things to review" card on the estate home (top 5, warnings first, asset-linked).
+- **Dedupe-on-reupload** (`AssetService.bulkCreate`): reconciles by
+  (type, institution, masked identifier) — a re-imported CAS UPDATES the matching
+  asset + appends a valuation instead of duplicating (§2.3 idempotency). Returns
+  `{created, updated}`; import toast + api-client type updated.
+
+**Verification**: `nx build @org/api` + `@org/app` green; lint 0 errors. NOT runtime-tested.
+
+## 2026-06-17 — Estate & Wealth Vault, M3+ CAS hero-upload (multi-holding import)
+
+**What**: One consolidated statement (CAMS/KFintech CAS, portfolio summary) →
+AI extracts an ARRAY of holdings → review list with checkboxes → bulk-create
+assets. Generic (any multi-holding doc), so no brittle CAS-specific parser.
+
+- Backend: `AssetDocumentService.extractHoldingsFromUpload` (array schema via
+  `AiService.extract`, shared `mapSuggestion` helper), `AssetService.bulkCreate`
+  (≤200, one snapshot recompute, source='extracted'), endpoints
+  `POST /estate/extract-holdings` + `POST /estate/assets/bulk` (+ `bulkCreateAssetsSchema`).
+- Frontend: `EstateImportPage` (upload → review/select holdings → import),
+  `/estate/import` route + home "Import statement" button; api-client
+  `extractHoldings` + `bulkCreateAssets`; `useBulkCreateAssets` hook.
+
+**Verification**: `nx build @org/api` + `@org/app` green; lint 0 errors. NOT
+runtime-tested (needs vision AI + a real CAS). DigiLocker, dedupe-on-reupload,
+classify-to-type, and the freshness engine remain (TASKS Tier 11).
+
+## 2026-06-17 — Estate & Wealth Vault, M3 document capture + AI extract-assist (docs/13)
+
+**What**: Upload statements/policies to an asset, versioned per §2.3, plus
+AI extract-assist that prefills asset fields from a document. Reuses
+`StorageService` + `AiService` + `sourcePart` exactly like the vault's
+`addDocument`/`scanDocument`. (CAS multi-holding parsing + DigiLocker remain
+follow-ups, §11.3.)
+
+**Backend** (`services/asset-document.service.ts` + `controllers/estate-document.controller.ts`):
+- `AssetDocument` upload (multipart) → StorageService → row with `slotKey`
+  (defaults to filename → monthly re-uploads version together) + `periodAsOf`.
+- List (newest period first), presigned download URL, delete.
+- `POST /estate/extract` (file, no asset) → AI vision suggests
+  {type, institution, value, identifier, maturityDate, currency} for autofill;
+  `POST /estate/assets/:id/documents/:docId/extract` does the same from an
+  attached doc. Module now imports `StorageModule` + `AiModule`.
+
+**Frontend**:
+- Add-asset page: "Autofill from a statement" upload → prefills the form.
+- Asset detail: `AssetDocuments` section (upload w/ statement date, list
+  versions, download, delete). api-client + query hooks added.
+
+**Verification**: `nx build @org/api` + `@org/app` green; lint 0 errors (no
+estate warnings). **NOT runtime-tested** (needs a vision-capable AI provider
+configured + a real upload; user verifies at the end).
+
+## 2026-06-17 — Estate module restructured into layered folders
+
+Grew past the flat-module threshold, so both sides are now grouped (matching how
+`intelligence/` uses subfolders):
+- API `apps/api/src/app/estate-vault/`: `controllers/` (estate, estate-admin,
+  estate-nominee), `services/` (asset, nominee, release, estate-report,
+  estate-vault-config, estate-liveness), `dto/` (estate.dto), with
+  `estate.constants.ts` + `estate-vault.module.ts` at the root.
+- App `apps/app/src/app/features/estate/`: `pages/` (8 pages), `components/`
+  (AssetRegister), with `queries.ts` + `index.ts` (barrel) at the root.
+Imports updated; `nx build @org/api` + `@org/app` green, lint 0 errors. Public
+API surface (routes) unchanged. New estate files should follow this layout.
+
+## 2026-06-17 — Estate & Wealth Vault, M5 nominee + release + Estate Report (docs/13)
+
+**What**: The differentiator — pass-to-nominee dead-man-switch + the Estate Report
+("money is not orphaned"), on top of M1/M2. Built on the **current single-key
+encryption with server-mediated, human-verified release** (docs/13 §11.6); per-nominee
+envelope encryption (M4) is a later hardening that won't change this API surface.
+
+**Schema/migration** (`estate_nominee_release`): `Nominee`, `AssetNomination`
+(≤4/asset, priority), `ReleaseGrant` (state machine active→pinged→escalated→
+released|revoked; `accessToken`; cadence/nextPing), `EstateAccessLog` (audit).
+
+**Backend** (`apps/api/.../estate-vault/`):
+- `NomineeService` — nominee CRUD (+ encrypted phone), per-asset nomination
+  replace-set, invite email (best-effort via global `MailService`).
+- `ReleaseService` — `ensureGrant` on nominee create, owner `checkIn` (resets
+  all grants), `updatePlan`, `revoke`, **human-verified `release`** (admin),
+  and `tick()` sweep (advances overdue grants, emails owner; NEVER auto-releases).
+- `EstateLivenessService` — hourly `setInterval` scheduler calling `tick()`
+  (mirrors the intelligence reconciler; no `@nestjs/schedule`).
+- `EstateReportService` — owner preview (identifiers masked) + token nominee
+  view (identifiers decrypted, scoped, 403 until released, audited).
+- Endpoints: `/estate/nominees` CRUD, `/estate/assets/:id/nominations` GET/PUT,
+  `/estate/release` + `/estate/checkin` + `/estate/release/:nomineeId`(plan/revoke),
+  `/estate/report`; public `/estate/nominee-access/:token`; admin
+  `/admin/estate-vault/grants` + `/grants/:id/release`. How-to-claim instructions
+  per asset type in `estate.constants.ts` (code-data; legal review pending).
+
+**Frontend** (`apps/app/.../features/estate/` + `@org/api-client`):
+- `NomineesPage` (CRUD), per-asset `NomineeAssignment` (Checkbox set on asset
+  detail), `EstateReleasePage` (check-in + grant status + revoke + nominee link),
+  `EstateReportPage` (owner preview, print, no-nominee gap nudge), public
+  `NomineeAccessPage` at `/n/:token` (released register, outside ProtectedRoute),
+  shared `AssetRegister`. Quick-links to all three on the estate home. i18n throughout.
+
+**Verification**: `nx build @org/api` + `nx build @org/app` green; lint across
+api/app/dto/api-client → **0 errors, 0 warnings in new estate files**. Migration
+applied. **NOT runtime-tested** (user will verify all flows at the end).
+
+**Honest deferred (docs/13 §11 / Appendix D)**:
+- **M4 envelope encryption** not done — release is server-mediated decryption with
+  the single `VAULT_ENCRYPTION_KEY`; releasing doesn't hand over a master key but the
+  server can read all assets. Per-nominee DEK wrapping is the hardening.
+- **Proof-of-death / claim flow** is minimal: release is a manual admin action;
+  there's no nominee-initiated proof upload + verification UI yet.
+- How-to-claim text + nominee≠heir framing **need an Indian lawyer's review**.
+- Liveness uses `setInterval` (single-instance); multi-instance needs a real scheduler/lock.
+
 ### 2026-06-14 — Every admin CRUD is a real route, not in-page state
 
 User: "use specific page for edit etc. with proper separate crud api … fix this for all the
@@ -2150,3 +2478,603 @@ parked runs to walk through.
   container; it doesn't account for the global app header. Acceptable on
   the current layout (no fixed top bar on desktop), but worth revisiting
   if a fixed chrome lands.
+
+---
+
+## 2026-06-17 — Estate & Wealth Vault, M1+M2 (docs/13)
+
+**What**: First implementation slice of the estate/wealth-vault module —
+asset inventory + valuations + net worth, shipped as a self-contained,
+toggleable module. Scope = docs/13 §0 (module shell), §2 (data model +
+§2.3 doc-versioning), §10 (net worth + history). NOT in this slice:
+nominee/release (M5), per-asset envelope encryption (M4), financial-doc
+extraction / CAS / DigiLocker (M3), Account Aggregator. Per the user,
+the docs/12 template-manifest plan is explicitly NOT being built.
+
+**Backend** (`apps/api/src/app/estate-vault/`):
+- `EstateVaultModule.forRoot()` — dynamic, gated by `ESTATE_VAULT_ENABLED`
+  (default on; `=false` mounts no controllers, tables untouched — kill
+  switch §0.1/§0.4). Depends only on shared seams via DI (reuses
+  `VaultCryptoService` for at-rest encryption, global `DatabaseService`).
+- `EstateVaultConfigService` — config-as-data (§0.3): one JSON row per org
+  + a system row seeded from `DEFAULT_ESTATE_CONFIG`, resolved
+  org→system→code. Mirrors `vault-config.service.ts`.
+- `AssetService` — CRUD + append-only `AssetValuation` on value change +
+  live net worth (sum + by-type) + snapshot-on-change + value history.
+  Sensitive identifier/notes encrypted in `dataEncrypted`; amounts stored
+  as plaintext minor-unit BigInt for aggregation/sorting.
+- Controllers: `EstateController` (`/estate/*` — capability, asset-types,
+  networth[/history], asset CRUD, reveal, valuations) +
+  `EstateAdminController` (`/admin/estate-vault/config` GET/PUT; plain
+  JwtAuthGuard with "lock later" note, matching vault-admin convention).
+
+**Schema/migration**: `Asset`, `AssetValuation`, `AssetDocument`
+(slotKey + periodAsOf versioning, §2.3), `WealthSnapshot`,
+`EstateVaultConfig`. Migration `20260617144855_estate_vault` applied via
+`pnpm prisma:migrate:dev`; client regenerated.
+
+**Contracts** (`@org/dto` `lib/estate`): shared Zod schemas
+(create/update asset, valuation, list query, module config) consumed by
+the API via `createZodDto`.
+
+**Frontend** (`apps/app/.../features/estate/` + `@org/api-client`):
+- `estate.service.ts` + wired through `services-context` + `main.tsx`.
+- Pages: `EstateHomePage` (calm net-worth surface, §8), `EstateAssetsPage`
+  (DataTable + server paging + Select type filter + ⋯ overflow, per the
+  UI-consistency rules), `EstateAssetNewPage` (guided add),
+  `EstateAssetDetailPage` (value, masked id + reveal, quick re-value,
+  value history).
+- Nav: capability-gated "Wealth Vault" item via `useEstateCapability`
+  (hides on 404/disabled). i18n `t('key','English')` throughout.
+
+**Deviations from docs/13 (intentional, for codebase consistency)**:
+- Routes use **static imports** (not lazy) — the app doesn't lazy-load any
+  feature; matched the convention. Gating is via the nav + capability.
+- Forms use **direct `useState`** (not react-hook-form + zodResolver) —
+  matched the existing vault pages. The shared Zod schema still validates
+  server-side. (Revisit for field-level inline errors per the
+  CODING_STANDARDS forms rule.)
+- Asset **amounts are plaintext** minor-unit integers (only identifiers
+  encrypted) so net worth can aggregate/sort in SQL. Full per-asset
+  envelope encryption is the M4 upgrade.
+
+**Verification**: `pnpm nx build @org/api` green; `pnpm nx build @org/app`
+green (only the pre-existing chunk-size warning); `pnpm nx run-many -t lint
+-p @org/api @org/app @org/dto @org/api-client` → **0 errors** (15
+pre-existing warnings, none in new estate files). Migration applied
+successfully. **NOT runtime-tested** — no browser walk yet (create asset →
+net worth → history → reveal → delete; capability gating on/off).
+
+## 2026-06-18 — Estate multi-profile FRONTEND (docs/15 §4 complete)
+
+Built the profile switcher + management UI on top of the already-complete
+multi-profile backend (docs/15 §3). The app no longer silently runs on the
+self profile only — one account can now switch between owned/shared
+person-vaults and share them.
+
+- **`features/estate/profile-context.tsx`** — `EstateProfileProvider` +
+  `useActiveProfile()`. Holds `activeProfileId` (persisted in `localStorage`,
+  key `estate.activeProfileId`), seeds the api-client module synchronously on
+  mount so the first request is scoped, defaults to the `isSelf` profile once
+  `listProfiles()` loads, and re-falls-back if the stored id is stale. On
+  switch: `setActiveEstateProfileId(id)` (drives the axios interceptor) **and**
+  `qc.removeQueries({ queryKey: ['estate'] })` so all profile-scoped data
+  refetches.
+- **`features/estate/EstateLayout.tsx`** — route wrapper mounting the provider +
+  a switcher bar (a `@org/ui` `Select` of profiles with You/role badges +
+  "Manage profiles" link) above `<Outlet/>`.
+- **`features/estate/pages/EstateProfilesPage.tsx`** (`/estate/profiles`) — list
+  profiles (label + self/role badge); add via the nominee New-person / Link-
+  Vault-person toggle pattern; delete (owner, non-self only); inline **Share
+  panel** per owned profile (list access, add by email + manager/viewer role,
+  remove access).
+- **`features/estate/queries.ts`** — profile hooks under a distinct
+  `['estate-profiles']` key prefix (so they survive `removeQueries(['estate'])`
+  on switch): `useEstateProfiles`, `useCreateProfile`, `useRemoveProfile`,
+  `useProfileAccess`, `useShareProfile`, `useUnshareProfile`. Data hooks unchanged
+  — the interceptor injects `profileId`, so no per-call wiring needed.
+- **`app.tsx`** — wrapped all in-app `/estate/*` routes in `<Route
+  element={<EstateLayout/>}>` and added the `/estate/profiles` route. The public
+  `/n/:token` nominee view stays outside the layout.
+- **`MainLayout.tsx`** — "Profiles" nav item (UsersIcon) under the Wealth Vault
+  submenu.
+
+**Deviations (intentional, codebase consistency)**: forms use direct `useState`
+(mirrors `NomineesPage` and the other estate pages, not react-hook-form) — same
+deviation already logged for the estate module.
+
+**Verification**: `pnpm nx build @org/app` green; `pnpm nx run-many -t lint -p
+@org/app @org/api-client` → **0 errors** (16 pre-existing warnings, none in the
+new estate files). **NOT runtime-tested** — needs the migration applied
+(`20260618160000_estate_profiles`) + a browser walk: create a 2nd profile,
+switch, add an asset, see net worth scoped; share by email, log in as that
+account → profile appears with role.
+
+## 2026-06-18 — Estate multi-profile: migration applied + re-verified
+
+- Applied `20260618160000_estate_profiles` via `pnpm prisma:migrate` (only pending
+  migration; "All migrations have been successfully applied") + `pnpm prisma:generate`.
+- Re-verified post-migrate: `pnpm nx build @org/api` green (webpack compiled), `pnpm nx
+  build @org/app` green, `pnpm nx run-many -t lint -p @org/api @org/app @org/dto
+  @org/api-client` → **0 errors**.
+- Feature is now code-complete **and** DB-ready. Remaining: the browser walk (docs/15
+  §4.5) — owner is running it.
+
+## 2026-06-18 — Estate pages full-width (per owner request)
+
+Removed the `mx-auto max-w-3xl` / `max-w-2xl` content cap from all in-app estate
+pages (Home, Assets detail, Asset new, Import, Bulk import, Profiles, Nominees,
+Release, Report) and the `EstateLayout` profile-switcher bar — they now use the
+full content width of the app shell. The public `/n/:token` `NomineeAccessPage`
+keeps its centered `max-w-3xl` (standalone read-only claim page, not in the app shell).
+
+## 2026-06-18 — Fix: duplicate "self" estate profiles (race in ensureSelf)
+
+**Bug**: `listProfiles` returned two `isSelf:true` rows for one user. Root cause:
+`EstateProfileService.ensureSelf` did a non-atomic `findFirst`-then-`create`. The
+new profile switcher fires several `/estate/*` requests on load (and React
+StrictMode double-invokes in dev), so two concurrent `ensureSelf` calls both saw
+"no self profile" and both inserted one.
+
+**Fix (three parts)**:
+- Migration `20260618170000_estate_self_profile_dedupe`: collapses existing dupes
+  (re-points Asset/Nominee/WealthSnapshot/ReleaseGrant + EstateProfileAccess onto
+  the oldest self profile per owner, deletes the extras), then adds a **partial
+  unique index** `UNIQUE ("ownerUserId") WHERE "isSelf" = true`. (The successful
+  index creation proves no dupes remain — it can't be built otherwise.)
+- `ensureSelf` now catches the `P2002` unique violation from a lost race, returns
+  the winning self profile, and removes the orphaned Vault person it had minted.
+  Changed `import type { Prisma }` → `import { Prisma }` for the runtime error class.
+- schema.prisma: documented the partial index on `EstateProfile` (Prisma can't
+  express partial unique indexes; it lives in the raw migration). Do NOT replace it
+  with `@@unique([ownerUserId, isSelf])` — that would also forbid multiple non-self
+  profiles per owner.
+
+Migration applied (`pnpm prisma:migrate`); `@org/api` build green.
+
+**Known residue**: the dedupe deletes the duplicate *profile* but the orphaned
+Vault PERSON entity it had created (an empty "self"-named person) is left in the
+Vault — SQL can't safely unwind Vault crypto. Harmless; delete it from /vault if it
+shows as a stray person.
+
+Also this session: estate pages made full-width (removed `mx-auto max-w-*`); profile
+switch now `resetQueries(['estate'])` (clears + refetches active queries) instead of
+`removeQueries`, so the page reliably refreshes scoped to the new profile.
+
+## 2026-06-18 — App-wide UI consistency: bulk-action bar, page header, error boundaries
+
+Several UI-consistency changes (owner-driven), all build + lint green (0 errors):
+
+**1. Standardized DataTable selection + bulk-action bar (`@org/ui` data-table.tsx).**
+Added a `selection` ({selectedIds, onChange, isSelectable?}) + `bulkActions(ids, clear)`
++ `selectionLabel` API. DataTable now injects a narrow (36px) always-on leading
+checkbox column (shared `SelectCheckbox`, header = select-all-visible) and renders ONE
+standardized themed bar **directly above the grid** when ≥1 row is selected
+(`border-border bg-secondary/60`, "{n} selected" + page actions + an X Clear button).
+Migrated **EstateAssetsPage, ReviewQueuePage, BatchesPage, DocumentsList** off their
+hand-rolled checkbox columns + divergent sticky bars (DocumentsList's was a too-light
+`bg-primary/5` floating bar; review/batches were `bg-background/95` sticky). Removed the
+per-page "Select multiple" toggles (selection is always on now). Tuned EstateAssets
+column widths (type/value/updated tighter, name/institution wider) and replaced the raw
+`⋯` glyph with a proper `MoreIcon`/`MoreGlyph` SVG icon button.
+
+**2. Standardized `PageHeader` (`components/page-header`).** Title + subtitle + actions
+slot, a Back button just before the title (sub-routes), and a sidebar-collapse toggle.
+Applied to all 10 estate pages. Pattern available for rollout to the rest of the app.
+
+**3. Sidebar collapse (MainLayout).** Desktop-only collapse, persisted (`nav.collapsed`),
+toggled from the PageHeader icon; a fixed fallback "show sidebar" button guarantees
+recovery on pages without a PageHeader. New `layout-context.ts` shares the toggle.
+
+**4. Error boundaries (`components/error-boundary`).** A class `ErrorBoundary` + themed
+`ErrorFallback` (Try again / Reload / Go to dashboard). Wired app-level (main.tsx) and
+route-level (MainLayout Outlet, keyed by pathname so navigation auto-resets).
+
+**5. Estate pages full-width** (removed `mx-auto max-w-*` from the in-app pages; public
+`/n/:token` stays centered). Profile switch now `resetQueries(['estate'])` (clears +
+refetches) so data reliably refreshes for the new profile.
+
+Scope notes (honest): the standardized bulk bar covers the four list pages above (the
+ones with bulk actions); read-only admin tables were left as-is. PageHeader was applied
+to the estate module; rolling it out to documents/vault/admin pages is follow-up. Nothing
+runtime-tested — owner verifies in browser.
+
+## 2026-06-18 — Per-profile amount masking + header rollout + groups bulk
+
+**Amount masking (DB-backed, default ON)** — privacy default so the vault doesn't
+show every amount.
+- Schema: `EstateProfile.maskAmounts Boolean @default(true)` + migration
+  `20260618180000_estate_profile_mask` (applied). Included in `ResolvedProfile`/
+  `present()` and the api-client `EstateProfile` type.
+- API: `PATCH /estate/profiles/:id` (owner/manager) via new `EstateProfileService.update`
+  + `updateEstateProfileSchema`/`UpdateEstateProfileDto`. api-client `updateProfile`.
+- Frontend: `profile-context` exposes `maskAmounts` + `toggleMaskAmounts` (persists via
+  `useUpdateProfile`); `formatMoney(value, currency, masked)` shows "<symbol> ••••••"
+  when masked. Applied to net worth + breakdown (home), asset list value, asset detail
+  value + history. A mask/reveal eye toggle lives in the estate header.
+
+**Estate header** — the profile switcher bar (top of every `/estate/*` page) now also
+carries the amount-mask eye toggle alongside the profile Select + "Manage profiles".
+
+**Groups bulk actions** — `/groups` DataTable now has selection + a bulk-delete action
+(standardized bar), matching assets/documents/review/batches.
+
+**PageHeader rollout** — applied the shared PageHeader (title + back + sidebar toggle +
+actions) to the top-level pages: Dashboard, Documents, Vault, Search, Groups (+ all 10
+estate pages earlier). STILL TODO (follow-up): sub-detail pages (vault entity, group
+detail, asset… done), intelligence pages (Batches/ReviewQueue have custom icon headers),
+admin/config pages, Settings.
+
+Verification: `@org/api` + `@org/app` build green; app lint **0 errors** (16 pre-existing
+warnings). Migration applied. NOT runtime-tested — owner verifies in browser. Note: a
+running vite dev server must be **restarted** to clear a stale "PageHeader is not defined"
+HMR error from mid-session (new module added). Pre-existing unrelated typecheck noise in
+`tools/prisma/seed.ts` and `*/vite.config.mts` does not fail the build targets.
+
+## 2026-06-18 — Estate profile controls moved into the page header
+
+Per owner feedback (the switcher bar above the header "looked bad"): removed the
+separate ProfileSwitcherBar and instead feed compact profile controls (profile
+Select + amount-mask eye toggle + "Manage" link) into the PageHeader's right side
+via a new `PageHeaderSlotContext` (components/page-header). EstateLayout provides
+the slot for all `/estate/*` pages, so the controls render *inside* each page's
+header rather than as a disconnected bar above it. Generic pages (no slot) are
+unaffected. EstateProfilesPage now shows an Active badge / "Switch to" action per
+profile alongside Share/Delete, so existing profiles are clearly manageable.
+
+## 2026-06-18 — Theme: proper light-mode elevation tiers (fix stark-white surfaces)
+
+**Symptom (owner):** sidebar + cards rendered stark white while the app shell is
+light-blue — surfaces looked like a different color system.
+
+**Root cause (token design, not a styling bug):** in light mode `--card`/`--popover`
+were pure white (`1 0 0`, zero chroma) while the canvas carried a real blue tint
+(`--secondary 0.92 0.04 250` via MainLayout's `bg-secondary/50`). Worse, `Card` and the
+sidebar used `bg-background` (`0.97 0.01 240`, ~no tint) rather than the surface token,
+so surfaces borrowed the canvas token and read as white; popovers (which *do* use
+`bg-popover`) were even whiter — inconsistent within one screen.
+
+**Fix (chosen direction: proper elevation tiers):**
+- `apps/app/src/styles.css` (light `:root`): `--card` and `--popover` `1 0 0` →
+  `0.99 0.008 250` (lightest tier, faint blue — elevated but not stark white);
+  `--background` `0.97 0.01 240` → `0.96 0.018 250` (hue aligned to the blue family,
+  marginally lower L so surfaces sit clearly above it). Dark mode untouched (already
+  had a tinted, lighter `--card`).
+- `libs/shared/ui/src/components/card.tsx`: `bg-background` → `bg-card text-card-foreground`.
+- `apps/app/.../main-layout/MainLayout.tsx`: sidebar `<aside>`, mobile `<header>`, and the
+  collapsed-sidebar reopen button `bg-background` → `bg-card`. The in-sidebar ⌘K search
+  trigger keeps `bg-background` on purpose so it reads as a recessed input against the
+  now-lighter sidebar.
+
+Elevation order (light): canvas `bg-secondary/50` (~0.945, most blue) < body
+`background` (0.96) < surfaces `card` (0.99, lightest). Everything stays in the blue family.
+
+**Verify:** app lint **0 errors** (16 pre-existing warnings). Typecheck has pre-existing
+failures in unrelated WIP files (`DocumentInsights.tsx:59`, `data-table.tsx:301`, a Button
+`variant="default"`) — not touched here; CSS/className edits cannot cause those TS errors.
+NOT runtime-tested — owner verifies in browser (restart vite to pick up the CSS-var change).
+
+## 2026-06-18 — Fix: estate AI-extraction client timeout (30s abort on a 59s call)
+
+**Symptom (from API log):** `POST /estate/extract-holdings` → client "request aborted"
+at `responseTime 29999` (30s), yet the server kept working and returned `201 +59584ms`.
+The CAS extraction *succeeded* but the client had already given up, so the result was
+discarded — and we still paid for the AI call (`AiUsage` row inserted).
+
+**Root cause:** `libs/shared/api-client/src/lib/http.ts:23` sets a global axios
+`timeout: 30_000` for every request. AI document extraction (vision/text → structured
+holdings) routinely exceeds that — a Consolidated Account Statement took ~60s.
+
+**Fix:** per-request `timeout` overrides on the four AI-bound estate calls in
+`libs/shared/api-client/src/lib/estate.service.ts` (global 30s stays for normal CRUD):
+`extractFromUpload`, `extractHoldings`, `extractFromDocument` → `AI_EXTRACT_TIMEOUT_MS`
+(180s); `importFiles` → `AI_BULK_TIMEOUT_MS` (600s, since it fans out one extraction per
+file, up to 50). `HttpClient` is `AxiosInstance`, so the config arg is fully typed.
+
+**Verify:** typecheck adds no new errors (3 pre-existing WIP errors in GroupIntelligencePanel/
+DocumentInsights/data-table remain, untouched). NOT runtime-tested — owner re-uploads a CAS
+and confirms the holdings now return instead of timing out.
+
+**Known follow-ups (not done here):**
+- **Server keeps spending after client disconnect.** Even with a longer client timeout, if
+  the user navigates away the server finishes the AI call and bins it. Proper fix: wire
+  `req` close → `AbortSignal` into `AiService.extract`. Larger change; logged for later.
+- **Intermittent `400 "No file uploaded"`** seen on the first attempt (req 22, 17ms, no DB
+  query before the 400 → never reached `suggestMany`, so it's the controller's
+  `if (!file)` guard, not the password path and not a multer size limit). Needs the 400
+  response body / a repro to pin down. Retrying with the file attached worked (req 23).
+
+## 2026-06-18 — Estate CAS extraction overhaul (accuracy + units + per-type + keep-source)
+
+User report: a large CAMS CAS extracted ₹36L vs the real ₹50L. Five units, all
+api build ✓ / app typecheck (only 3 pre-existing unrelated errors) / lint 0 across
+api+app+dto+api-client. Two migrations applied. NOT runtime-tested (needs vision AI + a real CAS).
+
+**1. Accuracy + reconciliation.** Root cause: Claude `extract` defaults
+`max_tokens: 8000` (`claude.provider.ts:178`) and `suggestMany` passed no override →
+the holdings JSON array truncated on big statements (the under-count). Fixes in
+`asset-document.service.ts`: `maxTokens: 32000` for the holdings call; prompt now
+forbids early-stop/summarising; the model also returns the statement's printed
+`portfolioTotal` + `statementDate`. `suggestMany` now returns
+`{ holdings, summary, reconciliation }` (was a bare array) where reconciliation =
+{ extractedTotal, statedTotal, deltaPct, matched(|Δ|≤1%), holdingsExtracted }.
+`EstateImportPage` shows a banner: green when reconciled, amber "totals don't match —
+review before importing" on mismatch, neutral when no total was printed.
+
+**2. Units field end-to-end.** `Asset.unitsHeld Decimal(28,8)` + migration
+`estate_asset_units`. `units` on create/update asset Zod DTO; `tracksUnits` flag on
+`estateAssetTypeSchema` (+ code defaults in estate.constants: MF/stocks/gold/crypto/
+bond/nps = true). `asset.service` persists + presents units. api-client `EstateAsset`/
+`AssetSuggestion`/`CreateAssetPayload`/`EstateAssetType` updated. New-asset form shows a
+units input only when the selected type tracksUnits; detail page shows a Units row when
+present; import rows show "N units". ⚠️ Existing DB config rows lack `tracksUnits` (Zod
+fills false on parse) → MF/stocks won't show the manual units field until the estate
+config is re-saved/re-seeded; extraction still captures units regardless (code-driven),
+and imported units always display.
+
+**3. Per-type extraction.** `EXTRACTION_GUIDANCE` map + `extractionGuidanceBlock()` in
+estate.constants, folded into both `suggest` + `suggestMany` prompts (MF→units×NAV current
+value not cost; stocks→qty×price; insurance→sum assured/maturity; bank→balance;
+FD→principal/maturity; gold→grams; etc.). Directly targets the "read invested instead of
+current value" error.
+
+**4. Keep source statement + password, mapped to assets.** `AssetDocument.passwordEnc`
+(AES-256-GCM master-key ciphertext via VaultCryptoService) + migration
+`estate_doc_password`. New `AssetDocumentService.bulkImportFromStatement` →
+`assets.bulkCreate` (now returns `assetIds`) then `attachStatementToAssets` (upload once,
+one AssetDocument per asset sharing the s3Key, kind 'cas', slotKey 'source_statement',
+encrypted password). New multipart `POST /estate/import-holdings` (file + assets JSON +
+password). Client `bulkCreateAssets(assets, source?)` posts multipart when a source file
+is given (180s timeout), else the JSON `/assets/bulk`. `EstateImportPage` passes the
+original file + password through. `extractFromDocument` now falls back to the stored
+(decrypted) password so a protected CAS re-extracts without re-typing. (Multi-file
+`importFiles` already stored+attached per file; password-retention there is a follow-up.)
+
+**Theme follow-up (bg-card report).** User saw cards/sidebar with no background after the
+earlier elevation-tier change. Investigated: the real Nx build (`dist/apps/app/assets/`)
+DOES emit `.bg-card{background-color:var(--color-card)}` + `--card: .99 .008 250` (light)
+/ `.18 .02 260` (dark) — the token is set up correctly (and `CitationEditor.tsx` already
+used `bg-card` pre-change). The transparent-card symptom is stale Vite dev-server CSS
+(Tailwind didn't regenerate the newly-used utility via HMR); fix = hard restart the dev
+server + hard-reload. No code change needed. Optional hardening offered: `@theme static`
+to always emit the card/popover tokens.
+
+## 2026-06-18 — Theme: tinted surfaces + dedicated sidebar token, finish token migration
+
+User reported cards and the side menu "still white" and wanted colors driven centrally.
+Root cause was two-fold, not a single hardcode:
+
+**1. Central token values were near-white.** `apps/app/src/styles.css` (the live OKLCH
+theme; `libs/shared/ui/src/styles/{colors,theme}.css` is the older HSL system) had
+`--card`/`--popover` at `0.99 0.008 250` — L=0.99, chroma 0.008 = effectively #fff. The
+sidebar already used `bg-card`, so it inherited the same near-white. Retuned (light):
+`--background 0.955 0.025 255`, `--card`/`--popover 0.985 0.014 255`, `--border`/`--input
+0.9 0.014 255` — soft cool-tinted off-white surfaces over a clearly tinted canvas, never
+stark white. Dark theme unchanged except new sidebar token.
+
+**2. Sidebar had no token of its own.** Added `--sidebar` / `--sidebar-foreground`
+(light `0.975 0.02 255` / `0.2 0.04 260`; dark `0.17 0.02 260` / `0.95 0.01 260`),
+registered `--color-sidebar(-foreground)` in the `@theme` block, and pointed the
+`<aside>` + mobile header in `MainLayout.tsx` at `bg-sidebar text-sidebar-foreground`.
+Nav rail is now re-skinnable independently of cards from one place.
+
+**3. Finished migrating hardcoded UI chrome to tokens.** AuthLayout (`bg-gray-50`→
+`bg-background`, `text-gray-900`→`text-foreground`, `text-gray-500`→`text-muted-
+foreground`); Register/ForgotPassword/ResetPassword headings + helper text → `text-
+foreground`/`text-muted-foreground`; `oauth-buttons.tsx` `bg-white hover:bg-gray-50`→
+`bg-card hover:bg-secondary text-card-foreground`.
+
+**Deliberately left white:** document/paper surfaces — `ArtboardIframe`, `PaginatedPreview`
+(`text-zinc-900` = print ink), rich-text `document-editor` page, and `SignaturesDialog`
+pads. These are literal A4/print + signature surfaces; theming them (esp. dark `bg-card`)
+would wrongly darken the WYSIWYG page. Verified: `nx run-many -t lint -p app,ui` → 0 errors.
+
+**Theme refinement — elevation/contrast (same day).** First pass tinted everything to a
+similar light-blue → flat, low hierarchy. User asked for "more separation". Root cause of
+the floating table: `data-table.tsx` container (the rounded/border wrapper, ~L549) had **no
+background fill**, so the table showed the `bg-secondary/50` canvas straight through. Fixes:
+(1) added `bg-card` to that wrapper so tables sit on a surface; (2) retuned tokens for a
+clean elevation ramp — cards/popovers now the brightest near-white surface (`--card
+0.995 0.005 255`), canvas tinted backdrop, sidebar a distinct deeper-tinted panel
+(`--sidebar 0.965 0.024 255`); (3) fixed inverted dark-mode elevation (card was *darker*
+than the canvas) — dark `--card 0.215`, `--sidebar 0.155`. Lint `ui` → 0 errors.
+
+## 2026-06-18 — Header/sidebar UX + estate header consolidation
+
+- **Sidebar collapse moved off the page header.** The `PageHeader` rendered a sidebar
+  toggle before every title (redundant). Removed it; the collapse control now lives in the
+  sidebar's own brand row (desktop, `SidebarCollapseIcon`), with a mobile close (`CloseIcon`)
+  for the drawer. `MainLayout` passes `onToggleCollapse={toggleSidebar}` to `Sidebar`. The
+  fixed top-left reopen button (collapsed state) is unchanged.
+- **PageHeader responsive.** Now stacks on mobile (`flex-col … sm:flex-row`); title is
+  `text-xl sm:text-2xl`, subtitle `text-sm sm:text-base`; actions wrap and left-align on
+  mobile, right-align from `sm`.
+- **Estate header: 3 controls → 1.** `/estate` crammed a profile `Select` (w-44) + eye/mask
+  toggle + Manage button into the header slot ("too many" on mobile). Replaced with a single
+  `DropdownMenu` (`EstateLayout.tsx`): trigger is icon-only on mobile, shows the active
+  profile name from `sm` up; menu holds the profile radio-group (switch), a "Show amounts"
+  checkbox (mask toggle), and "Manage profiles". Removed the `Select`/`EyeIcon` machinery.
+- Verify: lint `app,ui` → 0 errors. Typecheck surfaces 3 *pre-existing* errors from other
+  uncommitted WIP (GroupIntelligencePanel Button variant; DocumentInsights; data-table
+  column-`pinned` typed boolean vs 'left'/'right') — none from this change. Left the
+  data-table pinning type error for whoever owns that WIP.
+
+## 2026-06-18 — Responsive sweep: DataTable mobile cards, header overflow, paper-surface audit
+
+- **DataTable mobile card view (every list page at once).** The table only existed as a
+  horizontally-scrolling grid — unusable on phones. `data-table.tsx` now renders the table
+  `hidden sm:block` and, below `sm`, a stacked **card per row**: the first non-pinned column
+  is the card title, pinned-left cells (selection checkbox) sit left, pinned-right cells
+  (actions `⋯`) sit right, and the remaining columns render as label/value pairs (labels
+  pulled from a new `columnHeaderById` map). New `MobileCard<T>` component; shared
+  search/bulk-bar/pagination footer unchanged. Also widened `ColumnMeta.pinned` to
+  `boolean | 'left' | 'right'` so left/right pinning is distinguishable in the card layout —
+  which additionally cleared the pre-existing `data-table.tsx:301` typecheck error.
+- **PageHeader secondary-action overflow.** New declarative `secondaryActions:
+  PageHeaderAction[]` prop — rendered inline as ghost buttons from `sm` up, collapsed into a
+  single `⋯` `DropdownMenu` on mobile so headers never overflow. Applied to `EstateHomePage`
+  ("Import statement" → secondary; "Add asset" stays the primary CTA). Other pages can adopt
+  incrementally.
+- **Paper-surface dark-mode audit → no change (correct as-is).** `PaginatedPreview` page
+  (`bg-white text-zinc-900`), `ArtboardIframe` (`bg-white`), and `SignaturesDialog` pads are
+  literal print/ink + signature surfaces sitting on a themed backdrop with a shadow (the
+  WYSIWYG "floating page" — same as Word/Docs dark mode). Theming them to `bg-card` would
+  wrongly darken the page; left white intentionally in both themes.
+- Verify: lint `app,ui` → 0 errors. Typecheck → 2 *pre-existing* errors only
+  (GroupIntelligencePanel Button variant; DocumentInsights arg count), both in untouched WIP.
+
+## 2026-06-18 — Estate dashboard (charts) + per-asset-type detail fields
+
+**Overview & report dashboards.** Added dependency-free, theme-driven SVG charts
+(`apps/app/src/app/features/estate/components/charts.tsx`: `DonutChart`, `TrendChart`,
+`HBarList`, `ChartLegend`, `compactMoney`; colours from `--color-*` CSS vars; all amount
+labels respect the mask toggle). `EstateHomePage` is now a net-worth dashboard: headline +
+**net-worth trend** (range filter 3M/6M/1Y/All via `useNetWorthHistory` — new hook),
+**allocation donut** (category filter All/Financial/Physical/Other) + legend, **top
+holdings** bars, **financial-vs-physical** split, then nudges + quick links. `EstateReportPage`
+gained an **allocation donut** + **nominee-coverage donut** (share of estate with a nominee).
+
+**Per-asset-type detail fields ("proper details for wealth").** Decision (with user): NOT the
+dynamic doc-type schema/pipeline machinery — a **static, code-defined per-type field
+registry** instead (`asset-fields.ts`: insurance → kind/sumAssured/premium/validity; MF →
+fundHouse/folio/scheme/NAV; shares → exchange/ticker/avg-price; FD/bond/PPF →
+rate/payout/tenure; property → kind/address/city/area/RERA; gold → form/grams/purity; crypto,
+epf, nps, vehicle, bank…). Each kind can also relabel the built-in maturity field (insurance →
+"Valid till"). Storage: new **non-secret** `Asset.details Json?` column (migration
+`20260618190000_estate_asset_details`) — kept out of the encrypted blob so it stays
+queryable/displayable (enables future "insurance expiring" nudges). DTO `createAsset`/
+`updateAsset` gained a bounded `details` record; `asset.service` create/update/`present`
+persist + return it; api-client `EstateAsset`/`CreateAssetPayload` typed. Reusable
+`AssetDetailsFields` (edit) + `AssetDetailsView` (read) + `toDetailsPayload`/`detailsToFormValues`
+helpers; the New-asset form renders + submits per-type fields, and the detail page shows them
+with inline edit (`useUpdateAsset`).
+
+**On reusing doc-types + classify/extract pipeline:** they share the *schema-driven* pattern
+but are different domains (document ingestion vs asset records). The pipeline's real reuse
+point is *import* (auto-filling these fields from a CAS/statement) — a follow-up; the import
+flow still maps to the fixed top-level fields, not `details`, today.
+
+Verify: `nx typecheck/lint` for dto+api-client+api+app → 0 lint errors; only 2 *pre-existing*
+typecheck errors remain (GroupIntelligencePanel, DocumentInsights — untouched WIP). The
+migration must be applied to the DB (`prisma migrate deploy`) before the column is live.
+
+## 2026-06-18 — Import wiring: statements now auto-fill per-type asset details
+
+Extended the existing estate statement extraction (not the full pipeline) to populate the new
+`Asset.details`. Moved the per-type field registry into `@org/dto`
+(`estate/asset-fields.ts`) so app + API share one definition; app's `asset-fields.ts` is now a
+thin re-export. Added two registry helpers: `assetDetailGuidance(keys)` (builds per-type
+`details` key guidance for the extraction prompt, incl. select option values) and
+`sanitizeDetails(type, raw)` (filters/coerces model output against the registry — numbers
+parsed, selects matched by value or label, unknown keys dropped). Server
+`asset-document.service.ts`: both AI schemas (single + holdings) gained a `details` object,
+both instructions append `assetDetailGuidance`, and `mapSuggestion` now returns
+`sanitizeDetails(type, row.details)`. `bulkCreate` (the import path) + the single autofill
+persist `details`. Client `AssetSuggestion` typed; `EstateImportPage` passes `details` into
+each `CreateAssetPayload`; the New-asset autofill seeds the detail form from the suggestion.
+Net effect: upload a CAS/statement → imported assets arrive with fund house/folio/NAV,
+sum-assured/premium, FD rate, etc. already filled (sanitised), not just a bare value.
+
+Deliberately did NOT route estate import through the document Pipeline/StageExecution/
+review-queue machinery — see reasoning in this session's notes: a personal one-file import is
+an interactive single step (the import page already shows holdings + reconciliation to
+confirm); the pipeline's queueing/multi-stage/review-queue value is for org-scale batch
+document processing. Asset records stay their own domain (mutable entity w/ valuations,
+nominees, encrypted secrets, net-worth math), not a document-type extraction artifact.
+
+Verify: typecheck dto+api-client+api+app → only the 2 pre-existing errors; lint 0 errors.
+
+## 2026-06-18 — Estate: per-type extraction prompt + document analysis & Q&A
+
+**Part A — per-type extraction prompt (accuracy).** The single-asset autofill now sends the
+user's chosen `assetType`; the server builds a FOCUSED prompt for just that type (its
+guidance line + its `details` keys) instead of a generic all-types prompt — sharper
+classification + field extraction. Model may still correct the type. Threaded through
+client `extractFromUpload(file, password?, assetType?)` → `/estate/extract` (@Body assetType)
+→ `suggest(..., assetType?)` (focusType/focusLabel/guidanceKeys). CAS/holdings stays
+multi-type. (`asset-document.service.ts`, `estate-document.controller.ts`, client,
+`EstateAssetNewPage` autofill.)
+
+**Parts B/C — analysis + ask-questions over estate documents ("same like docs"), Slice 1.**
+New `EstateDocumentAnalysisService` (estate-vault) gives statements/policies the same
+treatment as the docs module: summary/parties/keyDates/obligations/riskFlags analysis (same
+`@org/doc-intelligence` prompts + schema, deterministic `@org/legal-reference` citation
+check) and grounded RAG Q&A (chunk → embed → topK → cited answer). Writes to the SAME
+polymorphic tables (`AnalysisRun`, `SourceChunk`) under `subjectType='asset_document'` — so
+the original document and its analysis live together exactly like docs, no migration needed.
+Kept self-contained (reuses shared libs + tables, NOT the docs `AnalysisService` class) to
+avoid coupling estate to the documents/search/wallet module graph. Added
+`AssetDocumentService.normalizedTextForDoc()` (parse w/ stored password) + `assertDocAccess()`.
+Endpoints: `POST/GET .../documents/:docId/analyze|analysis` + `POST .../ask`. Client:
+`analyzeDocument`/`documentAnalysis`/`askDocument` + `EstateDocAnalysis`/`EstateDocAnswer`
+types. UI: an Analyze/Ask panel per document in `AssetDocuments` (summary + key dates + risk
+flags + an "ask about this document" box with page citations).
+
+Also fixed a latent bug: `asset.service.ts` imported `Prisma` as `import type` but now uses
+`Prisma.JsonNull` (value) — switched to a value import (caught by `nx build api`).
+
+Verify: `nx build api` → compiles; `nx typecheck/lint app,api-client,dto` → only the 2
+pre-existing errors (GroupIntelligencePanel, DocumentInsights), 0 lint errors.
+
+**Deferred (next slices):** (2) full-text SEARCH over estate docs — index into the shared
+`SearchIndex` (add `SearchTextService.forAssetDocument` + a `kind`, enqueue on upload); (3)
+portfolio-level "wealth analysis" (analyze the whole net worth, not just one document).
+
+## 2026-06-18 — Portfolio "wealth analysis" (Slice A)
+
+`PortfolioAnalysisService` (estate-vault): computes portfolio metrics DETERMINISTICALLY —
+allocation/concentration by type (% of net worth), category split, nominee-coverage % (value
+with a nominee ÷ total, from `ownerReport`), and count maturing within 90 days — then feeds
+ONLY those numbers to `ai.extract` for a summary + prioritised risks + suggestions (golden
+rule: the model interprets, never invents figures). `POST /estate/portfolio/analyze?profileId=`
+on EstateController. Client `analyzePortfolio()` + `PortfolioAnalysis` type. UI: a "Wealth
+analysis" card on EstateHomePage (Generate → summary + risk dots + suggestions). Empty
+portfolio short-circuits to a friendly "add your first asset". `nx build api` + app/api-client
+typecheck green (only the 2 pre-existing errors). Runtime needs working AI provider keys.
+
+Tracking: see docs/TASKS.md "Estate Intelligence stream" — Slice A ticked; Slice B (full-text
+search over estate docs) is the remaining RESUME-HERE item.
+
+## 2026-06-18 — Full-text search over estate documents (Slice B)
+
+Estate assets now appear in global search (keyword + semantic), indexed at ASSET granularity
+(`kind='asset'`, `refId=assetId`) so a hit links to `/estate/assets/:id` and aggregates the
+asset's own fields + all its documents. New `AssetDocument.searchText` column (migration
+`20260618200000_asset_document_search_text`, applied to dev) caches parsed plaintext when a
+document is analyzed. `SearchTextService.forAsset()` builds bodyText from asset
+label/institution/details + each doc's searchText + the latest `AnalysisRun` summary per doc.
+`SearchIndexService` gained `kind='asset'` + `enqueueAsset` (indexNow→forAsset, embed-attribution
+branch); reindex is enqueued from `AssetService.create/update/bulkCreate` and after a document
+analyze (SearchModule is GLOBAL — injected directly, no module wiring). Widened the `'asset'`
+kind through: `SearchIndexJob`, `SearchParams`, `SearchQueryDto.kind`, `SearchConfig.enabledKinds`
+(+ schema enum + system default), `SearchFacets` (server+client), client `SearchKind`, and
+`hrefForHit` (→ `/estate/assets/:refId`). Collateral fix: `GroupIntelligencePanel` SearchResults
+prop kind union widened.
+
+Verify: `nx build api` compiles; `app/api-client/dto` typecheck → only the 2 pre-existing errors
+(GroupIntelligencePanel:112 Button variant, DocumentInsights:59). Keyword search works without
+AI; the semantic leg needs embedding keys. Tracking: docs/TASKS.md — Slices A & B ticked.
+
+## 2026-06-19 — Estate search moved from global → vault-scoped (+ UI)
+
+Per user direction ("do not add this in global search, instead a search on vault level. also add the UI"),
+backed out the prior global-search asset integration and built a dedicated vault search.
+
+- **Revert (global search):** removed `kind='asset'` everywhere — `SearchIndexJob`, `SearchParams`,
+  `SearchQueryDto` enum, `enabledKinds` default + `SYSTEM_DEFAULT_SEARCH_CONFIG`, dto `searchConfigSchema`,
+  client `SearchKind`, `hrefForHit`, GroupIntelligencePanel hit type. Deleted `SearchIndexService.enqueueAsset`,
+  `SearchTextService.forAsset`, the asset branch in `indexNow`/`backfillAll`, and every `enqueueAsset` call
+  (AssetService create/update/bulk/remove, EstateDocumentAnalysisService). Kept `AssetDocument.searchText`
+  (column + on-analyze population) — reused below.
+- **Backend (vault search):** new `EstateSearchService.search(profile, q, limit)` scoped to one profile —
+  matches asset fields (label/institution/JSON details), each attached document's `searchText`+filename, and
+  `AnalysisRun(subjectType='asset_document')` summaries; returns one hit per asset (rank asset>document>analysis)
+  with a context snippet + `matchedIn`. `GET /estate/search` on EstateController; `vaultSearchQuerySchema` +
+  `VaultSearchQueryDto` in @org/dto; registered in EstateVaultModule. profileId auto-applied by the axios interceptor.
+- **Frontend:** `estate.searchVault()` + `VaultSearchHit`/`VaultSearchResult` types (api-client); `useVaultSearch()`
+  hook; `EstateSearchPage` at `/estate/search` — debounced + URL-synced query, type badge, matched-in badge,
+  client-side snippet highlight, each result links to the asset; reachable via a "Search" secondary action on
+  EstateHomePage.
+- **Verify:** `nx build api` + `nx lint api` → 0 errors; `nx typecheck app api-client dto` → only the 2 pre-existing
+  WIP errors (GroupIntelligencePanel Badge variant, DocumentInsights arg count). Keyword-only (ILIKE) — no AI keys
+  needed. Not runtime-verified end-to-end.

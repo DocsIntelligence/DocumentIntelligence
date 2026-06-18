@@ -562,7 +562,7 @@ export function BuilderShell({ documentId }: Props) {
   );
 
   const previewPane = (
-    <section className="h-full min-h-0 bg-secondary/20">
+    <section className="h-full min-h-0 bg-secondary/40">
       <ArtboardIframe
         componentKey={resolveComponentKey(doc)}
         data={draft}
@@ -704,7 +704,7 @@ export function BuilderShell({ documentId }: Props) {
               className={cn(
                 'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
                 mobileTab === tab
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary/50 text-primary'
                   : 'text-foreground/55 hover:text-foreground',
               )}
             >
@@ -737,7 +737,7 @@ export function BuilderShell({ documentId }: Props) {
                 </div>
               </Panel>
 
-              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/40 active:bg-primary/50">
                 <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
               </Separator>
             </>
@@ -762,7 +762,7 @@ export function BuilderShell({ documentId }: Props) {
 
           {showPreview && (
             <>
-              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/40 active:bg-primary/50">
                 <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
               </Separator>
 

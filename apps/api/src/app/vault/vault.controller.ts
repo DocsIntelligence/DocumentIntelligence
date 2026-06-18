@@ -9,10 +9,11 @@ import {
   Post,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiCookieAuth,
@@ -115,6 +116,21 @@ export class VaultController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.vault.addDocument(user.id, id, file, kind ?? 'other');
+  }
+
+  @Post('entities/:id/documents/bulk-scan')
+  @UseInterceptors(FilesInterceptor('files', 20))
+  @ApiOperation({
+    summary:
+      'Upload many KYC docs → classify + extract + attach each, then autofill the entity',
+  })
+  bulkScan(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    if (!files?.length) throw new BadRequestException('No files uploaded');
+    return this.vault.bulkIngest(user.id, id, files);
   }
 
   @Post('entities/:id/documents/:docId/scan')

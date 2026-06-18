@@ -56,7 +56,7 @@ export function TemplateGallery({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] !max-w-3xl gap-3 overflow-hidden p-0">
+      <DialogContent className="max-h-[85vh] ! gap-3 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 pt-5 pb-3">
           <DialogTitle className="text-base">
             {t('editor.gallery.title', 'Choose a Template')}
@@ -100,7 +100,7 @@ export function TemplateGallery({
                       type="button"
                       onClick={() => handlePick(tpl)}
                       className={cn(
-                        'group flex items-start gap-3 rounded-md border border-border bg-background p-3 text-left transition-all hover:border-primary/60 hover:bg-secondary/30 focus:outline-none focus:ring-2 focus:ring-primary/40',
+                        'group flex items-start gap-3 rounded-md border border-border bg-background p-3 text-left transition-all hover:border-primary/60 hover:bg-secondary/40 focus:outline-none focus:ring-2 focus:ring-primary/40',
                         active && 'border-primary ring-1 ring-primary/40',
                       )}
                     >
@@ -113,7 +113,7 @@ export function TemplateGallery({
                             {tpl.name}
                           </span>
                           {active && (
-                            <span className="rounded-full bg-primary/15 px-1.5 py-0 text-[10px] font-medium text-primary">
+                            <span className="rounded-full bg-primary/35 px-1.5 py-0 text-[10px] font-medium text-primary">
                               {t('editor.gallery.loaded', 'Loaded')}
                             </span>
                           )}

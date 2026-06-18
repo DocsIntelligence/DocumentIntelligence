@@ -9,8 +9,18 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover';
  */
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-  'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -95,7 +105,8 @@ export function Calendar({
               onClick={() => onSelect(iso)}
               className={cn(
                 'h-8 rounded text-sm transition-colors hover:bg-secondary',
-                isSelected && 'bg-primary text-primary-foreground hover:bg-primary',
+                isSelected &&
+                  'bg-primary text-primary-foreground hover:bg-primary',
                 !isSelected && isToday && 'border border-primary/50',
               )}
             >
@@ -148,7 +159,7 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            'flex h-9 w-full items-center justify-between rounded border border-border bg-transparent px-3 py-2 text-sm shadow-sm transition-colors hover:bg-secondary/20 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50',
+            'flex h-9 w-full items-center justify-between rounded border border-border bg-transparent px-3 py-2 text-sm shadow-sm transition-colors hover:bg-secondary/40 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50',
             !d && 'text-muted-foreground',
             className,
           )}

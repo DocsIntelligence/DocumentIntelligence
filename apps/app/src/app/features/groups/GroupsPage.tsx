@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import { useCreateGroup, useDeleteGroup, useGroupsPage } from './queries';
 import { useLookupOptions } from '../documents/queries';
 import type { DocumentGroupSummary } from '@org/api-client';
@@ -39,6 +40,7 @@ export function GroupsPage() {
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setPage(0);
@@ -76,6 +78,25 @@ export function GroupsPage() {
       variant: 'destructive',
     });
     if (ok) del.mutate(id);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const ok = await confirm({
+      title: t('groups.bulkDeleteTitle', 'Delete {{n}} group(s)?', {
+        n: ids.length,
+      }),
+      description: t(
+        'groups.bulkDeleteDesc',
+        'Documents inside are ungrouped, not deleted.',
+      ),
+      confirmLabel: t('common.delete', 'Delete'),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    for (const id of ids) del.mutate(id);
+    setSelected(new Set());
   };
 
   const kindIcon = (kind: string) =>
@@ -149,22 +170,19 @@ export function GroupsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('groups.title', 'Document Groups')}
-          </h1>
-          <p className="mt-1 text-foreground/60">
-            {t(
-              'groups.subtitle',
-              'Organize related documents into folders, bundles, or matters.',
-            )}
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          {t('groups.new', '+ New group')}
-        </Button>
-      </div>
+      <PageHeader
+        back={false}
+        title={t('groups.title', 'Document Groups')}
+        subtitle={t(
+          'groups.subtitle',
+          'Organize related documents into folders, bundles, or matters.',
+        )}
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            {t('groups.new', '+ New group')}
+          </Button>
+        }
+      />
 
       <DataTable
         tableId="groups.list"
@@ -187,6 +205,18 @@ export function GroupsPage() {
           onPageSizeChange: setPageSize,
           loading: isFetching && isPlaceholderData,
         }}
+        selection={{ selectedIds: selected, onChange: setSelected }}
+        selectionLabel={(n) => t('groups.nSelected', '{{n}} selected', { n })}
+        bulkActions={() => (
+          <Button
+            variant="error"
+            size="sm"
+            onClick={handleBulkDelete}
+            disabled={del.isPending}
+          >
+            {t('common.delete', 'Delete')}
+          </Button>
+        )}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <Select

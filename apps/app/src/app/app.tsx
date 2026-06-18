@@ -68,11 +68,28 @@ import {
 } from './features/intelligence';
 import { SearchPage } from './features/search';
 import {
+  EstateHomePage,
+  EstateAssetsPage,
+  EstateAssetNewPage,
+  EstateImportPage,
+  EstateBulkImportPage,
+  EstateAssetDetailPage,
+  EstateSearchPage,
+  EstateLayout,
+  EstateProfilesPage,
+  NomineesPage,
+  EstateReleasePage,
+  EstateReportPage,
+  NomineeAccessPage,
+} from './features/estate';
+import {
   VaultPage,
   VaultEntityPage,
   VaultEntityEditPage,
   VaultNewEntityPage,
 } from './features/vault';
+import { EstateVaultConfigPage } from './features/admin/estate/EstateVaultConfigPage';
+import { EstateGrantsPage } from './features/admin/estate/EstateGrantsPage';
 import { Settings } from './features/settings/Settings';
 import { AuthLayout } from './layouts/auth-layout/AuthLayout';
 import { MainLayout } from './layouts/main-layout/MainLayout';
@@ -101,6 +118,8 @@ export function App() {
        * domain.
        */}
       <Route path="/s/:token" element={<SharedDocumentView />} />
+      {/* Public, token-guarded nominee access (resolves only once released). */}
+      <Route path="/n/:token" element={<NomineeAccessPage />} />
 
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
@@ -124,6 +143,24 @@ export function App() {
         <Route path="/vault/new" element={<VaultNewEntityPage />} />
         <Route path="/vault/:id" element={<VaultEntityPage />} />
         <Route path="/vault/:id/edit" element={<VaultEntityEditPage />} />
+        {/* All in-app estate routes share the profile switcher + active-profile
+         *  context (docs/15). The public /n/:token nominee view stays outside. */}
+        <Route element={<EstateLayout />}>
+          <Route path="/estate" element={<EstateHomePage />} />
+          <Route path="/estate/search" element={<EstateSearchPage />} />
+          <Route path="/estate/assets" element={<EstateAssetsPage />} />
+          <Route path="/estate/assets/new" element={<EstateAssetNewPage />} />
+          <Route path="/estate/import" element={<EstateImportPage />} />
+          <Route
+            path="/estate/import-files"
+            element={<EstateBulkImportPage />}
+          />
+          <Route path="/estate/assets/:id" element={<EstateAssetDetailPage />} />
+          <Route path="/estate/profiles" element={<EstateProfilesPage />} />
+          <Route path="/estate/nominees" element={<NomineesPage />} />
+          <Route path="/estate/release" element={<EstateReleasePage />} />
+          <Route path="/estate/report" element={<EstateReportPage />} />
+        </Route>
         <Route path="/documents" element={<DocumentsList />} />
         <Route path="/documents/new" element={<NewDocumentPicker />} />
         <Route path="/documents/templates" element={<TemplatesPage />} />
@@ -229,6 +266,14 @@ export function App() {
         <Route
           path="/config/vault/doc-kinds/:kindId/edit"
           element={<EditVaultDocKindPage />}
+        />
+        <Route
+          path="/config/estate-vault"
+          element={<EstateVaultConfigPage />}
+        />
+        <Route
+          path="/config/estate-vault/grants"
+          element={<EstateGrantsPage />}
         />
 
         {/* Back-compat: redirect any /admin/* bookmark to its /config/*

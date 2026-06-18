@@ -16,7 +16,9 @@ import {
   createAuthService,
   createDocumentGroupsService,
   createDocumentsService,
+  createEstateService,
   createHttpClient,
+  installEstateProfileParam,
   createIntelligenceService,
   createIntelligenceAdminService,
   createLegalAiService,
@@ -36,6 +38,7 @@ import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import App from './app/app';
+import { ErrorBoundary } from './app/components/error-boundary';
 import { ConfirmProvider } from './app/components/confirm/ConfirmProvider';
 import { PromptProvider } from './app/components/confirm/PromptProvider';
 import { ServicesProvider } from './app/features/documents/services-context';
@@ -71,6 +74,9 @@ const http = createHttpClient({
   },
 });
 
+// Scope every profile-aware /estate/* request to the active person-vault.
+installEstateProfileParam(http);
+
 const auth = createAuthService(http);
 const users = createUsersService(http);
 const documents = createDocumentsService(http);
@@ -83,6 +89,7 @@ const intelligenceAdmin = createIntelligenceAdminService(http);
 const search = createSearchService(http);
 const vault = createVaultService(http);
 const vaultAdmin = createVaultAdminService(http);
+const estate = createEstateService(http);
 
 const store = configureAppStore({ services: { auth, users } });
 
@@ -103,6 +110,7 @@ const root = ReactDOM.createRoot(
 root.render(
   <Provider store={store}>
     <StrictMode>
+      <ErrorBoundary level="app">
       <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -117,6 +125,7 @@ root.render(
             search={search}
             vault={vault}
             vaultAdmin={vaultAdmin}
+            estate={estate}
           >
             <BrowserRouter>
               <ConfirmProvider>
@@ -130,6 +139,7 @@ root.render(
         </TooltipProvider>
       </QueryClientProvider>
       </ThemeProvider>
+      </ErrorBoundary>
     </StrictMode>
   </Provider>,
 );

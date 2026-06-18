@@ -1,7 +1,6 @@
 import {
   Badge,
   Button,
-  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -114,15 +113,9 @@ export function ReviewQueuePage() {
   const [autoOpened, setAutoOpened] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
   const bulkAction = useBulkRunAction(batchId);
-
-  // Reset selection when the user leaves multi-select mode.
-  useEffect(() => {
-    if (!selectMode) setSelected(new Set());
-  }, [selectMode]);
 
   const types = useMemo(
     () =>
@@ -209,31 +202,6 @@ export function ReviewQueuePage() {
   const openReview = (pipelineRunId: string) =>
     setCurrent(items.findIndex((x) => x.pipelineRunId === pipelineRunId));
 
-  const selectableRows = filtered;
-  const allOnPageSelected =
-    selectableRows.length > 0 &&
-    selectableRows.every((r) => selected.has(r.pipelineRunId));
-  const someOnPageSelected = selectableRows.some((r) =>
-    selected.has(r.pipelineRunId),
-  );
-  const togglePageSelection = (next: boolean) => {
-    setSelected((prev) => {
-      const out = new Set(prev);
-      for (const r of selectableRows) {
-        if (next) out.add(r.pipelineRunId);
-        else out.delete(r.pipelineRunId);
-      }
-      return out;
-    });
-  };
-  const toggleOne = (id: string) =>
-    setSelected((prev) => {
-      const out = new Set(prev);
-      if (out.has(id)) out.delete(id);
-      else out.add(id);
-      return out;
-    });
-
   const onBulkApprove = async () => {
     if (!approvableIds.length) return;
     const ok = await confirm({
@@ -253,7 +221,6 @@ export function ReviewQueuePage() {
       runIds: approvableIds,
     });
     setSelected(new Set());
-    setSelectMode(false);
   };
 
   const onBulkArchive = async () => {
@@ -278,40 +245,9 @@ export function ReviewQueuePage() {
       reason: 'Bulk skipped from review queue',
     });
     setSelected(new Set());
-    setSelectMode(false);
   };
 
   const columns: DataTableColumn<QueueEntry>[] = [
-    ...(selectMode
-      ? [
-          {
-            key: 'select',
-            header: (
-              <Checkbox
-                aria-label={t('common.selectAllOnPage', 'Select all on page')}
-                checked={
-                  allOnPageSelected
-                    ? true
-                    : someOnPageSelected
-                      ? 'indeterminate'
-                      : false
-                }
-                onCheckedChange={(v) => togglePageSelection(Boolean(v))}
-              />
-            ),
-            width: 'w-10',
-            pinned: 'left',
-            cell: (r: QueueEntry) => (
-              <Checkbox
-                aria-label={t('common.selectRow', 'Select row')}
-                checked={selected.has(r.pipelineRunId)}
-                onCheckedChange={() => toggleOne(r.pipelineRunId)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ),
-          } satisfies DataTableColumn<QueueEntry>,
-        ]
-      : []),
     {
       key: 'file',
       header: t('intelligence.queue.file', 'File'),
@@ -484,31 +420,34 @@ export function ReviewQueuePage() {
         </div>
       </div>
 
-      {selectMode && selected.size > 0 && (
-        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
-          <span className="text-sm font-medium text-foreground">
-            {t('intelligence.queue.nSelected', '{{n}} selected', {
-              n: selected.size,
-            })}
-            {approvableIds.length !== selected.size && (
-              <span className="ml-2 text-foreground/55">
-                ·{' '}
-                {t(
-                  'intelligence.queue.nApprovable',
-                  '{{n}} can be approved',
-                  { n: approvableIds.length },
-                )}
-              </span>
-            )}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelected(new Set())}
-            >
-              {t('common.clear', 'Clear')}
-            </Button>
+      <DataTable
+        tableId={
+          batchId
+            ? 'intelligence.reviewQueue.batch'
+            : 'intelligence.reviewQueue.global'
+        }
+        data={filtered}
+        columns={columns}
+        rowKey={(r) => r.pipelineRunId}
+        search={(r) =>
+          `${r.filename} ${r.documentTypeKey ?? ''} ${r.batchName ?? ''}`
+        }
+        searchPlaceholder={t(
+          'intelligence.queue.search',
+          'Search by file, type, or batch…',
+        )}
+        pageSize={25}
+        pageSizeOptions={[10, 25, 50, 100]}
+        initialSort={{ key: 'updated', dir: 'desc' }}
+        empty={t('intelligence.queue.empty', 'Nothing to review here.')}
+        selection={{ selectedIds: selected, onChange: setSelected }}
+        selectionLabel={(n) =>
+          approvableIds.length !== n
+            ? `${t('intelligence.queue.nSelected', '{{n}} selected', { n })} · ${t('intelligence.queue.nApprovable', '{{n}} can be approved', { n: approvableIds.length })}`
+            : t('intelligence.queue.nSelected', '{{n}} selected', { n })
+        }
+        bulkActions={() => (
+          <>
             <Button
               variant="outline"
               size="sm"
@@ -532,30 +471,8 @@ export function ReviewQueuePage() {
                     n: approvableIds.length,
                   })}
             </Button>
-          </div>
-        </div>
-      )}
-
-      <DataTable
-        tableId={
-          batchId
-            ? 'intelligence.reviewQueue.batch'
-            : 'intelligence.reviewQueue.global'
-        }
-        data={filtered}
-        columns={columns}
-        rowKey={(r) => r.pipelineRunId}
-        search={(r) =>
-          `${r.filename} ${r.documentTypeKey ?? ''} ${r.batchName ?? ''}`
-        }
-        searchPlaceholder={t(
-          'intelligence.queue.search',
-          'Search by file, type, or batch…',
+          </>
         )}
-        pageSize={25}
-        pageSizeOptions={[10, 25, 50, 100]}
-        initialSort={{ key: 'updated', dir: 'desc' }}
-        empty={t('intelligence.queue.empty', 'Nothing to review here.')}
         toolbar={
           (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
@@ -621,17 +538,6 @@ export function ReviewQueuePage() {
                 </Select>
               )}
               </div>
-              {count > 0 && (
-                <Button
-                  size="sm"
-                  variant={selectMode ? 'secondary' : 'outline'}
-                  onClick={() => setSelectMode((v) => !v)}
-                >
-                  {selectMode
-                    ? t('common.cancel', 'Cancel')
-                    : t('common.selectMultiple', 'Select multiple')}
-                </Button>
-              )}
             </div>
           )
         }

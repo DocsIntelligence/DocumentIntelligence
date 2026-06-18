@@ -183,7 +183,7 @@ export function DraftWithAIPage() {
                     className={cn(
                       'group rounded-xl border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm',
                       preset?.key === p.key
-                        ? 'border-primary/60 ring-1 ring-primary/30'
+                        ? 'border-primary/60 ring-1 ring-primary/40'
                         : 'border-border',
                     )}
                   >

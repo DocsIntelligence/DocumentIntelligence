@@ -77,7 +77,7 @@ function ChoiceCard({
         className={cn(
           'h-full space-y-2 rounded-xl p-5 transition-all hover:-translate-y-0.5 hover:shadow-md',
           accent
-            ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
+            ? 'border-primary/40 bg-primary/5 hover:border-primary/50'
             : 'hover:border-primary/40',
         )}
       >

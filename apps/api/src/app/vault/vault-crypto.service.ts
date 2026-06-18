@@ -4,11 +4,15 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  hkdfSync,
   randomBytes,
 } from 'node:crypto';
 
 const ALGO = 'aes-256-gcm';
 const IV_BYTES = 12;
+const KEY_BYTES = 32;
+/** Domain-separation salt for HKDF-derived per-principal KEKs (estate M4). */
+const KEK_SALT = 'starter-estate-vault-kek-v1';
 
 /**
  * AES-256-GCM encryption for vault field data (docs/10). The key comes from
@@ -49,24 +53,64 @@ export class VaultCryptoService {
   }
 
   encrypt(plaintext: string): string {
+    return this.encryptWith(this.key, plaintext);
+  }
+
+  decrypt(blob: string): string {
+    return this.decryptWith(this.key, blob);
+  }
+
+  // ── Envelope-encryption primitives (estate M4, docs/13 §1.1) ───────────────
+  //
+  // The data model is per-asset DEK + per-principal wrapped DataKeys. KEKs are
+  // derived from the master key via HKDF here; swapping to a hosted KMS later is
+  // an internal change to `deriveKek` (and wrap/unwrap → KMS calls) with NO
+  // schema change. Not zero-knowledge — the server can derive any KEK — which is
+  // the accepted v1 trade-off (docs/13 §1.1).
+
+  /** AES-256-GCM encrypt with an explicit key → "iv:tag:ciphertext" (base64). */
+  encryptWith(key: Buffer, plaintext: string): string {
     const iv = randomBytes(IV_BYTES);
-    const cipher = createCipheriv(ALGO, this.key, iv);
+    const cipher = createCipheriv(ALGO, key, iv);
     const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
     return `${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`;
   }
 
-  decrypt(blob: string): string {
+  /** Inverse of `encryptWith`. */
+  decryptWith(key: Buffer, blob: string): string {
     const [ivB64, tagB64, dataB64] = blob.split(':');
     if (!ivB64 || !tagB64 || !dataB64) {
       throw new Error('Malformed vault ciphertext');
     }
-    const decipher = createDecipheriv(ALGO, this.key, Buffer.from(ivB64, 'base64'));
+    const decipher = createDecipheriv(ALGO, key, Buffer.from(ivB64, 'base64'));
     decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
     return Buffer.concat([
       decipher.update(Buffer.from(dataB64, 'base64')),
       decipher.final(),
     ]).toString('utf8');
+  }
+
+  /** A fresh random 256-bit data-encryption key (DEK). */
+  randomKey(): Buffer {
+    return randomBytes(KEY_BYTES);
+  }
+
+  /** Derive a principal's 256-bit KEK from the master key (HKDF-SHA256). */
+  deriveKek(principalRef: string): Buffer {
+    return Buffer.from(
+      hkdfSync('sha256', this.key, KEK_SALT, principalRef, KEY_BYTES),
+    );
+  }
+
+  /** Wrap (encrypt) a DEK under a principal's KEK → storable string. */
+  wrapKey(dek: Buffer, kek: Buffer): string {
+    return this.encryptWith(kek, dek.toString('base64'));
+  }
+
+  /** Unwrap (decrypt) a wrapped DEK with a principal's KEK. */
+  unwrapKey(wrapped: string, kek: Buffer): Buffer {
+    return Buffer.from(this.decryptWith(kek, wrapped), 'base64');
   }
 
   /** Encrypt a fields object → ciphertext blob (or null for empty). */

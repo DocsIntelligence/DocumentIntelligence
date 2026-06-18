@@ -22,6 +22,7 @@ import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { useVaultService } from '../documents/services-context';
 import {
   useAddVaultDocument,
+  useBulkScanVaultDocuments,
   useDeleteVaultEntity,
   useDuplicateVaultEntity,
   useRemoveVaultDocument,
@@ -56,7 +57,9 @@ export function VaultEntityPage() {
   const addDoc = useAddVaultDocument(id);
   const removeDoc = useRemoveVaultDocument(id);
   const scan = useScanVaultDocument(id);
+  const bulkScan = useBulkScanVaultDocuments(id);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bulkRef = useRef<HTMLInputElement>(null);
   const [docKind, setDocKind] = useState('aadhaar');
 
   // Group fields by their `group` for a tidy layout — same shape as the
@@ -85,6 +88,12 @@ export function VaultEntityPage() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  const onPickBulk = async (files: FileList | null) => {
+    const list = files ? Array.from(files) : [];
+    if (list.length) await bulkScan.mutateAsync(list);
+    if (bulkRef.current) bulkRef.current.value = '';
+  };
+
   const openDoc = async (docId: string) => {
     const { url } = await svc.documentUrl(id, docId);
     window.open(url, '_blank', 'noopener');
@@ -107,7 +116,7 @@ export function VaultEntityPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
@@ -190,7 +199,7 @@ export function VaultEntityPage() {
                       </span>
                     )}
                   </p>
-                  <div className="rounded-md border bg-secondary/20 px-2.5 py-2 text-sm">
+                  <div className="rounded-md border bg-secondary/40 px-2.5 py-2 text-sm">
                     {data.fields[f.key] || (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -238,6 +247,26 @@ export function VaultEntityPage() {
             >
               {addDoc.isPending && <Spinner className="mr-2 h-4 w-4" />}
               {t('vault.upload', 'Upload')}
+            </Button>
+            <input
+              ref={bulkRef}
+              type="file"
+              multiple
+              className="hidden"
+              accept="image/*,application/pdf"
+              onChange={(e) => onPickBulk(e.target.files)}
+            />
+            <Button
+              size="sm"
+              onClick={() => bulkRef.current?.click()}
+              disabled={bulkScan.isPending}
+              title={t(
+                'vault.bulkScanHint',
+                'Upload Aadhaar, PAN, etc. together — we detect each, attach it, and autofill the profile',
+              )}
+            >
+              {bulkScan.isPending && <Spinner className="mr-2 h-4 w-4" />}
+              {t('vault.bulkScan', 'Upload & autofill')}
             </Button>
           </div>
         </div>

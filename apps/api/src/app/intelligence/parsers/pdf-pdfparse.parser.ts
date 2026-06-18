@@ -22,7 +22,9 @@ export class PdfParseParser implements IParser {
 
   async parse(input: SourceInput): Promise<NormalizedDocument> {
     const data = new Uint8Array(Buffer.from(input.data, 'base64'));
-    const parser = new PDFParse({ data });
+    const parser = new PDFParse(
+      input.password ? { data, password: input.password } : { data },
+    );
     try {
       const result = await parser.getText();
       const pages = result.pages.map((p) => ({

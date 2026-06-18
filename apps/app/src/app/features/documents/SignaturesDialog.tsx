@@ -110,7 +110,7 @@ export function SignaturesDialog({
         </DialogHeader>
 
         {excluded && (
-          <div className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-xs text-foreground/80">
+          <div className="rounded-md border border-warning/40 bg-warning/50 p-2.5 text-xs text-foreground/80">
             {t('signatures.schedule1', SCHEDULE_1_NOTE)}
           </div>
         )}
@@ -144,7 +144,10 @@ export function SignaturesDialog({
           ))}
         </div>
 
-        <form onSubmit={addSigner} className="space-y-2 border-t border-border pt-3">
+        <form
+          onSubmit={addSigner}
+          className="space-y-2 border-t border-border pt-3"
+        >
           <Label className="text-xs text-foreground/60">
             {t('signatures.addSigner', 'Add a signer')}
           </Label>
@@ -156,7 +159,9 @@ export function SignaturesDialog({
                 {...register('name')}
               />
               {errors.name?.message && (
-                <span className="text-xs text-error">{errors.name.message}</span>
+                <span className="text-xs text-error">
+                  {errors.name.message}
+                </span>
               )}
             </div>
             <Controller
@@ -421,7 +426,7 @@ function SignatureCapture({
     mode === 'draw' ? hasInk : mode === 'upload' ? !!uploaded : !!typed.trim();
 
   return (
-    <div className="mt-3 space-y-2 rounded-md border border-border bg-secondary/20 p-3">
+    <div className="mt-3 space-y-2 rounded-md border border-border bg-secondary/40 p-3">
       <div className="flex gap-2">
         {(['draw', 'upload', 'typed'] as const).map((m) => (
           <button

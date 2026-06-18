@@ -1,8 +1,7 @@
 import { cn } from '@org/utils';
 import { forwardRef } from 'react';
 
-export interface ChipProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Selected styling (filled). */
   active?: boolean;
 }
@@ -19,7 +18,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(
       className={cn(
         'rounded-full border px-3 py-1 text-xs transition',
         active
-          ? 'border-primary bg-primary/10 text-primary'
+          ? 'border-primary bg-primary/50 text-primary'
           : 'border-border text-foreground/60 hover:bg-secondary',
         className,
       )}

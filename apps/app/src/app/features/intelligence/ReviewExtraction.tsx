@@ -96,7 +96,10 @@ function buildReviewSchema(
         if (f.required)
           ctx.addIssue({
             code: 'custom',
-            message: t('intelligence.review.errRequired', 'This field is required'),
+            message: t(
+              'intelligence.review.errRequired',
+              'This field is required',
+            ),
           });
         return;
       }
@@ -154,7 +157,10 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
     mode: 'onBlur',
     defaultValues: {
       fields: Object.fromEntries(
-        extraction.schema.fields.map((f) => [f.key, toEditable(original[f.key])]),
+        extraction.schema.fields.map((f) => [
+          f.key,
+          toEditable(original[f.key]),
+        ]),
       ),
     },
   });
@@ -219,7 +225,8 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
               )}
             </CardTitle>
             <p className="mt-1 text-sm text-foreground/60">
-              {t('intelligence.review.overall', 'Overall confidence')}: {overallPct}%
+              {t('intelligence.review.overall', 'Overall confidence')}:{' '}
+              {overallPct}%
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -231,13 +238,16 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
             <Button onClick={onCreateDocument} disabled={busy}>
               {convert.isPending
                 ? t('intelligence.review.creating', 'Creating…')
-                : t('intelligence.review.createDoc', 'Create editable document')}
+                : t(
+                    'intelligence.review.createDoc',
+                    'Create editable document',
+                  )}
             </Button>
           </div>
         </CardHeader>
         {extraction.review.needsReview && (
           <CardContent>
-            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+            <div className="rounded-lg border border-warning/40 bg-warning/50 p-3 text-sm">
               <p className="font-medium">
                 {t('intelligence.review.needsReview', 'Needs review')}
               </p>
@@ -320,7 +330,7 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
               ·{' '}
               {t(
                 'intelligence.review.typeKnownShort',
-                "Wrong? Pick a different type and re-process.",
+                'Wrong? Pick a different type and re-process.',
               )}
             </span>
           </div>
@@ -381,10 +391,14 @@ export function ReviewExtraction({ extraction, sourceId }: Props) {
                 <div className="space-y-0.5">
                   <label className="text-sm font-medium">
                     {field.label}
-                    {field.required && <span className="ml-0.5 text-error">*</span>}
+                    {field.required && (
+                      <span className="ml-0.5 text-error">*</span>
+                    )}
                   </label>
                   {field.description && (
-                    <p className="text-xs text-foreground/50">{field.description}</p>
+                    <p className="text-xs text-foreground/50">
+                      {field.description}
+                    </p>
                   )}
                 </div>
 

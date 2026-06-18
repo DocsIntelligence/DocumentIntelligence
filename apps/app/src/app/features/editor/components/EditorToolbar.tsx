@@ -220,7 +220,7 @@ function Btn({
         disabled={disabled}
         className={cn(
           'size-7 p-0 text-xs font-medium',
-          active && 'bg-primary/10 text-primary',
+          active && 'bg-primary/50 text-primary',
         )}
       >
         {children}

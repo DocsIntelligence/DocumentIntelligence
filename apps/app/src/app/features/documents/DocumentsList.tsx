@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import {
   useDeleteDocument,
   useDocumentCatalog,
@@ -130,12 +131,13 @@ export function DocumentsList({
     title: string;
   } | null>(null);
 
-  // Internal multi-select mode for bulk analyze. Independent of the external
-  // `selectable` prop (which is used by the group add-docs flow).
-  const [internalSelect, setInternalSelect] = useState(false);
-  const inSelectMode = selectable || internalSelect;
+  // `picker` = the external group add-docs flow (selectable prop): the title
+  // toggles selection instead of navigating, and per-row actions are hidden.
+  // Outside the picker, the checkbox column is always on (a standard DataTable
+  // affordance) so bulk actions are one click away.
+  const picker = !!selectable;
 
-  // Selection state (used by both external selectable mode AND internal select mode)
+  // Selection state (the DataTable owns the checkbox column; we own the Set).
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -160,91 +162,12 @@ export function DocumentsList({
   );
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
-    // Selection checkbox column — left-pinned so it stays at the leading edge
-    // even for users whose persisted column order from /documents put other
-    // columns first. The header is itself a "select all on this page" toggle.
-    ...(inSelectMode
-      ? [
-          {
-            key: 'select',
-            header: (() => {
-              const visibleIds = filteredRows.map((r) => r.id);
-              const allVisibleSelected =
-                visibleIds.length > 0 &&
-                visibleIds.every((id) => selected.has(id));
-              return (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      if (allVisibleSelected) {
-                        for (const id of visibleIds) next.delete(id);
-                      } else {
-                        for (const id of visibleIds) next.add(id);
-                      }
-                      return next;
-                    });
-                  }}
-                  aria-label={t(
-                    'common.toggleAllVisible',
-                    'Toggle selection for visible rows',
-                  )}
-                  className={`flex size-5 items-center justify-center rounded border-2 transition ${
-                    allVisibleSelected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  {allVisibleSelected && (
-                    <svg
-                      className="size-3.5"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                    >
-                      <path d="M2.5 6.5L5 9l4.5-6" />
-                    </svg>
-                  )}
-                </button>
-              );
-            })(),
-            width: 'w-10',
-            pinned: 'left' as const,
-            cell: (d: (typeof rows)[number]) => (
-              <button
-                type="button"
-                onClick={() => toggleSelect(d.id)}
-                aria-label={t('common.toggleSelect', 'Toggle selection')}
-                className={`flex size-5 shrink-0 items-center justify-center rounded border-2 transition ${
-                  selected.has(d.id)
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border hover:border-primary/50'
-                }`}
-              >
-                {selected.has(d.id) && (
-                  <svg
-                    className="size-3.5"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                  >
-                    <path d="M2.5 6.5L5 9l4.5-6" />
-                  </svg>
-                )}
-              </button>
-            ),
-          } as DataTableColumn<(typeof rows)[number]>,
-        ]
-      : []),
     {
       key: 'title',
       header: t('documents.colTitle', 'Title'),
       sortValue: (d) => (d.title ?? '').toLowerCase(),
       cell: (d) =>
-        inSelectMode ? (
+        picker ? (
           <button
             type="button"
             onClick={() => toggleSelect(d.id)}
@@ -278,8 +201,8 @@ export function DocumentsList({
         </span>
       ),
     },
-    // Group column — shown when NOT already inside a group and NOT in select mode
-    ...(!groupId && !inSelectMode
+    // Group column — shown when NOT already inside a group and NOT in the picker
+    ...(!groupId && !picker
       ? [
           {
             key: 'group',
@@ -320,14 +243,11 @@ export function DocumentsList({
               <AnalysisCell
                 status={analysisStatus.data?.[d.id]}
                 loading={analysisStatus.isLoading}
-                onClick={
-                  inSelectMode
-                    ? undefined
-                    : () =>
-                        setAnalyzeDoc({
-                          id: d.id,
-                          title: d.title ?? '',
-                        })
+                onClick={() =>
+                  setAnalyzeDoc({
+                    id: d.id,
+                    title: d.title ?? '',
+                  })
                 }
               />
             ),
@@ -345,8 +265,8 @@ export function DocumentsList({
         </span>
       ),
     },
-    // Actions column — hidden in any select mode
-    ...(!inSelectMode
+    // Actions column — hidden only in the picker (group add-docs) flow.
+    ...(!picker
       ? [
           {
             key: 'actions',
@@ -393,7 +313,7 @@ export function DocumentsList({
                       aria-label={t('common.actions', 'Actions')}
                       className="rounded p-1.5 text-foreground/55 transition hover:bg-secondary hover:text-foreground"
                     >
-                      ⋯
+                      <MoreGlyph />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -431,172 +351,153 @@ export function DocumentsList({
       : []),
   ];
 
+  // The bulk-action buttons shown in the DataTable's standardized bar. The bar
+  // chrome (count label, Clear) is provided by DataTable; `clear()` empties the
+  // selection. Three contexts: the group add-docs picker, a group page, and the
+  // library list.
+  const renderBulkActions = (clear: () => void) => {
+    if (selectable) {
+      return (
+        <Button
+          size="sm"
+          onClick={() => onSelectionConfirm?.(Array.from(selected))}
+        >
+          {t(
+            'groups.addSelected',
+            `Add ${selected.size} document${selected.size !== 1 ? 's' : ''}`,
+          )}
+        </Button>
+      );
+    }
+    if (groupId) {
+      return (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkAnalyzeOpen(true)}
+          >
+            {t('documents.bulkAction.analyze', 'Analyze')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const ids = Array.from(selected);
+              const ok = await confirm({
+                title: t(
+                  'documents.bulkRemoveFromGroupTitle',
+                  `Remove ${ids.length} document${ids.length === 1 ? '' : 's'} from this group?`,
+                ),
+                description: t(
+                  'documents.bulkRemoveFromGroupDesc',
+                  'The documents themselves are kept — only the group association is removed.',
+                ),
+                confirmLabel: t('common.remove', 'Remove'),
+              });
+              if (!ok) return;
+              for (const id of ids) {
+                removeFromGroup.mutate({ groupId, documentId: id });
+              }
+              clear();
+            }}
+          >
+            {t('documents.bulkAction.removeFromGroup', 'Remove from group')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-error hover:text-error"
+            onClick={async () => {
+              const ids = Array.from(selected);
+              const ok = await confirm({
+                title: t(
+                  'documents.bulkDeleteTitle',
+                  `Delete ${ids.length} document${ids.length === 1 ? '' : 's'}?`,
+                ),
+                description: t(
+                  'documents.bulkDeleteDesc',
+                  'This permanently deletes the selected documents. This cannot be undone.',
+                ),
+                confirmLabel: t('common.delete', 'Delete'),
+                variant: 'destructive',
+              });
+              if (!ok) return;
+              for (const id of ids) del.mutate(id);
+              clear();
+            }}
+          >
+            {t('common.delete', 'Delete')}
+          </Button>
+        </>
+      );
+    }
+    return (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setBulkAnalyzeOpen(true)}
+        >
+          {t('documents.bulkAction.analyze', 'Analyze')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setBulkAddToGroupIds(Array.from(selected))}
+        >
+          {t('documents.bulkAction.addToGroup', 'Add to group')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-error hover:text-error"
+          onClick={async () => {
+            const ids = Array.from(selected);
+            const ok = await confirm({
+              title: t(
+                'documents.bulkDeleteTitle',
+                `Delete ${ids.length} document${ids.length === 1 ? '' : 's'}?`,
+              ),
+              description: t(
+                'documents.bulkDeleteDesc',
+                'This permanently deletes the selected documents. This cannot be undone.',
+              ),
+              confirmLabel: t('common.delete', 'Delete'),
+              variant: 'destructive',
+            });
+            if (!ok) return;
+            for (const id of ids) del.mutate(id);
+            clear();
+          }}
+        >
+          {t('common.delete', 'Delete')}
+        </Button>
+      </>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {!groupId && !selectable && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t('documents.title', 'My documents')}
-            </h1>
-            <p className="mt-1 text-foreground/60">
-              {t(
-                'documents.subtitle',
-                'Drafts, signed copies, and shared documents.',
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <AnalysisQueueIndicator />
-            <Button asChild>
-              <Link to="/documents/new">
-                {t('common.newDocument', 'New document')}
-              </Link>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Selection bar */}
-      {inSelectMode && selected.size > 0 && (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 backdrop-blur">
-          <span className="text-sm font-medium">
-            {selected.size} document{selected.size !== 1 ? 's' : ''} selected
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelected(new Set())}
-            >
-              {t('common.clearSelection', 'Clear')}
-            </Button>
-            {selectable ? (
-              // External selectable mode (group add-docs flow): single confirm.
-              <Button
-                size="sm"
-                onClick={() => onSelectionConfirm?.(Array.from(selected))}
-              >
-                {t(
-                  'groups.addSelected',
-                  `Add ${selected.size} document${selected.size !== 1 ? 's' : ''}`,
-                )}
+        <PageHeader
+          back={false}
+          title={t('documents.title', 'My documents')}
+          subtitle={t(
+            'documents.subtitle',
+            'Drafts, signed copies, and shared documents.',
+          )}
+          actions={
+            <>
+              <AnalysisQueueIndicator />
+              <Button asChild>
+                <Link to="/documents/new">
+                  {t('common.newDocument', 'New document')}
+                </Link>
               </Button>
-            ) : groupId ? (
-              // Group context: Analyze + Remove-from-group + Delete. "Add to
-              // group" is intentionally hidden — a doc can only be in one
-              // group; the move flow lives on the library /documents page.
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBulkAnalyzeOpen(true)}
-                >
-                  {t('documents.bulkAction.analyze', 'Analyze')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    const ids = Array.from(selected);
-                    const ok = await confirm({
-                      title: t(
-                        'documents.bulkRemoveFromGroupTitle',
-                        `Remove ${ids.length} document${ids.length === 1 ? '' : 's'} from this group?`,
-                      ),
-                      description: t(
-                        'documents.bulkRemoveFromGroupDesc',
-                        'The documents themselves are kept — only the group association is removed.',
-                      ),
-                      confirmLabel: t('common.remove', 'Remove'),
-                    });
-                    if (!ok) return;
-                    for (const id of ids) {
-                      removeFromGroup.mutate({ groupId, documentId: id });
-                    }
-                    setSelected(new Set());
-                  }}
-                >
-                  {t(
-                    'documents.bulkAction.removeFromGroup',
-                    'Remove from group',
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-error hover:text-error"
-                  onClick={async () => {
-                    const ids = Array.from(selected);
-                    const ok = await confirm({
-                      title: t(
-                        'documents.bulkDeleteTitle',
-                        `Delete ${ids.length} document${ids.length === 1 ? '' : 's'}?`,
-                      ),
-                      description: t(
-                        'documents.bulkDeleteDesc',
-                        'This permanently deletes the selected documents. This cannot be undone.',
-                      ),
-                      confirmLabel: t('common.delete', 'Delete'),
-                      variant: 'destructive',
-                    });
-                    if (!ok) return;
-                    for (const id of ids) del.mutate(id);
-                    setSelected(new Set());
-                  }}
-                >
-                  {t('common.delete', 'Delete')}
-                </Button>
-              </>
-            ) : (
-              // Library context (/documents): the generic multi-action toolbar.
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBulkAnalyzeOpen(true)}
-                >
-                  {t('documents.bulkAction.analyze', 'Analyze')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBulkAddToGroupIds(Array.from(selected))}
-                >
-                  {t('documents.bulkAction.addToGroup', 'Add to group')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-error hover:text-error"
-                  onClick={async () => {
-                    const ids = Array.from(selected);
-                    const ok = await confirm({
-                      title: t(
-                        'documents.bulkDeleteTitle',
-                        `Delete ${ids.length} document${ids.length === 1 ? '' : 's'}?`,
-                      ),
-                      description: t(
-                        'documents.bulkDeleteDesc',
-                        'This permanently deletes the selected documents. This cannot be undone.',
-                      ),
-                      confirmLabel: t('common.delete', 'Delete'),
-                      variant: 'destructive',
-                    });
-                    if (!ok) return;
-                    // Iterate the existing single-delete mutation. No bulk API
-                    // yet — fine for handfuls; if this ever turns into a hot
-                    // path, add /documents/bulk-delete server-side.
-                    for (const id of ids) del.mutate(id);
-                    setSelected(new Set());
-                  }}
-                >
-                  {t('common.delete', 'Delete')}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+            </>
+          }
+        />
       )}
 
       {isLoading && (
@@ -662,6 +563,11 @@ export function DocumentsList({
             onPageSizeChange: setPageSize,
             loading: isFetching && isPlaceholderData,
           }}
+          selection={{ selectedIds: selected, onChange: setSelected }}
+          selectionLabel={(n) =>
+            t('documents.nSelected', '{{n}} document(s) selected', { n })
+          }
+          bulkActions={(_ids, clear) => renderBulkActions(clear)}
           toolbar={
             selectable ? undefined : (
               <DocumentsToolbar
@@ -672,11 +578,6 @@ export function DocumentsList({
                 typeFilter={typeFilter}
                 onTypeChange={setTypeFilter}
                 types={types}
-                internalSelect={internalSelect}
-                onToggleSelect={() => {
-                  setInternalSelect((v) => !v);
-                  setSelected(new Set());
-                }}
               />
             )
           }
@@ -707,23 +608,24 @@ export function DocumentsList({
         }}
         saving={rename.isPending}
       />
-      {addToGroupId && (() => {
-        const doc = filteredRows.find((r) => r.id === addToGroupId);
-        if (!doc) return null;
-        return (
-          <AddDocToGroupDialog
-            documents={[
-              {
-                id: doc.id,
-                title: doc.title ?? '',
-                group: doc.group ?? null,
-              },
-            ]}
-            open={!!addToGroupId}
-            onOpenChange={(v) => !v && setAddToGroupId(null)}
-          />
-        );
-      })()}
+      {addToGroupId &&
+        (() => {
+          const doc = filteredRows.find((r) => r.id === addToGroupId);
+          if (!doc) return null;
+          return (
+            <AddDocToGroupDialog
+              documents={[
+                {
+                  id: doc.id,
+                  title: doc.title ?? '',
+                  group: doc.group ?? null,
+                },
+              ]}
+              open={!!addToGroupId}
+              onOpenChange={(v) => !v && setAddToGroupId(null)}
+            />
+          );
+        })()}
       {analyzeDoc && (
         <AnalyzeDocumentDialog
           documentId={analyzeDoc.id}
@@ -734,9 +636,14 @@ export function DocumentsList({
       )}
       {bulkAnalyzeOpen && (
         <BulkAnalyzeDialog
-          targets={(filteredRows
-            .filter((r) => selected.has(r.id))
-            .map((r) => ({ id: r.id, title: r.title ?? '' })) as BulkAnalyzeTarget[])}
+          targets={
+            filteredRows
+              .filter((r) => selected.has(r.id))
+              .map((r) => ({
+                id: r.id,
+                title: r.title ?? '',
+              })) as BulkAnalyzeTarget[]
+          }
           open={bulkAnalyzeOpen}
           onOpenChange={setBulkAnalyzeOpen}
         />
@@ -778,8 +685,6 @@ function DocumentsToolbar({
   typeFilter,
   onTypeChange,
   types,
-  internalSelect,
-  onToggleSelect,
 }: {
   showStatus: boolean;
   showType: boolean;
@@ -788,12 +693,9 @@ function DocumentsToolbar({
   typeFilter: string | null;
   onTypeChange: (next: string | null) => void;
   types: ReadonlyArray<readonly [string, string]>;
-  internalSelect: boolean;
-  onToggleSelect: () => void;
 }) {
   const { t } = useTranslation();
-  const typeLabel = (key: string) =>
-    types.find(([k]) => k === key)?.[1] ?? key;
+  const typeLabel = (key: string) => types.find(([k]) => k === key)?.[1] ?? key;
   const hasFilters = !!statusFilter || !!typeFilter;
   const clearAll = () => {
     onStatusChange(null);
@@ -807,13 +709,14 @@ function DocumentsToolbar({
           {showStatus && (
             <Select
               value={statusFilter ?? ANY_STATUS}
-              onValueChange={(v) =>
-                onStatusChange(v === ANY_STATUS ? null : v)
-              }
+              onValueChange={(v) => onStatusChange(v === ANY_STATUS ? null : v)}
             >
               <SelectTrigger className="h-9 w-40 text-sm">
                 <SelectValue
-                  placeholder={t('documents.filter.allStatuses', 'All statuses')}
+                  placeholder={t(
+                    'documents.filter.allStatuses',
+                    'All statuses',
+                  )}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -851,15 +754,6 @@ function DocumentsToolbar({
             </Select>
           )}
         </div>
-        <Button
-          variant={internalSelect ? 'default' : 'outline'}
-          size="sm"
-          onClick={onToggleSelect}
-        >
-          {internalSelect
-            ? t('common.cancelSelection', 'Cancel selection')
-            : t('documents.selectMultiple', 'Select multiple')}
-        </Button>
       </div>
 
       {hasFilters && (
@@ -869,7 +763,10 @@ function DocumentsToolbar({
           </span>
           {statusFilter && (
             <ActiveFilterPill
-              label={t(`status.${statusFilter}`, statusFilter.replace(/_/g, ' '))}
+              label={t(
+                `status.${statusFilter}`,
+                statusFilter.replace(/_/g, ' '),
+              )}
               kind={t('documents.filter.status', 'Status')}
               onClear={() => onStatusChange(null)}
             />
@@ -904,7 +801,7 @@ function ActiveFilterPill({
   onClear: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary/50 px-2 py-0.5 text-primary">
       <span className="text-[10px] uppercase tracking-wide text-primary/70">
         {kind}
       </span>
@@ -913,7 +810,7 @@ function ActiveFilterPill({
         type="button"
         onClick={onClear}
         aria-label={`Clear ${kind} filter`}
-        className="ml-0.5 rounded-full p-0.5 text-primary/70 hover:bg-primary/15 hover:text-primary"
+        className="ml-0.5 rounded-full p-0.5 text-primary/70 hover:bg-primary/35 hover:text-primary"
       >
         <svg
           className="size-3"
@@ -1049,6 +946,24 @@ function CopyGlyph() {
   );
 }
 
+function MoreGlyph() {
+  return (
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </svg>
+  );
+}
+
 function TrashGlyph() {
   return (
     <svg
@@ -1080,9 +995,7 @@ function AnalysisCell({
   loading,
   onClick,
 }: {
-  status:
-    | { hasAnalysis: boolean; lastAnalyzedAt: string | null }
-    | undefined;
+  status: { hasAnalysis: boolean; lastAnalyzedAt: string | null } | undefined;
   loading: boolean;
   onClick?: () => void;
 }) {
@@ -1116,13 +1029,13 @@ function AnalysisCell({
     <button
       type="button"
       onClick={onClick}
-      className="rounded bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success-foreground hover:bg-success/15"
+      className="rounded bg-success/50 px-1.5 py-0.5 text-[11px] font-medium text-success-foreground hover:bg-success/35"
       title={t('documents.viewOrReanalyze', 'View / re-analyze')}
     >
       {label}
     </button>
   ) : (
-    <span className="rounded bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success-foreground">
+    <span className="rounded bg-success/50 px-1.5 py-0.5 text-[11px] font-medium text-success-foreground">
       {label}
     </span>
   );
@@ -1135,13 +1048,13 @@ function StatusPill({ status }: { status: string }) {
     in_review: 'bg-blue-100 text-blue-800',
     ready: 'bg-emerald-100 text-emerald-800',
     signed: 'bg-emerald-100 text-emerald-800',
-    archived: 'bg-foreground/10 text-foreground/60',
+    archived: 'bg-foreground/50 text-foreground/60',
   };
   return (
     <span
       className={cn(
         'flex-none rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-        tone[status] ?? 'bg-foreground/10 text-foreground/60',
+        tone[status] ?? 'bg-foreground/50 text-foreground/60',
       )}
     >
       {t(`status.${status}`, status.replace(/_/g, ' '))}

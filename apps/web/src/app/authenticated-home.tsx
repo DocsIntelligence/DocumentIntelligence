@@ -71,7 +71,7 @@ export function AuthenticatedHome() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-foreground/60">Role</span>
-                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-primary/50 text-primary">
                       {user.role}
                     </span>
                   </div>

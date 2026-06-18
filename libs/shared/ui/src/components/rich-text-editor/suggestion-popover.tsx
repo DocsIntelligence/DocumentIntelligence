@@ -43,7 +43,7 @@ export const SuggestionPopover = forwardRef<
             className={cn(
               'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
               index === selectedIndex
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/50 text-primary'
                 : 'hover:bg-secondary',
             )}
             onMouseDown={(e) => {

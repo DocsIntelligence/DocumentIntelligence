@@ -48,7 +48,7 @@ export function EditorSideMenu({
   return (
     <nav
       aria-label="Editor sections"
-      className="flex h-full w-44 flex-none flex-col border-r border-border bg-secondary/15"
+      className="flex h-full w-44 flex-none flex-col border-r border-border bg-secondary/35"
     >
       <div className="flex-1 min-h-0 overflow-y-auto py-2">
         {items.map((it) => {
@@ -83,7 +83,7 @@ function MenuButton({ item }: { item: RailItem }) {
       onClick={item.onClick}
       className={`mx-1.5 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium transition-colors ${
         item.active
-          ? 'bg-primary/15 text-primary'
+          ? 'bg-primary/35 text-primary'
           : 'text-foreground/70 hover:bg-secondary hover:text-foreground'
       }`}
     >

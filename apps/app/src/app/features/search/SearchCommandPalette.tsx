@@ -1,10 +1,5 @@
 import type { SearchHit } from '@org/api-client';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Spinner,
-} from '@org/ui';
+import { Dialog, DialogContent, DialogTitle, Spinner } from '@org/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -90,7 +85,9 @@ export function SearchCommandPalette() {
 
   // Keep the active row in view.
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-idx="${active}"]`,
+    );
     el?.scrollIntoView({ block: 'nearest' });
   }, [active]);
 
@@ -100,7 +97,9 @@ export function SearchCommandPalette() {
         className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
         onKeyDown={onKeyDown}
       >
-        <DialogTitle className="sr-only">{t('search.title', 'Search')}</DialogTitle>
+        <DialogTitle className="sr-only">
+          {t('search.title', 'Search')}
+        </DialogTitle>
         <div className="flex items-center gap-2 border-b px-3">
           <SearchGlyph />
           <input
@@ -119,7 +118,10 @@ export function SearchCommandPalette() {
         <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
           {!enabled ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              {t('search.paletteHint', 'Search your drafts and uploads. Use ↑ ↓ and Enter.')}
+              {t(
+                'search.paletteHint',
+                'Search your drafts and uploads. Use ↑ ↓ and Enter.',
+              )}
             </p>
           ) : items.length === 0 && !isFetching ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -139,7 +141,7 @@ export function SearchCommandPalette() {
                 <span
                   className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                     hit.kind === 'document'
-                      ? 'bg-primary/10 text-primary'
+                      ? 'bg-primary/50 text-primary'
                       : 'bg-secondary text-secondary-foreground'
                   }`}
                 >

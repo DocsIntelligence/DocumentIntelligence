@@ -3,11 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { WEB_ENV } from '../../../config';
 import { SITE_NAME } from '../../../lib/site';
-import {
-  citationSlug,
-  fetchPublicCitation,
-  slugToId,
-} from '../../../lib/law';
+import { citationSlug, fetchPublicCitation, slugToId } from '../../../lib/law';
 
 interface Params {
   id: string;
@@ -81,7 +77,8 @@ export default async function LawDetailPage({
     url,
     inLanguage: 'en',
   };
-  if (citation.effectiveFrom) jsonLd['legislationDate'] = citation.effectiveFrom;
+  if (citation.effectiveFrom)
+    jsonLd['legislationDate'] = citation.effectiveFrom;
   if (citation.summary) jsonLd['description'] = citation.summary;
   if (citation.externalUrl) jsonLd['sameAs'] = citation.externalUrl;
 
@@ -93,7 +90,7 @@ export default async function LawDetailPage({
       />
       <div className="min-h-screen bg-background">
         <header className="border-b border-border/40">
-          <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-between">
+          <div className="mx-auto px-6 py-4 flex items-center justify-between">
             <Link
               href="/law"
               className="text-sm text-foreground/70 hover:text-foreground"
@@ -109,7 +106,7 @@ export default async function LawDetailPage({
           </div>
         </header>
 
-        <main className="mx-auto max-w-3xl px-6 py-10 space-y-6">
+        <main className="mx-auto px-6 py-10 space-y-6">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="inline-flex items-center rounded-full bg-info text-info-foreground px-2 py-0.5 text-xs font-medium">
@@ -164,16 +161,17 @@ export default async function LawDetailPage({
                   </div>
                   <h3 className="font-medium text-foreground">
                     {predecessor.actShort ?? predecessor.act}
-                    {predecessor.section ? ` §${predecessor.section}` : ''} —{' '}
-                    {predecessor.title}
+                    {predecessor.section
+                      ? ` §${predecessor.section}`
+                      : ''} — {predecessor.title}
                   </h3>
                   <p className="mt-2 text-sm text-foreground/70 leading-relaxed whitespace-pre-line">
                     {predecessor.summary}
                   </p>
                 </div>
-                <div className="rounded-lg border border-success/30 bg-success/5 p-4">
+                <div className="rounded-lg border border-success/40 bg-success/5 p-4">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="inline-flex items-center rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-medium">
+                    <span className="inline-flex items-center rounded-full bg-success/35 text-success px-2 py-0.5 text-[10px] font-medium">
                       After · current
                     </span>
                     {citation.effectiveFrom && (
@@ -193,8 +191,8 @@ export default async function LawDetailPage({
                 </div>
               </div>
               <p className="mt-3 text-[11px] text-foreground/50">
-                Drafting reference only — section numbers + scope of change
-                are curated and may need verification against the bare act.
+                Drafting reference only — section numbers + scope of change are
+                curated and may need verification against the bare act.
               </p>
             </article>
           )}
@@ -253,8 +251,8 @@ export default async function LawDetailPage({
           )}
 
           <p className="text-xs text-foreground/45">
-            Drafting reference only — verify against the bare act before
-            binding use.
+            Drafting reference only — verify against the bare act before binding
+            use.
           </p>
         </main>
       </div>

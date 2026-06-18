@@ -17,7 +17,7 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-10 p-8 bg-gradient-to-br from-primary/5 via-background to-secondary/10">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-10 p-8 bg-gradient-to-br from-primary/5 via-background to-secondary/50">
       <div className="text-center space-y-4">
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
           {SITE_NAME}
@@ -37,7 +37,7 @@ export default async function HomePage() {
         </Link>
         <Link
           href="/register"
-          className="px-6 py-3 bg-background border border-border text-foreground rounded-lg font-medium hover:bg-secondary/30 transition-colors text-center shadow-sm"
+          className="px-6 py-3 bg-background border border-border text-foreground rounded-lg font-medium hover:bg-secondary/40 transition-colors text-center shadow-sm"
         >
           Create account
         </Link>

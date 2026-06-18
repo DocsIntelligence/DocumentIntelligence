@@ -16,7 +16,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { APP_ENV } from '../../../config';
+import { ErrorBoundary } from '../../components/error-boundary';
+import { LayoutContext } from './layout-context';
 import { SearchCommandPalette, openSearchPalette } from '../../features/search';
+import { useEstateCapability } from '../../features/estate';
 import { ThemeToggle } from '../../theme/ThemeToggle';
 
 /**
@@ -31,6 +34,17 @@ export function MainLayout() {
   const location = useLocation();
   const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Desktop-only sidebar collapse (mobile uses the drawer). Persisted so the
+  // choice survives reloads; toggled from the page header's sidebar icon.
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('nav.collapsed') === '1',
+  );
+  const toggleSidebar = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem('nav.collapsed', next ? '1' : '0');
+      return next;
+    });
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -43,12 +57,15 @@ export function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-secondary/10">
+    <LayoutContext.Provider
+      value={{ sidebarCollapsed: collapsed, toggleSidebar }}
+    >
+    <div className="min-h-screen bg-secondary/50">
       {/* Global ⌘K quick search (mounted once) */}
       <SearchCommandPalette />
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-sidebar text-sidebar-foreground px-4 md:hidden">
         <button
           type="button"
           aria-label={t('common.openMenu', 'Open menu')}
@@ -72,17 +89,38 @@ export function MainLayout() {
         userPicture={user?.picture}
         isAdmin={user?.role === 'admin'}
         mobileOpen={mobileOpen}
+        collapsed={collapsed}
         onClose={() => setMobileOpen(false)}
+        onToggleCollapse={toggleSidebar}
         onLogout={onLogout}
       />
 
-      {/* Content */}
-      <div className="md:pl-64">
+      {/* Desktop fallback to reopen the sidebar (works even on pages that
+          don't render a PageHeader with its own toggle). */}
+      {collapsed && (
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={t('nav.showSidebar', 'Show sidebar')}
+          title={t('nav.showSidebar', 'Show sidebar')}
+          className="fixed left-3 top-3 z-30 hidden size-9 items-center justify-center rounded-md border border-border bg-card text-foreground/70 shadow-sm transition hover:bg-secondary hover:text-foreground md:inline-flex"
+        >
+          <MenuIcon />
+        </button>
+      )}
+
+      {/* Content — drops the sidebar gutter when the sidebar is collapsed. */}
+      <div className={cn('transition-[padding]', collapsed ? 'md:pl-0' : 'md:pl-64')}>
         <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 md:px-8 md:py-10">
-          <Outlet />
+          {/* Route-level boundary: keyed by path so navigating away clears a
+              page-local error automatically. */}
+          <ErrorBoundary level="route" key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
+    </LayoutContext.Provider>
   );
 }
 
@@ -96,7 +134,9 @@ interface SidebarProps {
   userPicture?: string | null;
   isAdmin: boolean;
   mobileOpen: boolean;
+  collapsed: boolean;
   onClose: () => void;
+  onToggleCollapse: () => void;
   onLogout: () => void;
 }
 
@@ -106,10 +146,14 @@ function Sidebar({
   userPicture,
   isAdmin,
   mobileOpen,
+  collapsed,
   onClose,
+  onToggleCollapse,
   onLogout,
 }: SidebarProps) {
   const { t } = useTranslation();
+  const estate = useEstateCapability();
+  const estateOn = estate.data?.enabled === true;
   return (
     <>
       {/* Mobile overlay */}
@@ -123,18 +167,39 @@ function Sidebar({
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-background transition-transform duration-200 ease-out md:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          collapsed ? 'md:-translate-x-full' : 'md:translate-x-0',
         )}
       >
         {/* Brand */}
-        <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-          <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+        <div className="flex h-14 items-center gap-2 border-b border-border px-3 pl-5">
+          <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary/50 text-primary">
             <LogoIcon />
           </span>
-          <Link to="/dashboard" className="text-base font-semibold">
+          <Link to="/dashboard" className="truncate text-base font-semibold">
             {APP_ENV.appName}
           </Link>
+          {/* Desktop collapse — mobile uses the drawer/overlay to dismiss. */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={t('nav.hideSidebar', 'Hide sidebar')}
+            title={t('nav.hideSidebar', 'Hide sidebar')}
+            className="ml-auto hidden size-8 flex-none items-center justify-center rounded-md text-foreground/55 transition hover:bg-secondary hover:text-foreground md:inline-flex"
+          >
+            <SidebarCollapseIcon />
+          </button>
+          {/* Mobile close */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close', 'Close')}
+            title={t('common.close', 'Close')}
+            className="ml-auto inline-flex size-8 flex-none items-center justify-center rounded-md text-foreground/55 transition hover:bg-secondary hover:text-foreground md:hidden"
+          >
+            <CloseIcon />
+          </button>
         </div>
 
         {/* Quick search trigger (opens the ⌘K palette) */}
@@ -184,6 +249,62 @@ function Sidebar({
             label={t('nav.vault', 'Vault')}
             icon={<VaultIcon />}
           />
+          {estateOn && (
+            <NavGroup
+              label={t('nav.estate', 'Wealth Vault')}
+              icon={<ChartIcon />}
+              storageKey="nav.group.estate"
+              childPaths={['/estate']}
+            >
+              <NavItem
+                to="/estate"
+                end
+                label={t('nav.estateOverview', 'Overview')}
+                icon={<ChartIcon />}
+              />
+              <NavItem
+                to="/estate/profiles"
+                label={t('nav.estateProfiles', 'Profiles')}
+                icon={<UsersIcon />}
+              />
+              <NavItem
+                to="/estate/assets"
+                end
+                label={t('nav.estateAssets', 'Assets')}
+                icon={<ListIcon />}
+              />
+              <NavItem
+                to="/estate/assets/new"
+                label={t('nav.estateAddAsset', 'Add asset')}
+                icon={<PlusIcon />}
+              />
+              <NavItem
+                to="/estate/import"
+                label={t('nav.estateImport', 'Import statement')}
+                icon={<UploadIcon />}
+              />
+              <NavItem
+                to="/estate/import-files"
+                label={t('nav.estateBulkImport', 'Bulk file import')}
+                icon={<LayersIcon />}
+              />
+              <NavItem
+                to="/estate/nominees"
+                label={t('nav.estateNominees', 'Nominees')}
+                icon={<ShieldIcon />}
+              />
+              <NavItem
+                to="/estate/release"
+                label={t('nav.estateRelease', 'Release plan')}
+                icon={<GearIcon />}
+              />
+              <NavItem
+                to="/estate/report"
+                label={t('nav.estateReport', 'Estate report')}
+                icon={<BookIcon />}
+              />
+            </NavGroup>
+          )}
 
           <NavGroup
             label={t('nav.documents', 'Documents')}
@@ -274,6 +395,13 @@ function Sidebar({
               label={t('nav.vaultConfig', 'Vault fields')}
               icon={<VaultIcon />}
             />
+            {estateOn && (
+              <NavItem
+                to="/config/estate-vault"
+                label={t('nav.estateConfig', 'Estate Vault')}
+                icon={<ChartIcon />}
+              />
+            )}
             <NavItem
               to="/config/legal-reference"
               label={t('nav.legalReference', 'Legal references')}
@@ -322,7 +450,7 @@ function Sidebar({
           <button
             type="button"
             onClick={onLogout}
-            className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground/70 transition-colors hover:bg-error/10 hover:text-error"
+            className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground/70 transition-colors hover:bg-error/50 hover:text-error"
           >
             <LogoutIcon />
             {t('common.logout', 'Log out')}
@@ -351,7 +479,7 @@ function NavItem({
         cn(
           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
           isActive
-            ? 'bg-primary/10 text-primary'
+            ? 'bg-primary/50 text-primary'
             : 'text-foreground/70 hover:bg-secondary/60 hover:text-foreground',
         )
       }
@@ -461,6 +589,23 @@ function MenuIcon() {
       <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+function SidebarCollapseIcon() {
+  return (
+    <svg {...iconProps} className="size-5">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="m16 9-3 3 3 3" />
+    </svg>
+  );
+}
+function CloseIcon() {
+  return (
+    <svg {...iconProps} className="size-5">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }
@@ -601,6 +746,16 @@ function GearIcon() {
     <svg {...iconProps}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+function UsersIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }

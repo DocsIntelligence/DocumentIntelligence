@@ -10,3 +10,5 @@ export * from './lib/intelligence.service';
 export * from './lib/intelligence-admin.service';
 export * from './lib/search.service';
 export * from './lib/vault.service';
+export * from './lib/estate.service';
+export * from './lib/estate-context';

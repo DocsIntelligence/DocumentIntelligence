@@ -49,7 +49,7 @@ export function AnalysisQueueIndicator() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-full border border-border bg-secondary/15 px-3 py-1 text-xs font-medium text-foreground/75 transition hover:bg-secondary/30"
+          className="flex items-center gap-2 rounded-full border border-border bg-secondary/35 px-3 py-1 text-xs font-medium text-foreground/75 transition hover:bg-secondary/40"
           aria-label={label}
         >
           {inFlightCount > 0 ? (
@@ -64,9 +64,7 @@ export function AnalysisQueueIndicator() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2 text-xs font-medium text-foreground/70">
-          <span>
-            {t('documents.queueIndicator.heading', 'Analysis queue')}
-          </span>
+          <span>{t('documents.queueIndicator.heading', 'Analysis queue')}</span>
           <span className="text-[10px] text-foreground/45">
             {batches.length}{' '}
             {batches.length === 1
@@ -77,7 +75,8 @@ export function AnalysisQueueIndicator() {
         <ScrollArea className="max-h-80">
           <ul className="divide-y divide-border/70">
             {batches.map((b) => {
-              const finished = b.counts.done + b.counts.cached + b.counts.failed;
+              const finished =
+                b.counts.done + b.counts.cached + b.counts.failed;
               const pct =
                 b.counts.total === 0
                   ? 0
@@ -104,11 +103,11 @@ export function AnalysisQueueIndicator() {
                     )}
                     {b.counts.cached > 0 && <span>↻ {b.counts.cached}</span>}
                     {b.counts.running > 0 && (
-                      <span className="text-primary">
-                        ⏵ {b.counts.running}
-                      </span>
+                      <span className="text-primary">⏵ {b.counts.running}</span>
                     )}
-                    {b.counts.queued > 0 && <span>· {b.counts.queued} queued</span>}
+                    {b.counts.queued > 0 && (
+                      <span>· {b.counts.queued} queued</span>
+                    )}
                     {b.counts.failed > 0 && (
                       <span className="text-error">✗ {b.counts.failed}</span>
                     )}

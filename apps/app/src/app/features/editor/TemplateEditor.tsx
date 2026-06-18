@@ -252,8 +252,8 @@ function TemplateEditorInner({
   const [showSidebar, setShowSidebar] = useState(true);
   // Persisted per-panel visibility (which menu items the user has hidden).
   // Lives in localStorage so the preference survives reloads / new docs.
-  const [hiddenPanels, setHiddenPanels] = useState<Set<string>>(
-    () => loadHiddenPanels(),
+  const [hiddenPanels, setHiddenPanels] = useState<Set<string>>(() =>
+    loadHiddenPanels(),
   );
   useEffect(() => {
     saveHiddenPanels(hiddenPanels);
@@ -953,7 +953,8 @@ function TemplateEditorInner({
             t('editor.toolbar.insights', 'Insights')}
           {sidebarTab === 'legal-ai-usage' &&
             t('editor.toolbar.usage', 'Usage')}
-          {sidebarTab === 'comments' && t('editor.toolbar.comments', 'Comments')}
+          {sidebarTab === 'comments' &&
+            t('editor.toolbar.comments', 'Comments')}
           {sidebarTab === 'history' && t('editor.toolbar.history', 'History')}
           {sidebarTab === 'share' && t('editor.toolbar.share', 'Share')}
         </div>
@@ -962,7 +963,7 @@ function TemplateEditorInner({
           {sidebarTab === 'fields' && (
             <>
               {completionStats.total > 0 && (
-                <div className="border-b border-border bg-secondary/15 px-4 py-2">
+                <div className="border-b border-border bg-secondary/35 px-4 py-2">
                   <div className="flex items-center justify-between text-[11px] text-foreground/60">
                     <span>{t('editor.completion', 'Completion')}</span>
                     <span>{completionStats.pct}%</span>
@@ -1035,7 +1036,7 @@ function TemplateEditorInner({
         ref={editorScrollRef}
         className="relative flex-1 overflow-y-auto bg-background"
       >
-        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8">
+        <div className="mx-auto  px-4 py-6 sm:px-8">
           <EditorContent editor={editor} />
         </div>
         {translitState && (
@@ -1095,7 +1096,7 @@ function TemplateEditorInner({
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-secondary/10">
+    <div className="flex h-screen flex-col overflow-hidden bg-secondary/50">
       {/* Top bar — two rows: identity + primary (row 1), grouped actions (row 2) */}
       <header className="flex-none border-b border-border bg-background">
         {/* Row 1 — identity + primary actions */}
@@ -1302,7 +1303,7 @@ function TemplateEditorInner({
                 </div>
               </Panel>
 
-              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/40 active:bg-primary/50">
                 <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
               </Separator>
             </>
@@ -1327,7 +1328,7 @@ function TemplateEditorInner({
 
           {showPreview && (
             <>
-              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/30 active:bg-primary/50">
+              <Separator className="relative flex w-1.5 items-center justify-center bg-border/50 transition-colors hover:bg-primary/40 active:bg-primary/50">
                 <div className="h-8 w-0.5 rounded-full bg-foreground/20" />
               </Separator>
               <Panel
@@ -1353,7 +1354,7 @@ function TemplateEditorInner({
                 className={cn(
                   'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
                   mobilePane === pane
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/50 text-primary'
                     : 'text-foreground/55 hover:text-foreground',
                 )}
               >
@@ -1787,10 +1788,7 @@ function loadHiddenPanels(): Set<string> {
 
 function saveHiddenPanels(set: Set<string>): void {
   try {
-    window.localStorage.setItem(
-      PANEL_VISIBILITY_KEY,
-      JSON.stringify([...set]),
-    );
+    window.localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify([...set]));
   } catch {
     /* best-effort */
   }
@@ -1913,7 +1911,6 @@ function PrintIcon() {
   );
 }
 
-
 function GearIcon() {
   return (
     <svg
@@ -1961,4 +1958,3 @@ function BackIcon() {
     </svg>
   );
 }
-

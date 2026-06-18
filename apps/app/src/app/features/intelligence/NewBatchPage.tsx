@@ -121,7 +121,7 @@ export function NewBatchPage() {
 
       <Card className="rounded-xl">
         <div className="flex items-center gap-2">
-          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/35 text-primary">
             <UploadIcon className="size-5" />
           </span>
           <div>
@@ -179,7 +179,7 @@ export function NewBatchPage() {
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border/70 bg-secondary/30 p-8 text-center transition hover:border-primary/50 hover:bg-secondary/50"
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border/70 bg-secondary/40 p-8 text-center transition hover:border-primary/50 hover:bg-secondary/50"
         >
           <span className="text-sm font-medium">
             {files.length
@@ -223,7 +223,7 @@ export function NewBatchPage() {
                   type="button"
                   aria-label={t('common.remove', 'Remove')}
                   onClick={() => removeFile(i)}
-                  className="flex-none rounded p-1 text-foreground/50 hover:bg-error/10 hover:text-error"
+                  className="flex-none rounded p-1 text-foreground/50 hover:bg-error/50 hover:text-error"
                 >
                   ✕
                 </button>

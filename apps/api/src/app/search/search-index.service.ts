@@ -174,7 +174,9 @@ export class SearchIndexService {
         batchId,
         ...(kind === 'document'
           ? { documentId: refId }
-          : { sourceDocumentId: refId }),
+          : kind === 'source'
+            ? { sourceDocumentId: refId }
+            : {}),
       },
       async () => {
         try {

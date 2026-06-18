@@ -105,7 +105,8 @@ export function BulkAnalyzeDialog({
     total: targets.length,
   };
   const finished = counts.done + counts.cached + counts.failed;
-  const progress = counts.total === 0 ? 0 : Math.round((finished / counts.total) * 100);
+  const progress =
+    counts.total === 0 ? 0 : Math.round((finished / counts.total) * 100);
   const hasStarted = !!batchId;
   const isComplete = !!data?.isComplete;
 
@@ -134,7 +135,7 @@ export function BulkAnalyzeDialog({
 
         <div className="space-y-3 py-1">
           {!hasStarted && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-secondary/15 p-3 text-sm">
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-secondary/35 p-3 text-sm">
               <Checkbox
                 checked={force}
                 onCheckedChange={(v) => setForce(v === true)}
@@ -168,14 +169,10 @@ export function BulkAnalyzeDialog({
             </span>
             <span className="flex items-center gap-2">
               {counts.done > 0 && (
-                <span className="text-success-foreground">
-                  ✓ {counts.done}
-                </span>
+                <span className="text-success-foreground">✓ {counts.done}</span>
               )}
               {counts.cached > 0 && (
-                <span className="text-foreground/55">
-                  ↻ {counts.cached}
-                </span>
+                <span className="text-foreground/55">↻ {counts.cached}</span>
               )}
               {counts.failed > 0 && (
                 <span className="text-error">✗ {counts.failed}</span>
@@ -185,12 +182,15 @@ export function BulkAnalyzeDialog({
 
           <ScrollArea className="h-56 rounded-md border border-border">
             <ul className="divide-y divide-border/70">
-              {(data?.items ?? targets.map((tg) => ({
-                id: tg.id,
-                documentId: tg.id,
-                status: 'queued' as const,
-                error: null,
-              }))).map((item) => (
+              {(
+                data?.items ??
+                targets.map((tg) => ({
+                  id: tg.id,
+                  documentId: tg.id,
+                  status: 'queued' as const,
+                  error: null,
+                }))
+              ).map((item) => (
                 <RowItem
                   key={item.id}
                   title={titleById.get(item.documentId) ?? ''}
@@ -272,7 +272,7 @@ function RowItem({
       : status === 'cached'
         ? t('documents.bulk.statusCached', 'Cached (unchanged)')
         : status === 'failed'
-          ? error ?? t('documents.bulk.statusFailed', 'Failed')
+          ? (error ?? t('documents.bulk.statusFailed', 'Failed'))
           : status === 'running'
             ? t('documents.bulk.statusRunning', 'Running\u2026')
             : t('documents.bulk.statusPending', 'Queued');

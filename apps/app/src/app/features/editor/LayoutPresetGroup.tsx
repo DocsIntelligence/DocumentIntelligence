@@ -69,7 +69,7 @@ export function LayoutPresetGroup({
               onClick={() => onChange(p.sidebar, p.preview)}
               className={`flex size-7 flex-none items-center justify-center rounded transition-colors ${
                 active
-                  ? 'bg-primary/15 text-primary'
+                  ? 'bg-primary/35 text-primary'
                   : 'text-foreground/55 hover:bg-secondary hover:text-foreground'
               }`}
             >

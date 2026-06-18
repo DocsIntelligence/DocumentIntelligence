@@ -15,13 +15,7 @@ import {
   type Row,
   type SortingState,
 } from '@tanstack/react-table';
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Input } from './input';
 import {
   Select,
@@ -66,6 +60,19 @@ export interface DataTableSort {
 }
 
 /**
+ * Opt-in row selection. When provided, the table renders a narrow, always-on
+ * leading checkbox column (header = select-all-visible) and — when at least one
+ * row is selected and `bulkActions` is given — a standardized action bar just
+ * above the table. Selection state is owned by the caller (a `Set` of row ids).
+ */
+export interface DataTableSelection {
+  selectedIds: Set<string>;
+  onChange: (next: Set<string>) => void;
+  /** Restrict which rows can be selected; non-selectable rows show no checkbox. */
+  isSelectable?: (rowId: string) => boolean;
+}
+
+/**
  * Opt-in server-driven mode. When provided, the table does NOT filter/sort/
  * paginate internally — it renders `data` as given (the current page) and
  * delegates page/sort/search changes to these callbacks.
@@ -91,6 +98,16 @@ export interface DataTableProps<T> {
   search?: (row: T) => string;
   searchPlaceholder?: string;
   toolbar?: ReactNode;
+  /** Enable the leading checkbox column + standardized bulk-action bar. */
+  selection?: DataTableSelection;
+  /**
+   * Render the bulk-action buttons shown in the bar when ≥1 row is selected.
+   * Receives the selected ids and a `clear()` helper. The bar chrome (the
+   * "{n} selected" label, themed container, and Clear button) is provided.
+   */
+  bulkActions?: (ids: string[], clear: () => void) => ReactNode;
+  /** Override the "{n} selected" label (e.g. pluralized / translated). */
+  selectionLabel?: (count: number) => ReactNode;
   renderExpanded?: (row: T) => ReactNode;
   pageSize?: number;
   pageSizeOptions?: number[];
@@ -143,7 +160,7 @@ interface ColumnMeta {
   align?: 'left' | 'right' | 'center';
   className?: string;
   widthClass?: string;
-  pinned?: boolean;
+  pinned?: boolean | 'left' | 'right';
 }
 
 /** Map a Tailwind `w-NN` / `w-[NNNpx]` hint to its pixel equivalent. */
@@ -166,11 +183,14 @@ const tailwindWidthToPx = (cls?: string): number | undefined => {
  */
 export function DataTable<T>({
   data,
-  columns: userColumns,
+  columns: providedColumns,
   rowKey,
   search,
   searchPlaceholder = 'Search…',
   toolbar,
+  selection,
+  bulkActions,
+  selectionLabel,
   renderExpanded,
   pageSize = 25,
   pageSizeOptions = [10, 25, 50, 100, 200],
@@ -183,6 +203,70 @@ export function DataTable<T>({
   reorderableColumns = true,
 }: DataTableProps<T>) {
   const serverMode = !!server;
+
+  // ── Selection (optional leading checkbox column) ─────────────────────────
+  const selectableIds = useMemo(
+    () =>
+      selection
+        ? data
+            .map(rowKey)
+            .filter((id) => !selection.isSelectable || selection.isSelectable(id))
+        : [],
+    [selection, data, rowKey],
+  );
+  const allVisibleSelected =
+    !!selection &&
+    selectableIds.length > 0 &&
+    selectableIds.every((id) => selection.selectedIds.has(id));
+
+  const selectionColumn = useMemo<DataTableColumn<T> | null>(() => {
+    if (!selection) return null;
+    const toggleAll = () => {
+      const next = new Set(selection.selectedIds);
+      if (allVisibleSelected) for (const id of selectableIds) next.delete(id);
+      else for (const id of selectableIds) next.add(id);
+      selection.onChange(next);
+    };
+    return {
+      key: '__select__',
+      pinned: 'left',
+      // Narrow, fixed: just the checkbox + tight padding.
+      width: 'w-9',
+      defaultWidth: 36,
+      minWidth: 36,
+      maxWidth: 36,
+      className: 'px-2',
+      header: (
+        <SelectCheckbox
+          checked={allVisibleSelected}
+          onClick={toggleAll}
+          label="Toggle selection for all visible rows"
+        />
+      ),
+      cell: (row: T) => {
+        const id = rowKey(row);
+        if (selection.isSelectable && !selection.isSelectable(id)) return null;
+        const checked = selection.selectedIds.has(id);
+        return (
+          <SelectCheckbox
+            checked={checked}
+            onClick={() => {
+              const next = new Set(selection.selectedIds);
+              if (checked) next.delete(id);
+              else next.add(id);
+              selection.onChange(next);
+            }}
+            label="Toggle selection"
+          />
+        );
+      },
+    };
+  }, [selection, selectableIds, allVisibleSelected, rowKey]);
+
+  const userColumns = useMemo(
+    () => (selectionColumn ? [selectionColumn, ...providedColumns] : providedColumns),
+    [selectionColumn, providedColumns],
+  );
 
   // ── Persisted column state (widths + order) ─────────────────────────────
   const [persisted, setPersisted] = useState<PersistedTableState>(() =>
@@ -220,13 +304,21 @@ export function DataTable<T>({
     [userColumns, rowKey],
   );
 
+  // Column header by id — used to label values in the mobile card view.
+  const columnHeaderById = useMemo(
+    () => new Map(userColumns.map((c) => [c.key, c.header])),
+    [userColumns],
+  );
+
   // ── Search (global filter) ───────────────────────────────────────────────
   const [globalFilter, setGlobalFilter] = useState('');
-  const activeQuery = serverMode ? server.query ?? '' : globalFilter;
+  const activeQuery = serverMode ? (server.query ?? '') : globalFilter;
 
   // ── Sort ────────────────────────────────────────────────────────────────
   const [sorting, setSorting] = useState<SortingState>(
-    initialSort ? [{ id: initialSort.key, desc: initialSort.dir === 'desc' }] : [],
+    initialSort
+      ? [{ id: initialSort.key, desc: initialSort.dir === 'desc' }]
+      : [],
   );
   const effectiveSorting: SortingState = serverMode
     ? server.sort
@@ -369,9 +461,7 @@ export function DataTable<T>({
     if (pinned.has(fromKey) || pinned.has(toKey)) return;
     // Persisted order tracks ONLY non-pinned columns — pinned ones are always
     // appended at render time so they stay at the right edge.
-    const nonPinnedIds = userColumns
-      .filter((c) => !c.pinned)
-      .map((c) => c.key);
+    const nonPinnedIds = userColumns.filter((c) => !c.pinned).map((c) => c.key);
     const base = persisted.order.length
       ? persisted.order.filter((k) => nonPinnedIds.includes(k))
       : nonPinnedIds;
@@ -398,7 +488,8 @@ export function DataTable<T>({
   const current = effectivePagination.pageIndex;
   const start = total === 0 ? 0 : current * effectivePagination.pageSize;
   const visibleCount = serverMode ? data.length : rows.length;
-  const colSpan = table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0);
+  const colSpan =
+    table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0);
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -426,8 +517,44 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-border">
-        <div className="overflow-x-auto">
+      {/* Standardized bulk-action bar — same chrome, theme + position on every
+          table: sits directly above the grid when ≥1 row is selected. */}
+      {selection && bulkActions && selection.selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2 text-sm">
+          <span className="font-medium text-foreground/80">
+            {selectionLabel
+              ? selectionLabel(selection.selectedIds.size)
+              : `${selection.selectedIds.size} selected`}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {bulkActions([...selection.selectedIds], () =>
+              selection.onChange(new Set()),
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => selection.onChange(new Set())}
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-foreground/60 transition hover:bg-secondary hover:text-foreground"
+          >
+            <svg
+              className="size-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+            Clear
+          </button>
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        {/* Desktop / tablet: the full table (horizontal scroll if needed). */}
+        <div className="hidden overflow-x-auto sm:block">
           <table
             className="text-sm"
             style={{
@@ -461,7 +588,8 @@ export function DataTable<T>({
                       reorderableColumns &&
                       !meta.pinned &&
                       hg.headers.length > 1;
-                    const isDrop = dropTargetKey === col.id && dragKey !== col.id;
+                    const isDrop =
+                      dropTargetKey === col.id && dragKey !== col.id;
                     return (
                       <th
                         key={header.id}
@@ -516,8 +644,9 @@ export function DataTable<T>({
                           meta.align === 'center' && 'text-center',
                           draggable && 'cursor-grab active:cursor-grabbing',
                           isDrop &&
-                            'bg-primary/10 ring-1 ring-inset ring-primary/40',
+                            'bg-primary/50 ring-1 ring-inset ring-primary/40',
                           dragKey === col.id && 'opacity-50',
+                          meta.className,
                         )}
                       >
                         <span
@@ -564,7 +693,7 @@ export function DataTable<T>({
                               'absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none transition-colors',
                               col.getIsResizing()
                                 ? 'bg-primary/60'
-                                : 'bg-transparent hover:bg-primary/30 group-hover/th:bg-border/80',
+                                : 'bg-transparent hover:bg-primary/40 group-hover/th:bg-border/80',
                             )}
                           />
                         )}
@@ -601,6 +730,23 @@ export function DataTable<T>({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: a stacked card per row — no horizontal scrolling. */}
+        <div className="divide-y divide-border/60 sm:hidden">
+          {rows.map((row) => (
+            <MobileCard<T>
+              key={row.id}
+              row={row}
+              headerById={columnHeaderById}
+              renderExpanded={renderExpanded}
+            />
+          ))}
+          {rows.length === 0 && (
+            <div className="px-4 py-10 text-center text-sm text-foreground/50">
+              {empty ?? 'Nothing to show.'}
+            </div>
+          )}
         </div>
 
         {total > 0 && (
@@ -670,7 +816,7 @@ function DataRow<T>({
   const [isOpen, setOpen] = useState(false);
   return (
     <Fragment>
-      <tr className="transition hover:bg-secondary/30">
+      <tr className="transition hover:bg-secondary/40">
         {renderExpanded && (
           <td className="pl-3">
             <button
@@ -704,13 +850,98 @@ function DataRow<T>({
         })}
       </tr>
       {renderExpanded && isOpen && (
-        <tr className="bg-secondary/20">
+        <tr className="bg-secondary/40">
           <td colSpan={colSpan} className="px-4 py-3">
             {renderExpanded(row.original)}
           </td>
         </tr>
       )}
     </Fragment>
+  );
+}
+
+/**
+ * Mobile rendering of a row: a card with a prominent primary value, any pinned
+ * controls (selection checkbox / actions menu) on the same line, and the
+ * remaining columns as label/value pairs. Replaces the horizontally-scrolling
+ * table on phones (`sm:hidden`).
+ */
+function MobileCard<T>({
+  row,
+  headerById,
+  renderExpanded,
+}: {
+  row: Row<T>;
+  headerById: Map<string, ReactNode>;
+  renderExpanded?: (row: T) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const cells = row.getVisibleCells();
+  const pinnedOf = (cell: (typeof cells)[number]) =>
+    ((cell.column.columnDef.meta ?? {}) as ColumnMeta).pinned;
+  const leftCells = cells.filter((c) => pinnedOf(c) === 'left');
+  const rightCells = cells.filter(
+    (c) => pinnedOf(c) === true || pinnedOf(c) === 'right',
+  );
+  const bodyCells = cells.filter((c) => !pinnedOf(c));
+  const [primary, ...rest] = bodyCells;
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-start gap-2">
+        {leftCells.map((cell) => (
+          <div key={cell.id} className="flex-none pt-0.5">
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </div>
+        ))}
+        {primary && (
+          <div className="min-w-0 flex-1 font-medium text-foreground">
+            {flexRender(primary.column.columnDef.cell, primary.getContext())}
+          </div>
+        )}
+        <div className="flex flex-none items-center gap-1">
+          {rightCells.map((cell) => (
+            <div key={cell.id}>
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </div>
+          ))}
+          {renderExpanded && (
+            <button
+              type="button"
+              aria-label="Toggle details"
+              onClick={() => setOpen((s) => !s)}
+              className="rounded p-1 text-foreground/50 hover:bg-secondary hover:text-foreground"
+            >
+              <Chevron dir={open ? 'down' : 'right'} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {rest.length > 0 && (
+        <dl className="mt-2.5 space-y-1.5">
+          {rest.map((cell) => (
+            <div
+              key={cell.id}
+              className="flex items-baseline justify-between gap-3 text-sm"
+            >
+              <dt className="flex-none text-foreground/55">
+                {headerById.get(cell.column.id)}
+              </dt>
+              <dd className="min-w-0 truncate text-right text-foreground/90">
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {renderExpanded && open && (
+        <div className="mt-3 border-t border-border/60 pt-3">
+          {renderExpanded(row.original)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -771,6 +1002,44 @@ function PagerButton({
       className="rounded-md border border-border px-2 py-1 transition hover:bg-secondary disabled:pointer-events-none disabled:opacity-40"
     >
       {children}
+    </button>
+  );
+}
+
+/** The shared square checkbox used by the selection column (header + rows). */
+function SelectCheckbox({
+  checked,
+  onClick,
+  label,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={checked}
+      className={cn(
+        'flex size-[18px] shrink-0 items-center justify-center rounded border-2 transition',
+        checked
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border hover:border-primary',
+      )}
+    >
+      {checked && (
+        <svg
+          className="size-3"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <path d="M2.5 6.5L5 9l4.5-6" />
+        </svg>
+      )}
     </button>
   );
 }

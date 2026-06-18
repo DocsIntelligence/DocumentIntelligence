@@ -120,7 +120,7 @@ export function IntelligenceUpload() {
             className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition hover:border-primary/50 hover:bg-secondary/50 ${
               fileError
                 ? 'border-error/60 bg-error/5'
-                : 'border-border/70 bg-secondary/30'
+                : 'border-border/70 bg-secondary/40'
             }`}
           >
             <span className="text-sm font-medium">

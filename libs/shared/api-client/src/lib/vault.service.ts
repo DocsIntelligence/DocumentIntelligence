@@ -171,7 +171,35 @@ export const createVaultService = (http: HttpClient) => ({
         `/vault/entities/${id}/documents/${docId}/scan`,
       )
       .then((r) => r.data),
+
+  /** Upload many KYC docs at once → classify + extract + attach each, then
+   *  autofill the entity's empty fields. Returns per-file results + the entity. */
+  bulkScanDocuments: (id: string, files: File[]) => {
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    return http
+      .post<VaultBulkScanResult>(
+        `/vault/entities/${id}/documents/bulk-scan`,
+        form,
+      )
+      .then((r) => r.data);
+  },
 });
+
+export interface VaultBulkScanFile {
+  filename: string;
+  status: 'scanned' | 'failed';
+  documentId?: string;
+  kind?: string;
+  fields?: string[];
+  error?: string;
+}
+
+export interface VaultBulkScanResult {
+  results: VaultBulkScanFile[];
+  filledCount: number;
+  entity: VaultEntityDetail;
+}
 
 export interface VaultFieldConfig {
   id: string;

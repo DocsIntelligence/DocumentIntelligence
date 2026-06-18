@@ -118,7 +118,11 @@ export const blankPipeline = (): PipelineDto => ({
   ],
 });
 
-function toPayload(v: PipelineDto): { key: string; name: string; stages: StageValue[] } {
+function toPayload(v: PipelineDto): {
+  key: string;
+  name: string;
+  stages: StageValue[];
+} {
   return {
     key: v.key.trim(),
     name: v.name.trim(),
@@ -169,7 +173,10 @@ export function PipelineManager() {
 
   const onDelete = async (key: string) => {
     const ok = await confirm({
-      title: t('adminIntel.pipeline.deleteTitle', 'Delete pipeline permanently?'),
+      title: t(
+        'adminIntel.pipeline.deleteTitle',
+        'Delete pipeline permanently?',
+      ),
       description: t(
         'adminIntel.pipeline.deleteDesc',
         'Removes the pipeline and all its versions for good. Refused if any run used it — disable instead. Prefer Disable to keep history.',
@@ -331,7 +338,10 @@ export function PipelineManager() {
           columns={columns}
           rowKey={(p) => p.key}
           search={(p) => `${p.name} ${p.key}`}
-          searchPlaceholder={t('adminIntel.pipeline.search', 'Search pipelines…')}
+          searchPlaceholder={t(
+            'adminIntel.pipeline.search',
+            'Search pipelines…',
+          )}
           initialSort={{ key: 'name', dir: 'asc' }}
           renderExpanded={(p) => <ExpandedPipeline pipelineKey={p.key} />}
           toolbar={
@@ -451,13 +461,13 @@ export function PipelineEditor({
             {save.isPending
               ? t('common.saving', 'Saving…')
               : creating
-              ? t('adminIntel.pipeline.create', '+ New pipeline')
-              : t('adminIntel.pipeline.saveVersion', 'Save (new version)')}
+                ? t('adminIntel.pipeline.create', '+ New pipeline')
+                : t('adminIntel.pipeline.saveVersion', 'Save (new version)')}
           </Button>
         </div>
 
         {warnings.length > 0 && (
-          <ul className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning-foreground space-y-1">
+          <ul className="rounded-md bg-warning/50 px-3 py-2 text-xs text-warning-foreground space-y-1">
             {warnings.map((w) => (
               <li key={w}>⚠ {w}</li>
             ))}
@@ -520,7 +530,10 @@ export function PipelineEditor({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {STAGE_TYPES.map((ty) => (
-              <DropdownMenuItem key={ty} onSelect={() => append(defaultStage(ty))}>
+              <DropdownMenuItem
+                key={ty}
+                onSelect={() => append(defaultStage(ty))}
+              >
                 {ty}
               </DropdownMenuItem>
             ))}
@@ -603,7 +616,13 @@ function StageCard({
           {nameErr && <span className="text-xs text-error">{nameErr}</span>}
         </div>
         <div className="flex gap-1">
-          <Button type="button" size="sm" variant="ghost" disabled={!canUp} onClick={onUp}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!canUp}
+            onClick={onUp}
+          >
             ↑
           </Button>
           <Button

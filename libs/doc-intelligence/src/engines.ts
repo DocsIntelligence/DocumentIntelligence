@@ -21,6 +21,8 @@ export interface SourceInput {
   filename?: string;
   /** Caller's language hint, if known. */
   language?: string;
+  /** Password for an encrypted/protected PDF (e.g. a CAMS/KFintech CAS). */
+  password?: string;
 }
 
 /** Native-text fast path: PDF text layer, DOCX via mammoth, etc. (cheap). */

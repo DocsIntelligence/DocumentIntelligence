@@ -1,12 +1,5 @@
 import type { VaultFieldDef } from '@org/api-client';
-import {
-  Badge,
-  Button,
-  Card,
-  FormField,
-  Input,
-  Spinner,
-} from '@org/ui';
+import { Badge, Button, Card, FormField, Input, Spinner } from '@org/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -89,13 +82,16 @@ export function VaultEntityEditPage() {
   }
 
   const save = async () => {
-    await update.mutateAsync({ label: label.trim() || data.label, fields: form });
+    await update.mutateAsync({
+      label: label.trim() || data.label,
+      fields: form,
+    });
     toast.success(t('vault.saved', 'Saved'));
     navigate(`/vault/${id}`);
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto  space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>

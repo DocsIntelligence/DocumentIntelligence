@@ -30,7 +30,7 @@ export function SectionsTree({ sections, activeKey, onSelect }: Props) {
                 className={[
                   'w-full text-left px-2 py-1.5 rounded-md transition-colors',
                   active
-                    ? 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary/50 text-primary font-medium'
                     : 'hover:bg-foreground/5 text-foreground/80',
                 ].join(' ')}
               >

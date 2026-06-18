@@ -106,8 +106,14 @@ export function Settings() {
       const label =
         (await prompt({
           title: t('settings.namePasskeyTitle', 'Name this passkey'),
-          label: t('settings.namePasskeyPrompt', 'Name this passkey (optional):'),
-          placeholder: t('settings.namePasskeyPlaceholder', 'e.g. MacBook Touch ID'),
+          label: t(
+            'settings.namePasskeyPrompt',
+            'Name this passkey (optional):',
+          ),
+          placeholder: t(
+            'settings.namePasskeyPlaceholder',
+            'e.g. MacBook Touch ID',
+          ),
         })) ?? undefined;
       const verifyRes = await fetch(
         `${API_BASE_URL}/auth/passkey/register/verify`,
@@ -195,7 +201,7 @@ export function Settings() {
             <p className="text-xs text-foreground/40 mt-0.5">
               @{user?.username}
             </p>
-            <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+            <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/50 text-primary">
               {user?.role}
             </span>
           </div>

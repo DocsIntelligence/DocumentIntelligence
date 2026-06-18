@@ -15,6 +15,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import {
   useDeleteVaultEntity,
   useDuplicateVaultEntity,
@@ -116,22 +117,19 @@ export function VaultPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {t('vault.title', 'Document Vault')}
-          </h1>
-          <p className="mt-1 text-foreground/60">
-            {t(
-              'vault.subtitle',
-              'Save people & companies once — their details and ID documents — then autofill any document. Sensitive fields are encrypted and masked.',
-            )}
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/vault/new">{t('vault.new', 'New entity')}</Link>
-        </Button>
-      </div>
+      <PageHeader
+        back={false}
+        title={t('vault.title', 'Document Vault')}
+        subtitle={t(
+          'vault.subtitle',
+          'Save people & companies once — their details and ID documents — then autofill any document. Sensitive fields are encrypted and masked.',
+        )}
+        actions={
+          <Button asChild>
+            <Link to="/vault/new">{t('vault.new', 'New entity')}</Link>
+          </Button>
+        }
+      />
 
       <DataTable
         tableId="vault.list"

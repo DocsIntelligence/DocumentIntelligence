@@ -155,7 +155,7 @@ export function AddDocToGroupDialog({
           )}
 
           {selectedGroupId && (
-            <div className="space-y-2 rounded-md border border-border bg-secondary/15 p-3 text-xs">
+            <div className="space-y-2 rounded-md border border-border bg-secondary/35 p-3 text-xs">
               <p className="font-medium text-foreground">
                 {t('groups.preview', 'Of the {{n}} selected:', {
                   n: documents.length,
@@ -173,10 +173,7 @@ export function AddDocToGroupDialog({
                     <span className="font-medium text-foreground">
                       {alreadyHere.length}
                     </span>{' '}
-                    {t(
-                      'groups.alreadyHere',
-                      'already in this group (no-op).',
-                    )}
+                    {t('groups.alreadyHere', 'already in this group (no-op).')}
                   </li>
                 )}
                 {inOtherGroup.length > 0 && (
@@ -218,9 +215,7 @@ export function AddDocToGroupDialog({
           </Button>
           <Button
             size="sm"
-            disabled={
-              !selectedGroupId || addDocs.isPending || willAdd === 0
-            }
+            disabled={!selectedGroupId || addDocs.isPending || willAdd === 0}
             onClick={handleSubmit}
           >
             {addDocs.isPending
@@ -332,15 +327,10 @@ export function AddDocsToCurrentGroupDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-2">
-            <span>
-              {t('groups.addDocsTitle', 'Add documents to group')}
-            </span>
+            <span>{t('groups.addDocsTitle', 'Add documents to group')}</span>
             {selected.size > 0 && (
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                {t(
-                  'groups.selectedCount',
-                  `${selected.size} selected`,
-                )}
+              <span className="rounded-full bg-primary/50 px-2.5 py-0.5 text-xs font-medium text-primary">
+                {t('groups.selectedCount', `${selected.size} selected`)}
               </span>
             )}
           </DialogTitle>
@@ -392,7 +382,7 @@ export function AddDocsToCurrentGroupDialog({
                   onClick={() => toggleSelect(doc.id)}
                   className={`flex w-full items-center gap-3 rounded px-2 py-2 text-left text-sm transition-colors ${
                     selected.has(doc.id)
-                      ? 'bg-primary/10 text-primary'
+                      ? 'bg-primary/50 text-primary'
                       : 'hover:bg-secondary/60'
                   }`}
                 >
@@ -432,10 +422,7 @@ export function AddDocsToCurrentGroupDialog({
           <span className="text-xs text-foreground/55">
             {selected.size === 0
               ? t('groups.pickToContinue', 'Pick one or more to continue.')
-              : t(
-                  'groups.willAdd',
-                  `Will add ${selected.size} to this group.`,
-                )}
+              : t('groups.willAdd', `Will add ${selected.size} to this group.`)}
           </span>
           <div className="flex gap-2">
             <Button

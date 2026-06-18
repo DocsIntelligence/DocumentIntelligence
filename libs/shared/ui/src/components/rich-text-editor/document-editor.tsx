@@ -350,7 +350,7 @@ export function DocumentEditor({
           className="relative overflow-y-auto bg-background"
           style={{ width: showPreview ? `${panelWidth}%` : '100%' }}
         >
-          <div className="mx-auto max-w-3xl px-8 py-6 text-foreground">
+          <div className="mx-auto px-8 py-6 text-foreground">
             <EditorContent editor={editor} />
 
             {suggestions && (
@@ -368,7 +368,7 @@ export function DocumentEditor({
         {/* Resize handle */}
         {showPreview && (
           <div
-            className="group flex w-1.5 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-primary/20 active:bg-primary/30"
+            className="group flex w-1.5 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-primary/40 active:bg-primary/40"
             onMouseDown={handleMouseDown}
           >
             <div className="h-8 w-0.5 rounded-full bg-foreground/20 transition-colors group-hover:bg-primary/60" />
@@ -439,7 +439,7 @@ function ToolbarButton({
         onClick={onClick}
         className={cn(
           'size-7 p-0 text-xs font-medium',
-          active && 'bg-primary/10 text-primary',
+          active && 'bg-primary/50 text-primary',
         )}
       >
         {children}

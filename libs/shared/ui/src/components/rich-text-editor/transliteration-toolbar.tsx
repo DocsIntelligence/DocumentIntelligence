@@ -78,7 +78,7 @@ export function TransliterationToolbar({
               onClick={() => setLanguage(code as SupportedLanguage)}
               className={cn(
                 'gap-2',
-                code === language && 'bg-primary/10 text-primary',
+                code === language && 'bg-primary/50 text-primary',
               )}
             >
               <span className="min-w-16 text-sm">{lang.nativeName}</span>

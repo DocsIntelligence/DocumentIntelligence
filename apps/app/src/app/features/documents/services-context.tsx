@@ -1,6 +1,7 @@
 import type {
   DocumentGroupsService,
   DocumentsService,
+  EstateService,
   IntelligenceAdminService,
   IntelligenceService,
   LegalAiService,
@@ -29,6 +30,7 @@ interface Services {
   search: SearchService;
   vault: VaultService;
   vaultAdmin: VaultAdminService;
+  estate: EstateService;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -48,6 +50,7 @@ export function ServicesProvider({
   search,
   vault,
   vaultAdmin,
+  estate,
   children,
 }: ProviderProps) {
   return (
@@ -63,6 +66,7 @@ export function ServicesProvider({
         search,
         vault,
         vaultAdmin,
+        estate,
       }}
     >
       {children}
@@ -124,6 +128,12 @@ export function useVaultAdminService(): VaultAdminService {
   const ctx = useContext(ServicesContext);
   if (!ctx) throw new Error('useVaultAdminService outside <ServicesProvider>');
   return ctx.vaultAdmin;
+}
+
+export function useEstateService(): EstateService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx) throw new Error('useEstateService outside <ServicesProvider>');
+  return ctx.estate;
 }
 
 export function useDocumentGroupsService(): DocumentGroupsService {

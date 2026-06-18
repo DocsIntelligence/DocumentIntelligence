@@ -88,14 +88,15 @@ interface UsageRow {
   errorMessage: string | null;
 }
 
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
-  success: 'success',
-  error: 'error',
-  timeout: 'error',
-  rate_limited: 'warning',
-  cancelled: 'info',
-  partial: 'warning',
-};
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> =
+  {
+    success: 'success',
+    error: 'error',
+    timeout: 'error',
+    rate_limited: 'warning',
+    cancelled: 'info',
+    partial: 'warning',
+  };
 
 const RANGES: Array<{ label: string; days: number }> = [
   { label: 'Last 24h', days: 1 },
@@ -207,7 +208,8 @@ export function AiUsagePage() {
   useEffect(() => {
     let cancelled = false;
     setRefreshing(true);
-    const base = scope === 'me' ? `${API_BASE_URL}/me` : `${API_BASE_URL}/admin`;
+    const base =
+      scope === 'me' ? `${API_BASE_URL}/me` : `${API_BASE_URL}/admin`;
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (operation) params.set('operation', operation);
     if (provider) params.set('provider', provider);
@@ -224,10 +226,14 @@ export function AiUsagePage() {
     Promise.all([
       fetch(`${base}/ai-usage/summary?${params.toString()}`, {
         credentials: 'include',
-      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
+      }).then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+      ),
       fetch(`${base}/ai-usage?${listParams.toString()}`, {
         credentials: 'include',
-      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
+      }).then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+      ),
     ])
       .then(([s, l]) => {
         if (cancelled) return;
@@ -356,7 +362,10 @@ export function AiUsagePage() {
       header: t('aiUsage.colEntity', 'Entity'),
       cell: (r) => {
         const link =
-          (r.documentId && { to: `/documents/${r.documentId}`, label: 'doc' }) ||
+          (r.documentId && {
+            to: `/documents/${r.documentId}`,
+            label: 'doc',
+          }) ||
           (r.sourceDocumentId && {
             to: `/analyze/${r.sourceDocumentId}`,
             label: 'source',
@@ -364,10 +373,7 @@ export function AiUsagePage() {
           (r.batchId && { to: `/batches/${r.batchId}`, label: 'batch' });
         if (!link) return <span className="text-xs text-foreground/30">—</span>;
         return (
-          <Link
-            to={link.to}
-            className="text-xs text-primary hover:underline"
-          >
+          <Link to={link.to} className="text-xs text-primary hover:underline">
             {link.label}
           </Link>
         );
@@ -398,16 +404,26 @@ export function AiUsagePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={scope} onValueChange={(v) => setScope(v as 'workspace' | 'me')}>
+          <Select
+            value={scope}
+            onValueChange={(v) => setScope(v as 'workspace' | 'me')}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="workspace">{t('aiUsage.scopeWorkspace', 'Workspace')}</SelectItem>
-              <SelectItem value="me">{t('aiUsage.scopeMine', 'My calls only')}</SelectItem>
+              <SelectItem value="workspace">
+                {t('aiUsage.scopeWorkspace', 'Workspace')}
+              </SelectItem>
+              <SelectItem value="me">
+                {t('aiUsage.scopeMine', 'My calls only')}
+              </SelectItem>
             </SelectContent>
           </Select>
-          <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+          <Select
+            value={String(days)}
+            onValueChange={(v) => setDays(Number(v))}
+          >
             <SelectTrigger className="w-[160px]">
               <SelectValue />
             </SelectTrigger>
@@ -425,7 +441,7 @@ export function AiUsagePage() {
       {/* Active scope-filter pills — show what the URL pre-filtered to, with
           one-click clear. */}
       {(batchId || sourceDocumentId || pipelineRunId || documentId) && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/20 px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-xs">
           <span className="text-foreground/60">
             {t('aiUsage.scopedTo', 'Scoped to')}:
           </span>
@@ -479,152 +495,180 @@ export function AiUsagePage() {
             </Card>
           ) : (
             <>
-          {/* KPI tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiTile
-              label={t('aiUsage.kpiCalls', 'Calls')}
-              value={fmtN(summary.totals.calls)}
-              sub={`${fmtN(summary.totals.successCalls)} ok · ${fmtN(summary.totals.errorCalls)} err`}
-            />
-            <KpiTile
-              label={t('aiUsage.kpiCost', 'Est. cost')}
-              value={fmtUsd(summary.totals.costUsd)}
-              sub={`${fmtN(summary.totals.totalTokens)} tokens`}
-            />
-            <KpiTile
-              label={t('aiUsage.kpiInput', 'Input tokens')}
-              value={fmtN(summary.totals.inputTokens)}
-              sub={`${fmtN(summary.totals.cachedInputTokens)} cached`}
-            />
-            <KpiTile
-              label={t('aiUsage.kpiOutput', 'Output tokens')}
-              value={fmtN(summary.totals.outputTokens)}
-              sub={
-                summary.totals.reasoningTokens > 0
-                  ? `${fmtN(summary.totals.reasoningTokens)} reasoning`
-                  : ''
-              }
-            />
-            <KpiTile
-              label={t('aiUsage.kpiAvg', 'Avg duration')}
-              value={fmtMs(summary.totals.averageDurationMs)}
-              sub={`p95 ${fmtMs(summary.latency.p95)} · p99 ${fmtMs(summary.latency.p99)}`}
-            />
-            <KpiTile
-              label={t('aiUsage.kpiErrors', 'Error rate')}
-              value={
-                summary.totals.calls
-                  ? `${((summary.totals.errorCalls / summary.totals.calls) * 100).toFixed(1)}%`
-                  : '0%'
-              }
-              sub={`${fmtN(summary.totals.errorCalls)} failed`}
-            />
-          </div>
-
-          {/* Sparkline (per-day calls) + breakdown cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="rounded-xl p-5 lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-foreground">
-                  {t('aiUsage.dailyTitle', 'Daily volume')}
-                </h3>
-                {refreshing && <Spinner className="size-4" />}
+              {/* KPI tiles */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <KpiTile
+                  label={t('aiUsage.kpiCalls', 'Calls')}
+                  value={fmtN(summary.totals.calls)}
+                  sub={`${fmtN(summary.totals.successCalls)} ok · ${fmtN(summary.totals.errorCalls)} err`}
+                />
+                <KpiTile
+                  label={t('aiUsage.kpiCost', 'Est. cost')}
+                  value={fmtUsd(summary.totals.costUsd)}
+                  sub={`${fmtN(summary.totals.totalTokens)} tokens`}
+                />
+                <KpiTile
+                  label={t('aiUsage.kpiInput', 'Input tokens')}
+                  value={fmtN(summary.totals.inputTokens)}
+                  sub={`${fmtN(summary.totals.cachedInputTokens)} cached`}
+                />
+                <KpiTile
+                  label={t('aiUsage.kpiOutput', 'Output tokens')}
+                  value={fmtN(summary.totals.outputTokens)}
+                  sub={
+                    summary.totals.reasoningTokens > 0
+                      ? `${fmtN(summary.totals.reasoningTokens)} reasoning`
+                      : ''
+                  }
+                />
+                <KpiTile
+                  label={t('aiUsage.kpiAvg', 'Avg duration')}
+                  value={fmtMs(summary.totals.averageDurationMs)}
+                  sub={`p95 ${fmtMs(summary.latency.p95)} · p99 ${fmtMs(summary.latency.p99)}`}
+                />
+                <KpiTile
+                  label={t('aiUsage.kpiErrors', 'Error rate')}
+                  value={
+                    summary.totals.calls
+                      ? `${((summary.totals.errorCalls / summary.totals.calls) * 100).toFixed(1)}%`
+                      : '0%'
+                  }
+                  sub={`${fmtN(summary.totals.errorCalls)} failed`}
+                />
               </div>
-              <DailyBars daily={summary.daily} />
-            </Card>
 
-            <Card className="rounded-xl p-5">
-              <h3 className="font-medium text-foreground mb-3">
-                {t('aiUsage.providersTitle', 'Providers')}
-              </h3>
-              <ul className="space-y-2 text-sm">
-                {summary.perProvider.length === 0 && (
-                  <li className="text-foreground/40">—</li>
-                )}
-                {summary.perProvider.map((p) => (
-                  <li
-                    key={p.provider}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span className="font-mono text-xs text-foreground/80">
-                      {p.provider}
-                    </span>
-                    <span className="tabular-nums text-foreground">
-                      {fmtUsd(p.costUsd)}{' '}
-                      <span className="text-foreground/40">· {fmtN(p.calls)}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </div>
+              {/* Sparkline (per-day calls) + breakdown cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card className="rounded-xl p-5 lg:col-span-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-foreground">
+                      {t('aiUsage.dailyTitle', 'Daily volume')}
+                    </h3>
+                    {refreshing && <Spinner className="size-4" />}
+                  </div>
+                  <DailyBars daily={summary.daily} />
+                </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="rounded-xl p-5">
-              <h3 className="font-medium text-foreground mb-3">
-                {t('aiUsage.byModelTitle', 'By model')}
-              </h3>
-              <table className="w-full text-sm">
-                <thead className="text-xs text-foreground/50 border-b border-border/40">
-                  <tr>
-                    <th className="text-left py-1">Model</th>
-                    <th className="text-right py-1">Calls</th>
-                    <th className="text-right py-1">Tokens</th>
-                    <th className="text-right py-1">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.perModel.map((m) => (
-                    <tr key={`${m.provider}/${m.model}`} className="border-b border-border/20 last:border-0">
-                      <td className="py-1.5">
-                        <div className="font-mono text-xs text-foreground">{m.model}</div>
-                        <div className="text-[10px] text-foreground/50">{m.provider}</div>
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtN(m.calls)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtN(m.tokens)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtUsd(m.costUsd)}</td>
-                    </tr>
-                  ))}
-                  {summary.perModel.length === 0 && (
-                    <tr>
-                      <td className="py-3 text-foreground/40" colSpan={4}>—</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </Card>
+                <Card className="rounded-xl p-5">
+                  <h3 className="font-medium text-foreground mb-3">
+                    {t('aiUsage.providersTitle', 'Providers')}
+                  </h3>
+                  <ul className="space-y-2 text-sm">
+                    {summary.perProvider.length === 0 && (
+                      <li className="text-foreground/40">—</li>
+                    )}
+                    {summary.perProvider.map((p) => (
+                      <li
+                        key={p.provider}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span className="font-mono text-xs text-foreground/80">
+                          {p.provider}
+                        </span>
+                        <span className="tabular-nums text-foreground">
+                          {fmtUsd(p.costUsd)}{' '}
+                          <span className="text-foreground/40">
+                            · {fmtN(p.calls)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
 
-            <Card className="rounded-xl p-5">
-              <h3 className="font-medium text-foreground mb-3">
-                {t('aiUsage.byOpTitle', 'By operation')}
-              </h3>
-              <table className="w-full text-sm">
-                <thead className="text-xs text-foreground/50 border-b border-border/40">
-                  <tr>
-                    <th className="text-left py-1">Operation</th>
-                    <th className="text-right py-1">Calls</th>
-                    <th className="text-right py-1">Tokens</th>
-                    <th className="text-right py-1">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.perOperation.map((o) => (
-                    <tr key={o.operation} className="border-b border-border/20 last:border-0">
-                      <td className="py-1.5 capitalize">{o.operation}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtN(o.calls)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtN(o.tokens)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmtUsd(o.costUsd)}</td>
-                    </tr>
-                  ))}
-                  {summary.perOperation.length === 0 && (
-                    <tr>
-                      <td className="py-3 text-foreground/40" colSpan={4}>—</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </Card>
-          </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card className="rounded-xl p-5">
+                  <h3 className="font-medium text-foreground mb-3">
+                    {t('aiUsage.byModelTitle', 'By model')}
+                  </h3>
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-foreground/50 border-b border-border/40">
+                      <tr>
+                        <th className="text-left py-1">Model</th>
+                        <th className="text-right py-1">Calls</th>
+                        <th className="text-right py-1">Tokens</th>
+                        <th className="text-right py-1">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.perModel.map((m) => (
+                        <tr
+                          key={`${m.provider}/${m.model}`}
+                          className="border-b border-border/20 last:border-0"
+                        >
+                          <td className="py-1.5">
+                            <div className="font-mono text-xs text-foreground">
+                              {m.model}
+                            </div>
+                            <div className="text-[10px] text-foreground/50">
+                              {m.provider}
+                            </div>
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtN(m.calls)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtN(m.tokens)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtUsd(m.costUsd)}
+                          </td>
+                        </tr>
+                      ))}
+                      {summary.perModel.length === 0 && (
+                        <tr>
+                          <td className="py-3 text-foreground/40" colSpan={4}>
+                            —
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+
+                <Card className="rounded-xl p-5">
+                  <h3 className="font-medium text-foreground mb-3">
+                    {t('aiUsage.byOpTitle', 'By operation')}
+                  </h3>
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-foreground/50 border-b border-border/40">
+                      <tr>
+                        <th className="text-left py-1">Operation</th>
+                        <th className="text-right py-1">Calls</th>
+                        <th className="text-right py-1">Tokens</th>
+                        <th className="text-right py-1">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.perOperation.map((o) => (
+                        <tr
+                          key={o.operation}
+                          className="border-b border-border/20 last:border-0"
+                        >
+                          <td className="py-1.5 capitalize">{o.operation}</td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtN(o.calls)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtN(o.tokens)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {fmtUsd(o.costUsd)}
+                          </td>
+                        </tr>
+                      ))}
+                      {summary.perOperation.length === 0 && (
+                        <tr>
+                          <td className="py-3 text-foreground/40" colSpan={4}>
+                            —
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+              </div>
             </>
           )}
 
@@ -637,12 +681,18 @@ export function AiUsagePage() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 <Input
-                  placeholder={t('aiUsage.searchPlaceholder', 'Search model / feature / error…')}
+                  placeholder={t(
+                    'aiUsage.searchPlaceholder',
+                    'Search model / feature / error…',
+                  )}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="w-[260px]"
                 />
-                <Select value={operation || '__all'} onValueChange={(v) => setOperation(v === '__all' ? '' : v)}>
+                <Select
+                  value={operation || '__all'}
+                  onValueChange={(v) => setOperation(v === '__all' ? '' : v)}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Op" />
                   </SelectTrigger>
@@ -655,7 +705,10 @@ export function AiUsagePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={provider || '__all'} onValueChange={(v) => setProvider(v === '__all' ? '' : v)}>
+                <Select
+                  value={provider || '__all'}
+                  onValueChange={(v) => setProvider(v === '__all' ? '' : v)}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Provider" />
                   </SelectTrigger>
@@ -668,14 +721,20 @@ export function AiUsagePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={model || '__all'} onValueChange={(v) => setModel(v === '__all' ? '' : v)}>
+                <Select
+                  value={model || '__all'}
+                  onValueChange={(v) => setModel(v === '__all' ? '' : v)}
+                >
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Model" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all">All models</SelectItem>
                     {(summary?.perModel ?? []).map((m) => (
-                      <SelectItem key={`${m.provider}/${m.model}`} value={m.model}>
+                      <SelectItem
+                        key={`${m.provider}/${m.model}`}
+                        value={m.model}
+                      >
                         {m.model}
                       </SelectItem>
                     ))}
@@ -686,7 +745,9 @@ export function AiUsagePage() {
                   onValueChange={(v) => setBatchId(v === '__all' ? '' : v)}
                 >
                   <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder={t('aiUsage.filterBatch', 'Batch')} />
+                    <SelectValue
+                      placeholder={t('aiUsage.filterBatch', 'Batch')}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all">
@@ -815,9 +876,7 @@ function DailyBars({
     <div className="flex items-end gap-1 h-32">
       {daily.map((d) => {
         const h = Math.max(2, Math.round((d.calls / max) * 100));
-        const errorH = d.calls
-          ? Math.round((d.errors / d.calls) * h)
-          : 0;
+        const errorH = d.calls ? Math.round((d.errors / d.calls) * h) : 0;
         return (
           <div
             key={d.day}

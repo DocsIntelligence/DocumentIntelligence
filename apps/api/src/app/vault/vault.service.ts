@@ -8,9 +8,11 @@ import {
 import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { AiService } from '../ai/ai.service';
+import type { MultimodalPart } from '../ai/providers/ai-provider.interface';
 import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
 import { sourcePart } from '../intelligence/engines/vlm-extraction.engine';
+import { ParsingService } from '../intelligence/parsing.service';
 import { VaultCryptoService } from './vault-crypto.service';
 import { VaultConfigService } from './vault-config.service';
 import { CreateVaultEntityDto, UpdateVaultEntityDto } from './vault.dto';
@@ -36,7 +38,34 @@ export class VaultService {
     private readonly storage: StorageService,
     private readonly ai: AiService,
     private readonly config: VaultConfigService,
+    private readonly parsing: ParsingService,
   ) {}
+
+  /**
+   * Build AI input part(s) for a document — TEXT-FIRST: born-digital PDFs (e.g.
+   * e-Aadhaar / e-PAN) are parsed to text so OCR works on ANY provider (incl.
+   * text-only ones) and is cheaper/more accurate. Images and scanned PDFs with
+   * no text layer fall back to `sourcePart` (vision). The AiService then picks
+   * whichever vision/extract provider is available, with fallback.
+   */
+  private async aiParts(
+    contentType: string,
+    base64: string,
+  ): Promise<MultimodalPart[]> {
+    if (this.parsing.canParse(contentType)) {
+      try {
+        const doc = await this.parsing.parse({ data: base64, contentType });
+        const text = (doc?.pages ?? [])
+          .map((p) => p.text)
+          .join('\n\n')
+          .trim();
+        if (text) return [{ kind: 'text', text: `--- Document text ---\n${text}` }];
+      } catch {
+        // Parse failed (e.g. protected) — fall back to vision below.
+      }
+    }
+    return [sourcePart(contentType, base64)];
+  }
 
   // ── Entities ────────────────────────────────────────────────────────────
 
@@ -282,9 +311,10 @@ export class VaultService {
 
     const instruction = `You are reading an Indian ${dk?.label ?? doc.kind}. Extract ONLY the listed fields that are clearly legible in the image/PDF; omit anything you are unsure about. Dates as YYYY-MM-DD. Aadhaar as 12 digits (no spaces). Do not invent values.`;
     const base64 = await this.base64(doc.s3Key);
+    const parts = await this.aiParts(doc.contentType, base64);
 
     const { data } = await this.ai.extract<Record<string, string>>(
-      [{ kind: 'text', text: instruction }, sourcePart(doc.contentType, base64)],
+      [{ kind: 'text', text: instruction }, ...parts],
       schema,
       { systemPrompt: 'Extract structured fields from the identity/registration document. Never fabricate.', schemaName: 'vault_scan', instruction },
     );
@@ -296,6 +326,147 @@ export class VaultService {
     }
     await this.audit(id, userId, 'reveal', `scan:${doc.kind}`);
     return { documentId: docId, kind: doc.kind, suggestions };
+  }
+
+  /**
+   * Bulk KYC ingest (docs/10): upload many identity docs at once → for each,
+   * one AI pass CLASSIFIES the document kind and EXTRACTS the canonical fields,
+   * the file is attached with the detected kind, and the merged values autofill
+   * the entity (only filling fields that are currently empty — never clobbers
+   * what the user typed). One call per file; bad files are skipped, not fatal.
+   */
+  async bulkIngest(
+    userId: string,
+    id: string,
+    files: { buffer: Buffer; originalname: string; mimetype: string }[],
+  ) {
+    const entity = await this.loadEntity(userId, id);
+    const fieldDefs = await this.config.fieldDefs(entity.ownerOrgId, entity.kind);
+    const labelFor = new Map(fieldDefs.map((f) => [f.key, f.label]));
+    const allowed = new Set(fieldDefs.map((f) => f.key));
+    const docKinds = (await this.config.docKinds(entity.ownerOrgId)).filter(
+      (d) => d.fills.length > 0,
+    );
+    const fillableKeys = [
+      ...new Set(docKinds.flatMap((d) => d.fills)),
+    ].filter((k) => allowed.has(k));
+    const kindKeys = docKinds.map((d) => d.kind);
+
+    if (fillableKeys.length === 0) {
+      throw new BadRequestException(
+        'This entity kind has no scannable fields to autofill.',
+      );
+    }
+
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        documentKind: {
+          type: 'string',
+          description: `The kind of document — one of: ${kindKeys.join(', ')}`,
+        },
+        ...Object.fromEntries(
+          fillableKeys.map((k) => [
+            k,
+            { type: 'string', description: labelFor.get(k) ?? k },
+          ]),
+        ),
+      },
+    } as unknown as Parameters<AiService['extract']>[1];
+    const instruction = `Identify which Indian identity/registration document this is (set documentKind from the allowed list) and extract ONLY the listed fields that are clearly legible. Dates as YYYY-MM-DD. Aadhaar as 12 digits (no spaces). PAN uppercase. Do not invent values; omit anything uncertain.`;
+
+    const results: {
+      filename: string;
+      status: 'scanned' | 'failed';
+      documentId?: string;
+      kind?: string;
+      fields?: string[];
+      error?: string;
+    }[] = [];
+    const merged: Record<string, string> = {};
+
+    for (const file of files) {
+      try {
+        const base64 = file.buffer.toString('base64');
+        const parts = await this.aiParts(file.mimetype, base64);
+        const { data } = await this.ai.extract<Record<string, string>>(
+          [{ kind: 'text', text: instruction }, ...parts],
+          schema,
+          {
+            systemPrompt:
+              'Classify and extract structured fields from an identity/registration document. Never fabricate.',
+            schemaName: 'vault_bulk_scan',
+            instruction,
+          },
+        );
+        const detected = String(data?.['documentKind'] ?? '').trim();
+        const kind = DOC_KINDS.has(detected) ? detected : 'other';
+        const stored = await this.storage.upload(file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+          folder: STORAGE_FOLDER,
+          userId,
+        });
+        const doc = await this.db.vaultDocument.create({
+          data: {
+            entityId: id,
+            kind,
+            filename: file.originalname,
+            contentType: file.mimetype,
+            byteSize: file.buffer.length,
+            s3Key: stored.key,
+            checksum: createHash('sha256').update(file.buffer).digest('hex'),
+          },
+        });
+        const got: string[] = [];
+        for (const k of fillableKeys) {
+          const v = data?.[k];
+          if (v != null && String(v).trim() !== '') {
+            got.push(k);
+            if (merged[k] === undefined) merged[k] = String(v).trim();
+          }
+        }
+        results.push({
+          filename: file.originalname,
+          status: 'scanned',
+          documentId: doc.id,
+          kind,
+          fields: got,
+        });
+      } catch (e) {
+        results.push({
+          filename: file.originalname,
+          status: 'failed',
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    // Autofill — fill only currently-empty fields (don't clobber user input).
+    const current = this.crypto.decryptFields(entity.dataEncrypted) as Record<
+      string,
+      string
+    >;
+    const next = { ...current };
+    let filledCount = 0;
+    for (const [k, v] of Object.entries(merged)) {
+      if (!next[k] || String(next[k]).trim() === '') {
+        next[k] = v;
+        filledCount += 1;
+      }
+    }
+    await this.db.vaultEntity.update({
+      where: { id },
+      data: { dataEncrypted: this.crypto.encryptFields(this.clean(next)) },
+    });
+    await this.audit(id, userId, 'update', `bulk-scan:${files.length}`);
+
+    return {
+      results,
+      filledCount,
+      entity: await this.get(userId, id),
+    };
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────

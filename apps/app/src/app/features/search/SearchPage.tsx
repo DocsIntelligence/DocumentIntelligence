@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
+import { PageHeader } from '../../components/page-header';
 import { useDocumentCatalog } from '../documents/queries';
 import { useSearch } from './queries';
 import { Highlighted, hrefForHit } from './highlight';
@@ -45,7 +46,9 @@ export function SearchPage() {
   );
   const [type, setType] = useState(sp.get('type') ?? ANY);
   const [status, setStatus] = useState(sp.get('status') ?? ANY);
-  const [sort, setSort] = useState<SearchSort>((sp.get('sort') as SearchSort) || 'relevance');
+  const [sort, setSort] = useState<SearchSort>(
+    (sp.get('sort') as SearchSort) || 'relevance',
+  );
   const [pageSize, setPageSize] = useState(Number(sp.get('ps')) || 20);
   const [page, setPage] = useState(0);
 
@@ -100,18 +103,15 @@ export function SearchPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {t('search.title', 'Search')}
-        </h1>
-        <p className="mt-1 text-foreground/60">
-          {t(
-            'search.subtitle',
-            'Search across your drafts and uploaded documents — by title or anything inside.',
-          )}
-        </p>
-      </div>
+    <div className="mx-auto space-y-5">
+      <PageHeader
+        back={false}
+        title={t('search.title', 'Search')}
+        subtitle={t(
+          'search.subtitle',
+          'Search across your drafts and uploaded documents — by title or anything inside.',
+        )}
+      />
 
       <div className="space-y-3">
         <Input
@@ -127,11 +127,17 @@ export function SearchPage() {
             {t('search.allKinds', 'All')}
             {facets ? ` (${facets.document + facets.source})` : ''}
           </Chip>
-          <Chip active={kind === 'document'} onClick={() => reset(() => setKind('document'))}>
+          <Chip
+            active={kind === 'document'}
+            onClick={() => reset(() => setKind('document'))}
+          >
             {t('search.drafts', 'Drafts')}
             {facets ? ` (${facets.document})` : ''}
           </Chip>
-          <Chip active={kind === 'source'} onClick={() => reset(() => setKind('source'))}>
+          <Chip
+            active={kind === 'source'}
+            onClick={() => reset(() => setKind('source'))}
+          >
             {t('search.uploads', 'Uploads')}
             {facets ? ` (${facets.source})` : ''}
           </Chip>
@@ -141,7 +147,9 @@ export function SearchPage() {
               <SelectValue placeholder={t('search.anyType', 'Any type')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>{t('search.anyType', 'Any type')}</SelectItem>
+              <SelectItem value={ANY}>
+                {t('search.anyType', 'Any type')}
+              </SelectItem>
               {(catalog.data ?? []).map((dt) => (
                 <SelectItem key={dt.key} value={dt.key}>
                   {dt.name}
@@ -150,12 +158,17 @@ export function SearchPage() {
             </SelectContent>
           </Select>
 
-          <Select value={status} onValueChange={(v) => reset(() => setStatus(v))}>
+          <Select
+            value={status}
+            onValueChange={(v) => reset(() => setStatus(v))}
+          >
             <SelectTrigger className="h-8 w-auto min-w-28 text-xs">
               <SelectValue placeholder={t('search.anyStatus', 'Any status')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>{t('search.anyStatus', 'Any status')}</SelectItem>
+              <SelectItem value={ANY}>
+                {t('search.anyStatus', 'Any status')}
+              </SelectItem>
               {STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
@@ -164,14 +177,23 @@ export function SearchPage() {
             </SelectContent>
           </Select>
 
-          <Select value={sort} onValueChange={(v) => reset(() => setSort(v as SearchSort))}>
+          <Select
+            value={sort}
+            onValueChange={(v) => reset(() => setSort(v as SearchSort))}
+          >
             <SelectTrigger className="h-8 w-auto min-w-28 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="relevance">{t('search.sortRelevance', 'Relevance')}</SelectItem>
-              <SelectItem value="recent">{t('search.sortRecent', 'Most recent')}</SelectItem>
-              <SelectItem value="title">{t('search.sortTitle', 'Title A–Z')}</SelectItem>
+              <SelectItem value="relevance">
+                {t('search.sortRelevance', 'Relevance')}
+              </SelectItem>
+              <SelectItem value="recent">
+                {t('search.sortRecent', 'Most recent')}
+              </SelectItem>
+              <SelectItem value="title">
+                {t('search.sortTitle', 'Title A–Z')}
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -191,7 +213,10 @@ export function SearchPage() {
       ) : loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-secondary/40" />
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-secondary/40"
+            />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -202,11 +227,15 @@ export function SearchPage() {
         <>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              {t('search.showingRange', 'Showing {{from}}–{{to}} of {{total}}', {
-                from,
-                to,
-                total,
-              })}
+              {t(
+                'search.showingRange',
+                'Showing {{from}}–{{to}} of {{total}}',
+                {
+                  from,
+                  to,
+                  total,
+                },
+              )}
               {data?.meta.tookMs != null && (
                 <span className="ml-1 opacity-70">· {data.meta.tookMs}ms</span>
               )}
@@ -230,10 +259,18 @@ export function SearchPage() {
 
           <div className="space-y-2">
             {items.map((hit) => (
-              <Link key={`${hit.kind}:${hit.refId}`} to={hrefForHit(hit)} className="block">
+              <Link
+                key={`${hit.kind}:${hit.refId}`}
+                to={hrefForHit(hit)}
+                className="block"
+              >
                 <Card className="p-3 transition-colors hover:bg-secondary/50">
                   <div className="flex items-center gap-2">
-                    <Badge variant={hit.kind === 'document' ? 'primary' : 'secondary'}>
+                    <Badge
+                      variant={
+                        hit.kind === 'document' ? 'primary' : 'secondary'
+                      }
+                    >
                       {hit.kind === 'document'
                         ? t('search.draft', 'Draft')
                         : t('search.upload', 'Upload')}
@@ -249,10 +286,16 @@ export function SearchPage() {
                   </div>
                   <div className="mt-1 flex items-center gap-2">
                     {hit.type && (
-                      <span className="shrink-0 text-xs text-muted-foreground">{hit.type}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {hit.type}
+                      </span>
                     )}
                     {hit.status && (
-                      <Badge variant="secondary" outline className="text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        outline
+                        className="text-[10px]"
+                      >
                         {hit.status}
                       </Badge>
                     )}
@@ -272,7 +315,10 @@ export function SearchPage() {
               <PagerBtn disabled={page === 0} onClick={() => setPage(0)}>
                 «
               </PagerBtn>
-              <PagerBtn disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <PagerBtn
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
                 {t('common.prev', 'Prev')}
               </PagerBtn>
               <span className="px-2 text-muted-foreground">

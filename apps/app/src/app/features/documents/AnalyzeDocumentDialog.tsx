@@ -88,7 +88,7 @@ export function AnalyzeDocumentDialog({
           ) : analysis ? (
             <CachedPreview analysis={analysis} />
           ) : (
-            <p className="rounded-md border border-dashed border-border bg-secondary/15 px-3 py-6 text-center text-sm text-foreground/60">
+            <p className="rounded-md border border-dashed border-border bg-secondary/35 px-3 py-6 text-center text-sm text-foreground/60">
               {t(
                 'documents.analyze.notAnalyzed',
                 'Not analyzed yet. Run analysis to see summary, parties, dates and risk flags.',
@@ -158,7 +158,7 @@ function CachedPreview({
   const dateCount = analysis.keyDates?.length ?? 0;
   const riskCount = analysis.riskFlags?.length ?? 0;
   return (
-    <div className="space-y-3 rounded-md border border-border bg-secondary/15 p-3">
+    <div className="space-y-3 rounded-md border border-border bg-secondary/35 p-3">
       <div className="flex items-center justify-between text-xs text-foreground/55">
         <span>
           {t('documents.analyze.lastRun', 'Last analyzed')}{' '}
@@ -182,7 +182,7 @@ function CachedPreview({
           {(analysis.parties ?? []).slice(0, 6).map((p, i) => (
             <span
               key={`${p.name}-${i}`}
-              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+              className="rounded-full bg-primary/50 px-2 py-0.5 text-[11px] text-primary"
               title={p.role}
             >
               {p.name}

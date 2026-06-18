@@ -2,7 +2,6 @@ import type { BatchSummary } from '@org/api-client';
 import {
   Badge,
   Button,
-  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -29,7 +28,12 @@ import {
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200];
 // BatchStatus enum values (prisma) — stable facet source, page-independent.
-const BATCH_STATUSES = ['running', 'needs_review', 'completed', 'failed'] as const;
+const BATCH_STATUSES = [
+  'running',
+  'needs_review',
+  'completed',
+  'failed',
+] as const;
 const ZERO_TOTALS = {
   running: 0,
   needsReview: 0,
@@ -38,12 +42,13 @@ const ZERO_TOTALS = {
   failed: 0,
 };
 
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
-  completed: 'success',
-  needs_review: 'warning',
-  failed: 'error',
-  running: 'info',
-};
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info'> =
+  {
+    completed: 'success',
+    needs_review: 'warning',
+    failed: 'error',
+    running: 'info',
+  };
 
 /**
  * Batches list (docs/07 P4.3): KPI tiles across all batches + a searchable,
@@ -61,7 +66,6 @@ export function BatchesPage() {
   );
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
   const bulkDelete = useBulkDeleteBatches();
@@ -69,12 +73,6 @@ export function BatchesPage() {
   useEffect(() => {
     setPage(0);
   }, [query, statusFilter, sort, pageSize]);
-
-  // Drop selections that fell off the current page after a filter / page
-  // change so the sticky action bar count never lies.
-  useEffect(() => {
-    if (!selectMode) setSelected(new Set());
-  }, [selectMode]);
 
   const { data, isFetching, isPlaceholderData } = useBatches({
     page,
@@ -90,27 +88,6 @@ export function BatchesPage() {
   const totals = data?.totals ?? ZERO_TOTALS;
   const hasFilters = !!(query.trim() || statusFilter);
   const hasBatches = total > 0;
-
-  const allOnPageSelected =
-    rows.length > 0 && rows.every((b) => selected.has(b.id));
-  const someOnPageSelected = rows.some((b) => selected.has(b.id));
-  const togglePageSelection = (next: boolean) => {
-    setSelected((prev) => {
-      const out = new Set(prev);
-      for (const b of rows) {
-        if (next) out.add(b.id);
-        else out.delete(b.id);
-      }
-      return out;
-    });
-  };
-  const toggleOne = (id: string) =>
-    setSelected((prev) => {
-      const out = new Set(prev);
-      if (out.has(id)) out.delete(id);
-      else out.add(id);
-      return out;
-    });
 
   const onBulkDelete = async () => {
     const ids = Array.from(selected);
@@ -130,41 +107,9 @@ export function BatchesPage() {
     if (!ok) return;
     await bulkDelete.mutateAsync(ids);
     setSelected(new Set());
-    setSelectMode(false);
   };
 
   const columns: DataTableColumn<BatchSummary>[] = [
-    ...(selectMode
-      ? [
-          {
-            key: 'select',
-            header: (
-              <Checkbox
-                aria-label={t('common.selectAllOnPage', 'Select all on page')}
-                checked={
-                  allOnPageSelected
-                    ? true
-                    : someOnPageSelected
-                      ? 'indeterminate'
-                      : false
-                }
-                onCheckedChange={(v) => togglePageSelection(Boolean(v))}
-              />
-            ),
-            width: 'w-10',
-            pinned: 'left',
-            cell: (b: BatchSummary) => (
-              <Checkbox
-                aria-label={t('common.selectRow', 'Select row')}
-                checked={selected.has(b.id)}
-                onCheckedChange={() => toggleOne(b.id)}
-                // Stop the row-expand click from also toggling selection.
-                onClick={(e) => e.stopPropagation()}
-              />
-            ),
-          } satisfies DataTableColumn<BatchSummary>,
-        ]
-      : []),
     {
       key: 'name',
       header: t('intelligence.batches.colName', 'Batch'),
@@ -265,35 +210,6 @@ export function BatchesPage() {
         </Button>
       </div>
 
-      {selectMode && selected.size > 0 && (
-        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
-          <span className="text-sm font-medium text-foreground">
-            {t('intelligence.batches.nSelected', '{{n}} selected', {
-              n: selected.size,
-            })}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelected(new Set())}
-            >
-              {t('common.clear', 'Clear')}
-            </Button>
-            <Button
-              variant="error"
-              size="sm"
-              disabled={bulkDelete.isPending}
-              onClick={onBulkDelete}
-            >
-              {bulkDelete.isPending
-                ? t('common.deleting', 'Deleting…')
-                : t('common.deleteN', 'Delete {{n}}', { n: selected.size })}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* KPI tiles — workspace totals (across all batches, any page) */}
       {(hasBatches || hasFilters) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -337,7 +253,10 @@ export function BatchesPage() {
           columns={columns}
           rowKey={(b) => b.id}
           search={(b) => `${b.name ?? ''} ${b.id}`}
-          searchPlaceholder={t('intelligence.batches.search', 'Search batches…')}
+          searchPlaceholder={t(
+            'intelligence.batches.search',
+            'Search batches…',
+          )}
           renderExpanded={(b) => <BatchBreakdown batch={b} />}
           pageSizeOptions={PAGE_SIZE_OPTIONS}
           server={{
@@ -353,6 +272,22 @@ export function BatchesPage() {
             onPageSizeChange: setPageSize,
             loading: isFetching && isPlaceholderData,
           }}
+          selection={{ selectedIds: selected, onChange: setSelected }}
+          selectionLabel={(n) =>
+            t('intelligence.batches.nSelected', '{{n}} selected', { n })
+          }
+          bulkActions={() => (
+            <Button
+              variant="error"
+              size="sm"
+              disabled={bulkDelete.isPending}
+              onClick={onBulkDelete}
+            >
+              {bulkDelete.isPending
+                ? t('common.deleting', 'Deleting…')
+                : t('common.deleteN', 'Delete {{n}}', { n: selected.size })}
+            </Button>
+          )}
           toolbar={
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <Select
@@ -383,18 +318,12 @@ export function BatchesPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                size="sm"
-                variant={selectMode ? 'secondary' : 'outline'}
-                onClick={() => setSelectMode((v) => !v)}
-              >
-                {selectMode
-                  ? t('common.cancel', 'Cancel')
-                  : t('common.selectMultiple', 'Select multiple')}
-              </Button>
             </div>
           }
-          empty={t('intelligence.batches.noMatch', 'No batches match these filters.')}
+          empty={t(
+            'intelligence.batches.noMatch',
+            'No batches match these filters.',
+          )}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
@@ -422,9 +351,9 @@ export function BatchesPage() {
 const TONE: Record<string, string> = {
   info: 'bg-info/15 text-info',
   warning: 'bg-warning/15 text-warning',
-  success: 'bg-success/15 text-success',
+  success: 'bg-success/35 text-success',
   error: 'bg-error/15 text-error',
-  muted: 'bg-foreground/10 text-foreground/55',
+  muted: 'bg-foreground/50 text-foreground/55',
 };
 
 function StatTile({

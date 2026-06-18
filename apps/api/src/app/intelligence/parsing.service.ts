@@ -15,6 +15,40 @@ import { UnpdfParser } from './parsers/pdf-unpdf.parser';
 const MIN_USABLE_CHARS = 24;
 
 /**
+ * Raised when a PDF needs a password (or the supplied one is wrong). Surfaced
+ * (not swallowed as "scanned") so callers can prompt for the password — a
+ * protected file is a different failure than a missing text layer.
+ */
+export class PdfPasswordRequiredError extends Error {
+  constructor(
+    /** True when a password was supplied but rejected, vs. none given. */
+    readonly incorrect: boolean,
+  ) {
+    super(
+      incorrect
+        ? 'The PDF password is incorrect.'
+        : 'This PDF is password-protected — a password is required.',
+    );
+    this.name = 'PdfPasswordRequiredError';
+  }
+}
+
+/** Detect a pdfjs / pdf-parse password exception from an unknown thrown value. */
+function passwordError(e: unknown): { matched: boolean; incorrect: boolean } {
+  const name = (e as { name?: string })?.name ?? '';
+  const msg = ((e as { message?: string })?.message ?? '').toLowerCase();
+  const code = (e as { code?: number })?.code;
+  const matched =
+    name === 'PasswordException' ||
+    msg.includes('password') ||
+    msg.includes('no password given') ||
+    msg.includes('incorrect password');
+  // pdfjs PasswordException codes: 1 = NEEDS_PASSWORD, 2 = INCORRECT_PASSWORD.
+  const incorrect = code === 2 || msg.includes('incorrect');
+  return { matched, incorrect };
+}
+
+/**
  * The free, native-text fast path (docs/05 §4): turn an uploaded DOCX/PDF/text
  * file into a NormalizedDocument using **multiple parsing libraries with
  * fallback**. For PDFs, unpdf is tried first and pdf-parse second — if the
@@ -73,6 +107,12 @@ export class ParsingService {
           `${parser.name} yielded only ${chars} chars — trying next parser`,
         );
       } catch (e) {
+        const pw = passwordError(e);
+        if (pw.matched) {
+          // A protected PDF fails identically in every parser — surface it
+          // immediately rather than mislabelling the doc as "scanned".
+          throw new PdfPasswordRequiredError(pw.incorrect);
+        }
         this.logger.warn(`${parser.name} failed: ${errorMessage(e)}`);
       }
     }

@@ -32,7 +32,7 @@ const providerConfig = {
         />
       </svg>
     ),
-    bg: 'bg-white hover:bg-gray-50 border border-border text-foreground',
+    bg: 'bg-card hover:bg-secondary border border-border text-card-foreground',
   },
   github: {
     label: 'GitHub',

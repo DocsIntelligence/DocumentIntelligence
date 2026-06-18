@@ -116,9 +116,9 @@ function StatTile({
 }) {
   const toneClass = {
     default: 'bg-secondary/60 text-foreground',
-    success: 'bg-success/10 text-success',
+    success: 'bg-success/50 text-success',
     muted: 'bg-secondary/40 text-foreground/55',
-    info: 'bg-info/10 text-info',
+    info: 'bg-info/50 text-info',
   }[tone];
   return (
     <div className="rounded-lg border border-border bg-background p-3">
@@ -148,12 +148,16 @@ export function EntityKindsManager() {
 
   const openKind = (id: string) =>
     navigate(`/config/vault/entity-kinds/${encodeURIComponent(id)}/edit`);
-  const newKind = () =>
-    navigate('/config/vault/entity-kinds/new');
+  const newKind = () => navigate('/config/vault/entity-kinds/new');
 
   const onDelete = async (r: VaultEntityKindConfig) => {
     if (r.isSystem) {
-      toast(t('vaultAdmin.systemKindDelete', 'System kinds cannot be deleted — disable them instead.'));
+      toast(
+        t(
+          'vaultAdmin.systemKindDelete',
+          'System kinds cannot be deleted — disable them instead.',
+        ),
+      );
       return;
     }
     const ok = await confirm({
@@ -235,7 +239,10 @@ export function EntityKindsManager() {
             danger
             title={
               r.isSystem
-                ? t('vaultAdmin.systemKindLocked', 'System kind — cannot delete')
+                ? t(
+                    'vaultAdmin.systemKindLocked',
+                    'System kind — cannot delete',
+                  )
                 : t('common.delete', 'Delete')
             }
             disabled={r.isSystem || del.isPending}
@@ -577,9 +584,7 @@ export function VaultDocKindsManager() {
   const delDocKind = useDeleteVaultDocKind();
 
   const openDocKind = (id: string) =>
-    navigate(
-      `/config/vault/doc-kinds/${encodeURIComponent(id)}/edit`,
-    );
+    navigate(`/config/vault/doc-kinds/${encodeURIComponent(id)}/edit`);
   const newDocKind = () => navigate('/config/vault/doc-kinds/new');
 
   const onDeleteDocKind = async (r: VaultDocKindConfig) => {
@@ -863,9 +868,7 @@ export function VaultFieldForm({
           >
             <Input
               value={f.options}
-              onChange={(e) =>
-                setF((s) => ({ ...s, options: e.target.value }))
-              }
+              onChange={(e) => setF((s) => ({ ...s, options: e.target.value }))}
             />
           </FormField>
         )}
@@ -1024,7 +1027,7 @@ export function VaultEntityKindForm({
         <KindFieldsEditor entityKindId={initial.id} kindLabel={k.label} />
       )}
       {!initial.id && (
-        <Card className="rounded-lg border-dashed bg-secondary/20 p-4 text-xs text-foreground/55">
+        <Card className="rounded-lg border-dashed bg-secondary/40 p-4 text-xs text-foreground/55">
           {t(
             'vaultAdmin.saveFirstForFields',
             'Save the kind first, then map fields to it below.',
@@ -1056,7 +1059,9 @@ function KindFieldsEditor({
   const setFields = useSetVaultEntityKindFields(entityKindId);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
   const [order, setOrder] = useState<string[]>([]);
-  const [groupOverride, setGroupOverride] = useState<Record<string, string>>({});
+  const [groupOverride, setGroupOverride] = useState<Record<string, string>>(
+    {},
+  );
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -1064,7 +1069,8 @@ function KindFieldsEditor({
     setLinkedIds(new Set(list.map((l) => l.fieldId)));
     setOrder(list.map((l) => l.fieldId));
     const overrides: Record<string, string> = {};
-    for (const l of list) if (l.groupOverride) overrides[l.fieldId] = l.groupOverride;
+    for (const l of list)
+      if (l.groupOverride) overrides[l.fieldId] = l.groupOverride;
     setGroupOverride(overrides);
   }, [links.data]);
 
@@ -1149,9 +1155,7 @@ function KindFieldsEditor({
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              navigate('/config/vault/fields/new')
-            }
+            onClick={() => navigate('/config/vault/fields/new')}
           >
             {t('vaultAdmin.newFieldLink', '+ Create new field')}
           </Button>
@@ -1224,7 +1228,9 @@ function KindFieldsEditor({
                         </p>
                         <p className="truncate font-mono text-xs text-foreground/45">
                           {f.key} · {f.type}
-                          {f.type === 'lookup' && f.lookupKey ? `:${f.lookupKey}` : ''}
+                          {f.type === 'lookup' && f.lookupKey
+                            ? `:${f.lookupKey}`
+                            : ''}
                         </p>
                       </div>
                       {isLinked && (
@@ -1406,7 +1412,9 @@ export function VaultDocKindForm({
           {t('vaultAdmin.knownKeys', 'Known keys')}: {knownKeys.join(', ')}
         </p>
         <label className="flex items-center justify-between rounded-md border p-2 text-sm">
-          <span>{t('vaultAdmin.scannableLabel', 'Scannable (OCR autofill)')}</span>
+          <span>
+            {t('vaultAdmin.scannableLabel', 'Scannable (OCR autofill)')}
+          </span>
           <Switch
             checked={d.scannable}
             onCheckedChange={(v) => setD((s) => ({ ...s, scannable: v }))}

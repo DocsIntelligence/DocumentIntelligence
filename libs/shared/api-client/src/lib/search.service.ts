@@ -20,6 +20,7 @@ export interface SearchHit {
 export interface SearchFacets {
   document: number;
   source: number;
+  asset: number;
 }
 
 export interface SearchResponse {

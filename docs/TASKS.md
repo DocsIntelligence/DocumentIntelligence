@@ -141,8 +141,125 @@
       summaries + `getOneAdmin(id)` (values on select); Vault list no longer decrypts fields (fields on select via get/reveal).
 - [ ] Apply lean-CRUD to **schemas + pipelines** admin (lists still embed nested fields/stages; add summary list + GET-by-key detail).
 
+## Tier 11 — Estate & Wealth Vault (docs/13) — new module, toggleable
+
+> Verify-first gate (docs/13 §11.1, D.1/D.2): the physical-asset wedge + nominee/will legal
+> framing are UNVALIDATED. Don't push past M3 without (a) demand evidence and (b) lawyer review.
+
+- [x] **M1 — module shell**: `EstateVaultModule.forRoot()` gated by `ESTATE_VAULT_ENABLED`;
+      `EstateVaultConfig` config-as-data (org→system→code); `/admin/estate-vault/config`.
+- [x] **M2 — asset inventory**: `Asset`/`AssetValuation`/`AssetDocument`(versioned)/`WealthSnapshot`
+      models + migration; CRUD + net worth + value history API; gated UI (home/list/new/detail) +
+      capability-gated nav. *(build + lint green; NOT runtime-tested.)*
+- [ ] **Runtime-verify M2**: browser walk (add asset → net worth → re-value → history → reveal →
+      delete; toggle `ESTATE_VAULT_ENABLED` off → nav/routes gone). Record in `VERIFICATION_LOG`.
+- [~] **M3 — document capture + extract-assist**: per-asset document upload + versioning (§2.3) +
+      presigned download + AI extract-assist (vision → suggested asset fields, autofill on add + on
+      attached docs). Backend (`asset-document.service` + `estate-document.controller`, reuses
+      Storage/Ai/sourcePart) + frontend (autofill on new, Documents section on detail). Build+lint green;
+      NOT runtime-tested (needs vision AI). CAS hero-upload (multi-holding import: extract array → review →
+      bulk-create) + **dedupe-on-reupload** (reconcile by type+institution+masked-id) done.
+      **Remaining M3 (deferred — 3rd-party)**: DigiLocker source; classify-to-asset-type beyond the AI hint.
+- [x] **M6 — gap nudges + freshness/dormancy engine**: descriptive nudges (no-nominee/value/stale/dormant)
+      from config thresholds; `GET /estate/nudges` + home "Things to review" card. Build+lint green; not runtime-tested.
+- [~] **M5 — nominee + release**: `Nominee`/`AssetNomination`/`ReleaseGrant`/`EstateAccessLog` +
+      liveness `setInterval` scheduler + owner check-in + **human-verified** admin release (§11.6) +
+      token-scoped nominee register / Estate Report (§10.3) + how-to-claim per type. Backend + frontend
+      done (migration `estate_nominee_release`; build+lint green). *(NOT runtime-tested; built on the
+      single-key crypto — see M4.)*
+- [x] **M4 — envelope encryption**: per-asset DEK (AES-256-GCM) wrapped per principal via
+      HKDF-derived KEKs over `VAULT_ENCRYPTION_KEY` (`DataKey` model + migration); rotation on
+      nominee removal; lazy + boot backfill of legacy blobs; nominee release reads only its
+      wrapped DEK. KMS swap deferred to an ops change (no schema change). Build+lint green; NOT
+      runtime-tested. *(Not zero-knowledge — accepted v1 trade-off, docs/13 §1.1.)*
+- [x] **M5 hardening**: nominee proof-of-death upload (public token) + admin verification page
+      (`/config/estate-vault/grants`, presigned proof view + manual Release); multi-instance-safe
+      scheduler (`SchedulerLease` atomic claim); legal-review tracking entry in config (manual
+      follow-up, no workflow). Lawyer review itself still pending (gated). Build+lint green.
+- [ ] **Runtime-verify M5**: add nominee → assign to asset → check-in → (admin) release → open `/n/:token`
+      → confirm scoped, revealed register; revoke; non-released token 403s.
+- [x] **Admin config UI** for the asset-type catalog + toggles (`/config/estate-vault`).
+      Whole-config editor (module/currency/cadence/thresholds/toggles + inline asset-type
+      catalog) over the existing `/admin/estate-vault/config`; route + estate-gated nav item.
+      Build + lint green; NOT runtime-tested.
+- [x] **Extract: text-first + password PDFs** — estate extract parses the PDF text layer (works
+      with text-only providers; fixes the `extract-holdings` 500) and accepts a password for
+      protected CAS statements (typed `PdfPasswordRequiredError` → 400 → UI retry). Build+lint green.
+- [x] **Wealth Vault nav submenu** — sidebar group (Overview/Assets/Add/Import/Bulk import/
+      Nominees/Release/Report) replacing the single dashboard link.
+- [x] **Multi-file bulk import** — `POST /estate/import-files`: N files (with per-file passwords) →
+      one asset each + the file attached, auto-extracted; per-file status/retry UI.
+- [x] **Nominee = Vault person** — every nominee backed by a Vault PERSON entity (source of truth
+      for DOB/Aadhaar/PAN/phone/address + docs); KYC de-duplicated off the Nominee; relationship
+      lookup; New-person / Link-existing form. Build+lint green.
+- [x] **Estate Report PDF** — `GET /estate/report.pdf` renders the masked owner report to PDF via
+      headless Chrome (self-contained `setContent`→`pdf()`, no Document/artboard/S3); Download button.
+- [x] **CAS dedupe fix** — `findDuplicate` now keys on label too (one MF folio spans many schemes).
+- [x] **CAS extraction overhaul** (user: 36L vs 50L under-count) — (1) holdings `maxTokens` 8000→32000
+      + no-truncate prompt + extract the statement's printed grand total → `{holdings,summary,reconciliation}`
+      with an amber "totals don't match" banner in import; (2) **units** end-to-end (`Asset.unitsHeld` +
+      migration, DTO `units`, per-type `tracksUnits` flag, new/detail/import UI); (3) **per-type extraction
+      guidance** (`EXTRACTION_GUIDANCE`, MF→units×NAV not cost, etc.); (4) **keep source statement +
+      encrypted password** mapped to every imported asset (`AssetDocument.passwordEnc` + migration,
+      `POST /estate/import-holdings`, re-extract reuses stored password). Build+lint green; NOT runtime-tested
+      (needs vision AI + real CAS). ⚠️ existing estate config rows need re-save for MF/stocks `tracksUnits` UI.
+- [x] **Assets list bulk actions** — row selection + bulk soft-delete toolbar; search already present.
+- [ ] **Forms**: revisit react-hook-form + field-level inline errors per CODING_STANDARDS (M2 used
+      direct `useState` to match existing vault pages).
+
 ## Payments / GTM (gates expansion per `08`)
 
 - [ ] Payments live for one tier (actually charge ₹49–₹199); the "draft free, pay to export" paywall.
 - [ ] SEO / own one search term; instrument the funnel.
 - [ ] **First 10 paying users** (the only metric that matters before broad expansion — `08` §6).
+
+## Estate Intelligence stream (2026-06-18) — charts, asset detail, doc analysis, search
+
+Self-contained resume notes. Tables touched are polymorphic (`AnalysisRun`,
+`SourceChunk` use `subjectType` string + `subjectId`; `SearchIndex` uses `kind`+`refId`),
+so estate plugs in as `subjectType='asset_document'` with NO schema churn.
+
+- [x] **Estate dashboard charts** — `features/estate/components/charts.tsx` (donut/trend/bars,
+      themed SVG, mask-aware). Overview = net-worth trend (range filter) + allocation donut
+      (category filter) + top holdings + fin-vs-physical. Report = allocation + nominee-coverage donuts.
+- [x] **Per-asset-type detail fields** — registry `@org/dto` `estate/asset-fields.ts` (shared by app+API);
+      `Asset.details Json?` (migration `20260618190000_estate_asset_details`, APPLIED); DTO create/update
+      `details`; `asset.service` create/update/bulkCreate/present persist+return; New form + detail page
+      (view + inline edit). Relabels maturity per type (insurance→"Valid till").
+- [x] **Import → details** — `assetDetailGuidance`+`sanitizeDetails` (dto registry); both AI extract
+      schemas gained a `details` object + guidance; `mapSuggestion` sanitises; import + autofill seed details.
+- [x] **Per-type extraction prompt** — `extractFromUpload(file,password?,assetType?)` → focused prompt for
+      the chosen type (`suggest()` focusType/guidanceKeys).
+- [x] **Per-document analysis + Q&A** — `EstateDocumentAnalysisService` (analyze/latest/ask), reuses
+      `@org/doc-intelligence` + `@org/legal-reference` + AnalysisRun/SourceChunk under `'asset_document'`.
+      `AssetDocumentService.normalizedTextForDoc()`/`assertDocAccess()`. Endpoints
+      `POST/GET .../documents/:docId/analyze|analysis`, `POST .../ask`. Client + AssetDocuments UI panel.
+      ⚠️ needs working AI provider keys at runtime to actually analyze/embed.
+
+### RESUME HERE — remaining slices (in progress)
+
+- [x] **Slice A — Portfolio "wealth analysis"** — DONE. `PortfolioAnalysisService` (estate-vault):
+      deterministic metrics (concentration, categorySplit, nomineeCoveragePct, maturingSoon) from
+      `AssetService.netWorth` + `EstateReportService.ownerReport`; AI (`ai.extract`) narrates summary/
+      risks/suggestions from those numbers only. `POST /estate/portfolio/analyze?profileId=`. Client
+      `analyzePortfolio()` + `PortfolioAnalysis` type. UI: "Wealth analysis" card on EstateHomePage.
+      api build + app/api-client green (only 2 pre-existing errors). Needs AI keys at runtime.
+- [x] **Slice B — Vault-scoped search (REPLACED global-search approach)** — DONE.
+      Per user: estate assets must NOT pollute the global drafting search — search lives at the VAULT level instead.
+      • Reverted the global integration entirely: removed `kind='asset'` from `SearchIndexJob`/`SearchParams`/
+        `SearchQueryDto`/`enabledKinds`/`SYSTEM_DEFAULT`/dto `searchConfigSchema`, deleted `enqueueAsset` +
+        `SearchTextService.forAsset()` + all `enqueueAsset` calls (AssetService, EstateDocumentAnalysisService),
+        and reverted client `SearchKind`/`hrefForHit`/GroupIntelligencePanel. (`AssetDocument.searchText` column +
+        its population on analyze were KEPT — reused by vault search.)
+      • New `EstateSearchService.search(profile, q, limit)` — profile-scoped, matches across asset fields
+        (label/institution/JSON details), each attached doc's `searchText`+filename, and `AnalysisRun` summaries;
+        best-match-per-asset (asset>document>analysis) with a context snippet + `matchedIn`. `GET /estate/search`
+        (`vaultSearchQuerySchema` in @org/dto, `VaultSearchQueryDto`); profileId auto-applied by the interceptor.
+      • UI: `EstateSearchPage` at `/estate/search` (debounced box, URL-synced `q`, type badge + matched-in badge +
+        highlighted snippet, links to `/estate/assets/:id`); `estate.searchVault()` + `useVaultSearch()`; reachable
+        from a "Search" secondary action on EstateHomePage.
+      • Verify: api build + lint 0 errors; app/api-client/dto typecheck green (only the 2 pre-existing WIP errors).
+        ⚠️ keyword-only (ILIKE/contains) — no AI/embeddings needed at runtime. Not runtime-verified end-to-end.
+
+ALL estate-intelligence slices for this stream are now landed. Remaining ideas (not requested yet):
+type/status filter on the vault search page; portfolio-analysis caching; "expiring soon" nudges from details.

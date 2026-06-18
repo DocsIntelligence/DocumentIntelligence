@@ -142,7 +142,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border/50 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="mx-auto px-4 h-14 flex items-center justify-between">
           <h1 className="text-lg font-semibold text-foreground">Settings</h1>
           <Link
             href="/"
@@ -153,7 +153,7 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="mx-auto px-4 py-8 space-y-6">
         {/* Profile */}
         <Card className="rounded-xl p-6">
           <h3 className="font-medium text-foreground mb-4">Profile</h3>
@@ -165,7 +165,7 @@ export default function SettingsPage() {
               <p className="text-xs text-foreground/40 mt-0.5">
                 @{user?.username}
               </p>
-              <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+              <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/50 text-primary">
                 {user?.role}
               </span>
             </div>

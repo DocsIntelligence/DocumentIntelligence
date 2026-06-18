@@ -40,10 +40,10 @@ export function Register() {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold text-foreground">
           {t('auth.register.title', 'Create account')}
         </h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           {t('auth.register.subtitle', 'Fill in your details to get started')}
         </p>
       </div>
@@ -114,7 +114,7 @@ export function Register() {
 
       <OAuthButtons apiUrl={API_BASE_URL} />
 
-      <p className="text-sm text-center text-gray-600 pt-2">
+      <p className="text-sm text-center text-muted-foreground pt-2">
         {t('auth.register.haveAccount', 'Already have an account?')}{' '}
         <Link to="/login" className="text-blue-600 hover:underline font-medium">
           {t('auth.login.title', 'Sign in')}

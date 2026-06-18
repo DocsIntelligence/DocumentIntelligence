@@ -37,6 +37,7 @@ export interface SearchHit {
 export interface SearchFacets {
   document: number;
   source: number;
+  asset: number;
 }
 
 export interface SearchResponse {
@@ -97,7 +98,7 @@ export class SearchService {
     const empty: SearchResponse = {
       items: [],
       total: 0,
-      facets: { document: 0, source: 0 },
+      facets: { document: 0, source: 0, asset: 0 },
       meta: { semantic: false, q, sort, tookMs: Date.now() - startedAt },
     };
     if (kinds.length === 0) return empty;
@@ -192,10 +193,13 @@ export class SearchService {
       `SELECT si.kind, count(*)::int AS n FROM "SearchIndex" si WHERE ${fb.where} GROUP BY si.kind`,
       ...fb.ps,
     );
-    const facets: SearchFacets = { document: 0, source: 0 };
+    const facets: SearchFacets = { document: 0, source: 0, asset: 0 };
     for (const r of facetRows) facets[r.kind] = r.n;
     const total = Math.min(
-      kinds.reduce((s, k) => s + (facets[k as 'document' | 'source'] ?? 0), 0),
+      kinds.reduce(
+        (s, k) => s + (facets[k as keyof SearchFacets] ?? 0),
+        0,
+      ),
       cfg.maxResults,
     );
 
