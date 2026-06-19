@@ -7,9 +7,10 @@ import {
   TabsTrigger,
 } from '@org/ui';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import { DocumentsList } from '../documents/DocumentsList';
 import { AddDocsToCurrentGroupDialog } from './AddToGroupDialog';
 import {
@@ -78,16 +79,10 @@ export function GroupDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm text-foreground/50">
-            <Link to="/groups" className="hover:text-foreground">
-              {t('groups.title', 'Groups')}
-            </Link>
-            <span>/</span>
-          </div>
-          {editing ? (
+      <PageHeader
+        backTo="/groups"
+        title={
+          editing ? (
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -96,12 +91,12 @@ export function GroupDetailPage() {
                 if (e.key === 'Enter') saveRename();
                 if (e.key === 'Escape') setEditing(false);
               }}
-              className="mt-1 text-2xl font-semibold"
+              className="text-2xl font-semibold"
               autoFocus
             />
           ) : (
-            <h2
-              className="mt-1 text-2xl font-semibold cursor-pointer hover:text-primary/80"
+            <span
+              className="cursor-pointer hover:text-primary/80"
               onClick={startRename}
               title={t('groups.clickToRename', 'Click to rename')}
             >
@@ -111,31 +106,33 @@ export function GroupDetailPage() {
                   ? '⚖️'
                   : '📁'}{' '}
               {group.name}
-            </h2>
-          )}
-          <p className="mt-1 text-xs text-foreground/50">
-            {group.kind} · {group.documents.length} document
-            {group.documents.length !== 1 ? 's' : ''} · Created{' '}
-            {new Date(group.createdAt).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            {t('groups.addDocuments', '+ Add documents')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={startRename}>
-            {t('common.rename', 'Rename')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-error"
-            onClick={handleDelete}
-          >
-            {t('common.delete', 'Delete')}
-          </Button>
-        </div>
-      </div>
+            </span>
+          )
+        }
+        subtitle={`${group.kind} · ${group.documents.length} document${
+          group.documents.length !== 1 ? 's' : ''
+        } · ${t('groups.created', 'Created')} ${new Date(
+          group.createdAt,
+        ).toLocaleDateString()}`}
+        actions={
+          <>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              {t('groups.addDocuments', '+ Add documents')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={startRename}>
+              {t('common.rename', 'Rename')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-error"
+              onClick={handleDelete}
+            >
+              {t('common.delete', 'Delete')}
+            </Button>
+          </>
+        }
+      />
 
       <AddDocsToCurrentGroupDialog
         groupId={group.id}

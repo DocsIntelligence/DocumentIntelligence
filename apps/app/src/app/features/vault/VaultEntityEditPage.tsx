@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PageHeader } from '../../components/page-header';
 import { useVaultService } from '../documents/services-context';
 import { useUpdateVaultEntity, useVaultEntity } from './queries';
 import { FieldInput } from './FieldInput';
@@ -91,30 +92,35 @@ export function VaultEntityEditPage() {
   };
 
   return (
-    <div className="mx-auto  space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
-            {KIND_LABEL[data.kind] ?? data.kind}
-          </Badge>
-          <h1 className="truncate text-xl font-semibold">
-            {t('vault.editTitle', 'Edit {{label}}', { label: data.label })}
-          </h1>
-        </div>
-        <div className="flex flex-none items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link to={`/vault/${id}`}>{t('common.cancel', 'Cancel')}</Link>
-          </Button>
-          <Button
-            size="sm"
-            onClick={save}
-            disabled={update.isPending || revealing || !!revealError}
-          >
-            {update.isPending && <Spinner className="mr-2 h-4 w-4" />}
-            {t('common.save', 'Save')}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo={`/vault/${id}`}
+        title={
+          <span className="flex items-center gap-2">
+            <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
+              {KIND_LABEL[data.kind] ?? data.kind}
+            </Badge>
+            <span className="truncate">
+              {t('vault.editTitle', 'Edit {{label}}', { label: data.label })}
+            </span>
+          </span>
+        }
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link to={`/vault/${id}`}>{t('common.cancel', 'Cancel')}</Link>
+            </Button>
+            <Button
+              size="sm"
+              onClick={save}
+              disabled={update.isPending || revealing || !!revealError}
+            >
+              {update.isPending && <Spinner className="mr-2 h-4 w-4" />}
+              {t('common.save', 'Save')}
+            </Button>
+          </>
+        }
+      />
 
       <Card className="space-y-5 p-4">
         <FormField label={t('vault.label', 'Name / label')}>

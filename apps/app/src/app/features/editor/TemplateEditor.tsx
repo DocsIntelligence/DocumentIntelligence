@@ -970,7 +970,7 @@ function TemplateEditorInner({
                   </div>
                   <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/40">
                     <div
-                      className="h-full bg-emerald-500 transition-all"
+                      className="h-full bg-success transition-all"
                       style={{ width: `${completionStats.pct}%` }}
                     />
                   </div>
@@ -1067,7 +1067,7 @@ function TemplateEditorInner({
           <span
             className={cn(
               'inline-block size-1.5 rounded-full',
-              savedAt ? 'bg-emerald-500' : 'bg-amber-400',
+              savedAt ? 'bg-success' : 'bg-warning',
             )}
           />
           {isSaving

@@ -6,9 +6,9 @@ interface Props {
 }
 
 const severityStyles: Record<Warning['severity'], string> = {
-  error: 'bg-red-50 border-red-300 text-red-900',
-  warning: 'bg-amber-50 border-amber-300 text-amber-900',
-  info: 'bg-blue-50 border-blue-300 text-blue-900',
+  error: 'bg-error/10 border-error/30 text-error',
+  warning: 'bg-warning/10 border-warning/30 text-warning',
+  info: 'bg-info/10 border-info/30 text-info',
 };
 
 export function RisksPanel({ warnings, onJump }: Props) {

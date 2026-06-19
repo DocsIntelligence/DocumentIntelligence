@@ -53,7 +53,7 @@ function Highlighted({ text, q }: { text: string; q: string }) {
     <>
       {parts.map((p, k) =>
         p.hit ? (
-          <mark key={k} className="rounded bg-warning/30 px-0.5 text-foreground">
+          <mark key={k} className="rounded bg-warning/40 px-0.5 font-medium text-foreground">
             {p.s}
           </mark>
         ) : (

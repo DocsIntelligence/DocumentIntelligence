@@ -16,6 +16,7 @@ import {
   Textarea,
 } from '@org/ui';
 import { APP_ENV } from '../../../../config';
+import { PageHeader } from '../../../components/page-header';
 
 const API_BASE_URL = APP_ENV.apiUrl;
 
@@ -125,17 +126,14 @@ export function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">
-          {t('settings.title', 'Platform settings')}
-        </h2>
-        <p className="text-foreground/60 mt-1 text-sm">
-          {t(
-            'settings.subtitle',
-            'Scoped toggles &amp; thresholds. Narrower scope wins on lookup: user → org → system → built-in default. New modules register keys in code; storage stays the same.',
-          )}
-        </p>
-      </div>
+      <PageHeader
+        back={false}
+        title={t('settings.title', 'Platform settings')}
+        subtitle={t(
+          'settings.subtitle',
+          'Scoped toggles &amp; thresholds. Narrower scope wins on lookup: user → org → system → built-in default. New modules register keys in code; storage stays the same.',
+        )}
+      />
 
       <Card className="rounded-xl p-5">
         <div className="flex flex-wrap items-end gap-3">

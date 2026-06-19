@@ -116,7 +116,7 @@ export function Register() {
 
       <p className="text-sm text-center text-muted-foreground pt-2">
         {t('auth.register.haveAccount', 'Already have an account?')}{' '}
-        <Link to="/login" className="text-blue-600 hover:underline font-medium">
+        <Link to="/login" className="text-primary hover:underline font-medium">
           {t('auth.login.title', 'Sign in')}
         </Link>
       </p>

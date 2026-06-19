@@ -601,10 +601,10 @@ export function BuilderShell({ documentId }: Props) {
               className={cn(
                 'inline-block size-1.5 rounded-full',
                 patch.isPending
-                  ? 'bg-amber-400'
+                  ? 'bg-warning'
                   : patch.isError
                     ? 'bg-error'
-                    : 'bg-emerald-500',
+                    : 'bg-success',
               )}
             />
             <span className="hidden sm:inline">

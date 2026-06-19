@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import { useIntelligenceService } from '../documents/services-context';
 import {
   useApproveRun,
@@ -220,54 +221,48 @@ export function BatchDetailPage() {
   const maxCount = Math.max(1, ...typeHistogram.map((h) => h.count));
 
   return (
-    <div className="mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {batch.name ?? t('intelligence.batches.title', 'Batches')}
-          </h1>
-          <p className="mt-1 text-sm text-foreground/60">
-            {t(
-              'intelligence.batches.countsArchived',
-              '{{c}}/{{t}} done · {{r}} to review · {{a}} archived · {{f}} failed',
-              {
-                c: batch.completed,
-                t: batch.total,
-                r: batch.needsReview,
-                a: batch.archived ?? 0,
-                f: batch.failed,
-              },
+    <div className="mx-auto space-y-6">
+      <PageHeader
+        backTo="/batches"
+        title={batch.name ?? t('intelligence.batches.title', 'Batches')}
+        subtitle={t(
+          'intelligence.batches.countsArchived',
+          '{{c}}/{{t}} done · {{r}} to review · {{a}} archived · {{f}} failed',
+          {
+            c: batch.completed,
+            t: batch.total,
+            r: batch.needsReview,
+            a: batch.archived ?? 0,
+            f: batch.failed,
+          },
+        )}
+        actions={
+          <>
+            {batch.needsReview > 0 && (
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/review-queue?batch=${id}`} className="gap-1.5">
+                  <InboxIcon className="size-3.5" />
+                  {t('intelligence.batches.goReview', 'Review {{n}}', {
+                    n: batch.needsReview,
+                  })}
+                </Link>
+              </Button>
             )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {batch.needsReview > 0 && (
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/review-queue?batch=${id}`} className="gap-1.5">
-                <InboxIcon className="size-3.5" />
-                {t('intelligence.batches.goReview', 'Review {{n}}', {
-                  n: batch.needsReview,
-                })}
-              </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting || batch.total === 0}
+              onClick={exportJson}
+              className="gap-1.5"
+            >
+              <DownloadIcon />
+              {exporting
+                ? t('intelligence.batches.exporting', 'Exporting…')
+                : t('intelligence.batches.exportJson', 'Export JSON')}
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={exporting || batch.total === 0}
-            onClick={exportJson}
-            className="gap-1.5"
-          >
-            <DownloadIcon />
-            {exporting
-              ? t('intelligence.batches.exporting', 'Exporting…')
-              : t('intelligence.batches.exportJson', 'Export JSON')}
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/batches">{t('common.back', 'Back')}</Link>
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Funnel */}
       <Card>

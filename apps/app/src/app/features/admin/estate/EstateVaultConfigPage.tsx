@@ -20,6 +20,7 @@ import {
 import { cn } from '@org/utils';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../../components/page-header';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { IconButton, TrashIcon } from '../intelligence/icons';
@@ -46,10 +47,7 @@ function ConfigShell({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-foreground/60">{subtitle}</p>
-      </div>
+      <PageHeader back={false} title={title} subtitle={subtitle} />
       <Card className="rounded-xl p-6">{children}</Card>
     </div>
   );

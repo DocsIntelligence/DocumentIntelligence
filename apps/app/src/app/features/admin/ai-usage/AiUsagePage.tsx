@@ -18,6 +18,7 @@ import {
 } from '@org/ui';
 import { selectUser, useAppSelector } from '@org/store';
 import { APP_ENV } from '../../../../config';
+import { PageHeader } from '../../../components/page-header';
 import { useBatches } from '../../intelligence/queries';
 
 const API_BASE_URL = APP_ENV.apiUrl;
@@ -391,52 +392,49 @@ export function AiUsagePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">
-            {t('aiUsage.title', 'AI usage')}
-          </h2>
-          <p className="text-foreground/60 mt-1 text-sm">
-            {t(
-              'aiUsage.subtitle',
-              'Every AI / LLM call across the platform — tokens, latency and cost, sliced by user, model, operation and document.',
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={scope}
-            onValueChange={(v) => setScope(v as 'workspace' | 'me')}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="workspace">
-                {t('aiUsage.scopeWorkspace', 'Workspace')}
-              </SelectItem>
-              <SelectItem value="me">
-                {t('aiUsage.scopeMine', 'My calls only')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={String(days)}
-            onValueChange={(v) => setDays(Number(v))}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGES.map((r) => (
-                <SelectItem key={r.days} value={String(r.days)}>
-                  {r.label}
+      <PageHeader
+        back={false}
+        title={t('aiUsage.title', 'AI usage')}
+        subtitle={t(
+          'aiUsage.subtitle',
+          'Every AI / LLM call across the platform — tokens, latency and cost, sliced by user, model, operation and document.',
+        )}
+        actions={
+          <>
+            <Select
+              value={scope}
+              onValueChange={(v) => setScope(v as 'workspace' | 'me')}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workspace">
+                  {t('aiUsage.scopeWorkspace', 'Workspace')}
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+                <SelectItem value="me">
+                  {t('aiUsage.scopeMine', 'My calls only')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={String(days)}
+              onValueChange={(v) => setDays(Number(v))}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RANGES.map((r) => (
+                  <SelectItem key={r.days} value={String(r.days)}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
       {/* Active scope-filter pills — show what the URL pre-filtered to, with
           one-click clear. */}

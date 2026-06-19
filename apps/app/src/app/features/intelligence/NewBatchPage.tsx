@@ -10,12 +10,13 @@ import {
 } from '@org/ui';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   DOC_ACCEPT,
   MAX_FILE_SIZE_MB,
   partitionDocumentFiles,
 } from '../../lib/file-validation';
+import { PageHeader } from '../../components/page-header';
 import { useCreateBatch, usePipelineOptions } from './queries';
 import { ArrowRightIcon, UploadIcon } from './icons';
 
@@ -99,25 +100,21 @@ export function NewBatchPage() {
 
   return (
     <div className="mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {t('intelligence.batches.new', 'New batch')}
-          </h1>
-          <p className="mt-1 text-foreground/60">
-            {t(
-              'intelligence.batches.newHint',
-              'Select multiple files (PDF, Word, text, images).',
-            )}
-          </p>
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/batches" className="gap-1.5">
-            {t('intelligence.batches.all', 'All batches')}
-            <ArrowRightIcon className="size-4" />
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/batches"
+        title={t('intelligence.batches.new', 'New batch')}
+        subtitle={t(
+          'intelligence.batches.newHint',
+          'Select multiple files (PDF, Word, text, images).',
+        )}
+        secondaryActions={[
+          {
+            label: t('intelligence.batches.all', 'All batches'),
+            to: '/batches',
+            icon: <ArrowRightIcon className="size-4" />,
+          },
+        ]}
+      />
 
       <Card className="rounded-xl">
         <div className="flex items-center gap-2">

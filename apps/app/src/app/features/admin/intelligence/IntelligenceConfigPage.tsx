@@ -2,6 +2,7 @@ import { Card, Spinner } from '@org/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { PageHeader } from '../../../components/page-header';
 import {
   CreateGroup,
   GroupEditor,
@@ -60,10 +61,7 @@ function ConfigShell({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-        <p className="text-foreground/60 mt-1">{subtitle}</p>
-      </div>
+      <PageHeader back={false} title={title} subtitle={subtitle} />
       <Card className="rounded-xl p-6">{children}</Card>
     </div>
   );

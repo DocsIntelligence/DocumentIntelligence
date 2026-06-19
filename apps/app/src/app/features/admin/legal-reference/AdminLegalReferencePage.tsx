@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../../components/page-header';
 import { CitationEditor } from './CitationEditor';
 import { LegalReferenceManager } from './LegalReferenceManager';
 
@@ -18,10 +19,7 @@ function ConfigShell({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-        <p className="text-foreground/60 mt-1">{subtitle}</p>
-      </div>
+      <PageHeader back={false} title={title} subtitle={subtitle} />
       {children}
     </div>
   );

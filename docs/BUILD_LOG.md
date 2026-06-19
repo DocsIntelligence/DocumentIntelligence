@@ -3078,3 +3078,42 @@ backed out the prior global-search asset integration and built a dedicated vault
 - **Verify:** `nx build api` + `nx lint api` → 0 errors; `nx typecheck app api-client dto` → only the 2 pre-existing
   WIP errors (GroupIntelligencePanel Badge variant, DocumentInsights arg count). Keyword-only (ILIKE) — no AI keys
   needed. Not runtime-verified end-to-end.
+
+## 2026-06-19 — Theme visibility + color palette switcher + app-wide UI consistency pass
+
+Three linked pieces of work (all app-side, theme-driven).
+
+**1. Theme token visibility (styles.css).** Status colors (error/warning/info/success)
+made more vivid in both light + dark; `secondary` fill darkened (light) / lightened (dark)
+so solid neutral badges/buttons separate from cards; borders darkened + global `*` rule
+`border-border/50 → /70`; dark-mode warning/success foregrounds flipped to dark text on the
+now-brighter fills. Vault search highlight `bg-warning/30 → /40 font-medium`.
+
+**2. Color palette switcher (new, orthogonal to light/dark).** Added a `Palette` axis
+(`default` | `warm`) applied via `:root[data-theme='warm']:not(.dark)` (light-only for now).
+ThemeProvider gained `palette`/`setPalette` (localStorage `theme.palette`, `data-theme` attr);
+new `PaletteSwitch` swatch control mounted beside `ThemeToggle` in the sidebar footer.
+i18n keys added (theme.palette*).
+
+**3. UI consistency pass (worst-offenders-first).** Goal: every in-shell page uses the shared
+`PageHeader` and all colors go through theme tokens (so the new palette/theme switch actually
+takes effect everywhere). Converted to `PageHeader`:
+- vault: VaultEntityPage, VaultEntityEditPage, VaultNewEntityPage
+- intelligence: BatchesPage, NewBatchPage, BatchDetailPage, ReviewQueuePage, AnalyzePage
+- admin: AdminSettingsPage, EstateGrantsPage, AiUsagePage + the shared `ConfigShell` in
+  EstateVaultConfigPage / IntelligenceConfigPage / AdminLegalReferencePage
+- documents/groups: GroupDetailPage (kept inline-rename title), GroupAddDocsPage, TemplatesPage,
+  DraftWithAIPage
+Color-token sweep (palette colors → semantic tokens): auth login links → text-primary;
+Dashboard + DocumentsList status maps + TemplatesPage pill → bg-{warning|info|success}/15 text-…;
+RisksPanel tone maps → bg-{error|warning|info}/10 …; PlaceholderForm/BuilderShell/TemplateEditor
+status dots/bars → bg-success / bg-warning.
+Intentional exceptions (left as-is): public NomineeAccessPage + full-bleed editors
+(DraftEditorPage, BuilderPage) don't use the in-shell PageHeader; signature canvas `bg-white`
+and the document page preview `bg-white text-zinc-900` are paper/ink semantics; mobile nav
+scrim `bg-black/40` is a deliberate dark overlay.
+Also fixed the 2 long-standing pre-existing type errors while in those files
+(GroupIntelligencePanel Badge `'default'→'primary'`; DocumentInsights `mutate()→mutate({})`).
+
+**Verify:** `nx typecheck app api-client dto` → GREEN (0 errors — baseline is now clean, no more
+"2 pre-existing"). `nx lint app` → 0 errors. Not runtime-verified in a browser.

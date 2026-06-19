@@ -116,7 +116,11 @@
   "theme": {
     "dark": "Dark",
     "light": "Light",
-    "system": "System"
+    "system": "System",
+    "label": "Theme",
+    "paletteLabel": "Color theme",
+    "paletteDefault": "Default",
+    "paletteWarm": "Warm"
   },
   "intelligence": {
     "upload": {

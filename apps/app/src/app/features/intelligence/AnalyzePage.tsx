@@ -1,6 +1,7 @@
 import { Button, Card, CardContent, Spinner } from '@org/ui';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { PageHeader } from '../../components/page-header';
 import { useExtraction, useIntelligenceJob } from './queries';
 import { DocumentInsights } from './DocumentInsights';
 import { ReviewExtraction } from './ReviewExtraction';
@@ -101,20 +102,21 @@ export function AnalyzePage() {
   }
 
   return (
-    <div className="mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t('intelligence.analyze.reviewTitle', 'Review extraction')}
-        </h1>
-        <div className="flex items-center gap-2">
-          <ViewOriginalButton sourceId={sourceId as string} />
-          <Button asChild variant="outline" size="sm">
-            <Link to="/analyze">
-              {t('intelligence.analyze.newUpload', 'Analyze another')}
-            </Link>
-          </Button>
-        </div>
-      </div>
+    <div className="mx-auto space-y-6">
+      <PageHeader
+        backTo="/analyze"
+        title={t('intelligence.analyze.reviewTitle', 'Review extraction')}
+        actions={
+          <>
+            <ViewOriginalButton sourceId={sourceId as string} />
+            <Button asChild variant="outline" size="sm">
+              <Link to="/analyze">
+                {t('intelligence.analyze.newUpload', 'Analyze another')}
+              </Link>
+            </Button>
+          </>
+        }
+      />
       <ReviewExtraction
         key={extraction.id}
         extraction={extraction}

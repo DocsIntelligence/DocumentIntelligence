@@ -56,7 +56,7 @@ export function DocumentInsights({
           </div>
           <Button
             variant="outline"
-            onClick={() => runAnalysis.mutate()}
+            onClick={() => runAnalysis.mutate({})}
             disabled={runAnalysis.isPending}
           >
             {runAnalysis.isPending

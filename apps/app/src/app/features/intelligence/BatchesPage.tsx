@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import { useBatches, useBulkDeleteBatches } from './queries';
 import {
   AlertIcon,
@@ -189,26 +190,23 @@ export function BatchesPage() {
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {t('intelligence.batches.title', 'Batches')}
-          </h1>
-          <p className="mt-1 text-foreground/60">
-            {t(
-              'intelligence.batches.subtitle',
-              'Upload many documents at once — they’re classified, extracted, and queued for review automatically.',
-            )}
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/batches/new" className="gap-1.5">
-            <UploadIcon className="size-4" />
-            {t('intelligence.batches.new', 'New batch')}
-          </Link>
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        back={false}
+        title={t('intelligence.batches.title', 'Batches')}
+        subtitle={t(
+          'intelligence.batches.subtitle',
+          'Upload many documents at once — they’re classified, extracted, and queued for review automatically.',
+        )}
+        actions={
+          <Button asChild>
+            <Link to="/batches/new" className="gap-1.5">
+              <UploadIcon className="size-4" />
+              {t('intelligence.batches.new', 'New batch')}
+            </Link>
+          </Button>
+        }
+      />
 
       {/* KPI tiles — workspace totals (across all batches, any page) */}
       {(hasBatches || hasFilters) && (

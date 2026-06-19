@@ -13,6 +13,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { PageHeader } from '../../components/page-header';
 import { useCreateVaultEntity, useVaultEntityKindsActive } from './queries';
 import { KIND_LABEL, KIND_ORDER } from './kinds';
 
@@ -61,23 +62,15 @@ export function VaultNewEntityPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {t('vault.newTitle', 'New vault entity')}
-          </h1>
-          <p className="mt-1 text-foreground/60">
-            {t(
-              'vault.newSubtitle',
-              'Pick a type and a recognisable name. You can fill in the details next.',
-            )}
-          </p>
-        </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/vault">{t('common.back', 'Back')}</Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader
+        backTo="/vault"
+        title={t('vault.newTitle', 'New vault entity')}
+        subtitle={t(
+          'vault.newSubtitle',
+          'Pick a type and a recognisable name. You can fill in the details next.',
+        )}
+      />
 
       <Card className="space-y-4 p-5">
         <FormField label={t('vault.kind', 'Type')}>

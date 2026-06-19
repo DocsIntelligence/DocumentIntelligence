@@ -1,8 +1,8 @@
 import type { AdminReleaseGrant } from '@org/api-client';
 import { Badge, Button, Card, Spinner } from '@org/ui';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../../components/page-header';
 import { useEstateService } from '../../documents/services-context';
 import { useEstateAdminGrants, useReleaseGrant } from './queries';
 
@@ -57,22 +57,14 @@ export function EstateGrantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">
-            {tt('estateGrants.title', 'Release grants')}
-          </h2>
-          <p className="mt-1 text-foreground/60">
-            {tt(
-              'estateGrants.subtitle',
-              'Verify proof of death and release a nominee’s access. Releases are manual — never automatic.',
-            )}
-          </p>
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/config/estate-vault">{tt('common.back', 'Back')}</Link>
-        </Button>
-      </div>
+      <PageHeader
+        backTo="/config/estate-vault"
+        title={tt('estateGrants.title', 'Release grants')}
+        subtitle={tt(
+          'estateGrants.subtitle',
+          'Verify proof of death and release a nominee’s access. Releases are manual — never automatic.',
+        )}
+      />
 
       {grants.isLoading ? (
         <div className="flex justify-center py-10">

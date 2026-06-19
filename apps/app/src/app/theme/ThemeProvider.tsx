@@ -10,14 +10,43 @@ import {
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
+/** Color palettes are an axis orthogonal to light/dark. `default` is the base
+ *  `:root` theme (no attribute); others apply via `[data-theme]` in styles.css.
+ *  Light-only for now — dark mode always uses the default dark tokens. */
+export type Palette = 'default' | 'warm';
+
+export const PALETTES: ReadonlyArray<{
+  id: Palette;
+  labelKey: string;
+  fallback: string;
+}> = [
+  { id: 'default', labelKey: 'theme.paletteDefault', fallback: 'Default' },
+  { id: 'warm', labelKey: 'theme.paletteWarm', fallback: 'Warm' },
+];
+
 interface ThemeContextValue {
   preference: ThemePreference;
   resolved: ResolvedTheme;
   setPreference: (p: ThemePreference) => void;
+  palette: Palette;
+  setPalette: (p: Palette) => void;
 }
 
 const STORAGE_KEY = 'theme';
+const PALETTE_KEY = 'theme.palette';
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+function getInitialPalette(): Palette {
+  if (typeof window === 'undefined') return 'default';
+  const stored = window.localStorage.getItem(PALETTE_KEY);
+  return PALETTES.some((p) => p.id === stored) ? (stored as Palette) : 'default';
+}
+
+function applyPalette(palette: Palette) {
+  const html = document.documentElement;
+  if (palette === 'default') delete html.dataset.theme;
+  else html.dataset.theme = palette;
+}
 
 function getInitialPreference(): ThemePreference {
   if (typeof window === 'undefined') return 'system';
@@ -49,12 +78,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [resolved, setResolved] = useState<ResolvedTheme>(() =>
     resolve(getInitialPreference()),
   );
+  const [palette, setPaletteState] = useState<Palette>(getInitialPalette);
 
   useEffect(() => {
     const next = resolve(preference);
     setResolved(next);
     apply(next);
   }, [preference]);
+
+  useEffect(() => {
+    applyPalette(palette);
+  }, [palette]);
 
   useEffect(() => {
     if (preference !== 'system') return;
@@ -74,9 +108,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     else window.localStorage.setItem(STORAGE_KEY, p);
   }, []);
 
+  const setPalette = useCallback((p: Palette) => {
+    setPaletteState(p);
+    if (p === 'default') window.localStorage.removeItem(PALETTE_KEY);
+    else window.localStorage.setItem(PALETTE_KEY, p);
+  }, []);
+
   const value = useMemo(
-    () => ({ preference, resolved, setPreference }),
-    [preference, resolved, setPreference],
+    () => ({ preference, resolved, setPreference, palette, setPalette }),
+    [preference, resolved, setPreference, palette, setPalette],
   );
 
   return (

@@ -139,7 +139,7 @@ function Field({ field, value, onChange, inputRef }: FieldProps) {
         <span
           className={cn(
             'inline-block size-1.5 rounded-full transition-colors',
-            filled ? 'bg-emerald-500' : 'bg-amber-400',
+            filled ? 'bg-success' : 'bg-warning',
           )}
           aria-label={
             filled

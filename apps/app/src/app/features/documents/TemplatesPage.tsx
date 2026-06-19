@@ -1,6 +1,7 @@
 import { Button, Card, Chip, Input } from '@org/ui';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../../components/page-header';
 import { useTranslation } from 'react-i18next';
 import { useCreateDocument, useDocumentCatalog } from './queries';
 
@@ -53,17 +54,14 @@ export function TemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {t('templates.title', 'Templates')}
-        </h1>
-        <p className="mt-1 text-foreground/60">
-          {t(
-            'templates.subtitle',
-            'Start from a structured document type — guided fields, the right format, and the applicable law filled in.',
-          )}
-        </p>
-      </div>
+      <PageHeader
+        back={false}
+        title={t('templates.title', 'Templates')}
+        subtitle={t(
+          'templates.subtitle',
+          'Start from a structured document type — guided fields, the right format, and the applicable law filled in.',
+        )}
+      />
 
       {isLoading && (
         <p className="text-sm text-foreground/60">
@@ -163,7 +161,7 @@ export function TemplatesPage() {
                   </p>
                 </div>
                 {tpl.isPremium && (
-                  <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-900">
+                  <span className="inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-warning">
                     {t('newDoc.premium', 'Premium')}
                   </span>
                 )}

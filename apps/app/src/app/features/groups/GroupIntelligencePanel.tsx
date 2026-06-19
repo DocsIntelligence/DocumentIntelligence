@@ -109,7 +109,7 @@ export function GroupSummaryView({ groupId, documentCount }: ViewProps) {
         </div>
         <Button
           size="sm"
-          variant={hasSummary ? 'outline' : 'default'}
+          variant={hasSummary ? 'outline' : 'primary'}
           disabled={empty || generate.isPending}
           onClick={() => generate.mutate(groupId)}
         >

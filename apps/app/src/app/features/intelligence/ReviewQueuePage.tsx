@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import {
   useApproveRun,
   useBatch,
@@ -24,7 +25,7 @@ import {
 } from './queries';
 import { ReviewExtraction } from './ReviewExtraction';
 import { ViewOriginalButton } from './ViewOriginalButton';
-import { ArrowRightIcon, FileTextIcon, InboxIcon } from './icons';
+import { ArrowRightIcon, FileTextIcon } from './icons';
 
 /** Unified entry the stepper walks (from the review queue OR a batch's runs). */
 interface QueueEntry {
@@ -376,49 +377,37 @@ export function ReviewQueuePage() {
   // ─── List view ───────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex size-10 items-center justify-center rounded-xl bg-warning/15 text-warning">
-            <InboxIcon className="size-5" />
-          </span>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {t('intelligence.queue.title', 'Review queue')}
-            </h1>
-            <p className="mt-0.5 text-sm text-foreground/60">
-              {batchId
-                ? t('intelligence.queue.subtitleBatch', 'In {{name}}', {
-                    name:
-                      batch?.name ??
-                      t('intelligence.queue.thisBatch', 'this batch'),
-                  })
-                : t(
-                    'intelligence.queue.subtitle',
-                    'Documents the pipeline flagged for a human check before finalizing.',
-                  )}
-              {count > 0 &&
-                ` · ${t('intelligence.queue.count', '{{n}} to review', { n: pendingCount })}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {pendingCount > 0 && (
+      <PageHeader
+        back={!!batchId}
+        backTo={batchId ? `/batches/${batchId}` : undefined}
+        title={t('intelligence.queue.title', 'Review queue')}
+        subtitle={
+          <>
+            {batchId
+              ? t('intelligence.queue.subtitleBatch', 'In {{name}}', {
+                  name:
+                    batch?.name ??
+                    t('intelligence.queue.thisBatch', 'this batch'),
+                })
+              : t(
+                  'intelligence.queue.subtitle',
+                  'Documents the pipeline flagged for a human check before finalizing.',
+                )}
+            {count > 0 &&
+              ` · ${t('intelligence.queue.count', '{{n}} to review', { n: pendingCount })}`}
+          </>
+        }
+        actions={
+          pendingCount > 0 ? (
             <Button size="sm" onClick={() => setCurrent(0)} className="gap-1.5">
               {batchId
                 ? t('intelligence.queue.reviewBatch', 'Review batch')
                 : t('intelligence.queue.reviewAll', 'Review all')}
               <ArrowRightIcon className="size-3.5" />
             </Button>
-          )}
-          {batchId && (
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/batches/${batchId}`}>
-                {t('intelligence.queue.backToBatch', 'Back to batch')}
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       <DataTable
         tableId={

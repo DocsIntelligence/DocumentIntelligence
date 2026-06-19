@@ -63,7 +63,7 @@ export function ForgotPassword() {
       </Button>
 
       <div className="text-sm pt-2">
-        <Link to="/login" className="text-blue-600 hover:underline">
+        <Link to="/login" className="text-primary hover:underline">
           {t('auth.common.backToSignIn', '← Back to sign in')}
         </Link>
       </div>

@@ -19,6 +19,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
+import { PageHeader } from '../../components/page-header';
 import { useVaultService } from '../documents/services-context';
 import {
   useAddVaultDocument,
@@ -116,55 +117,57 @@ export function VaultEntityPage() {
   };
 
   return (
-    <div className="mx-auto space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
-            {KIND_LABEL[data.kind] ?? data.kind}
-          </Badge>
-          <h1 className="truncate text-xl font-semibold">{data.label}</h1>
-          {!data.isActive && (
-            <Badge variant="secondary" outline className="text-[10px]">
-              {t('vault.disabled', 'Disabled')}
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/vault"
+        title={
+          <span className="flex items-center gap-2">
+            <Badge variant={KIND_BADGE[data.kind] ?? 'secondary'}>
+              {KIND_LABEL[data.kind] ?? data.kind}
             </Badge>
-          )}
-        </div>
-        <div className="flex flex-none items-center gap-2">
-          <Button asChild size="sm">
-            <Link to={`/vault/${id}/edit`}>{t('common.edit', 'Edit')}</Link>
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                {t('common.actions', 'Actions')}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={async () => {
-                  const copy = await duplicate.mutateAsync(id);
-                  navigate(`/vault/${copy.id}`);
-                }}
-              >
-                {t('vault.duplicate', 'Duplicate')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => update.mutate({ isActive: !data.isActive })}
-              >
-                {data.isActive
-                  ? t('vault.disable', 'Disable')
-                  : t('vault.enable', 'Enable')}
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-error" onSelect={removeEntity}>
-                {t('vault.deleteEntity', 'Delete entity')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/vault">{t('common.back', 'Back')}</Link>
-          </Button>
-        </div>
-      </div>
+            <span className="truncate">{data.label}</span>
+            {!data.isActive && (
+              <Badge variant="secondary" outline className="text-[10px]">
+                {t('vault.disabled', 'Disabled')}
+              </Badge>
+            )}
+          </span>
+        }
+        actions={
+          <>
+            <Button asChild size="sm">
+              <Link to={`/vault/${id}/edit`}>{t('common.edit', 'Edit')}</Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {t('common.actions', 'Actions')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={async () => {
+                    const copy = await duplicate.mutateAsync(id);
+                    navigate(`/vault/${copy.id}`);
+                  }}
+                >
+                  {t('vault.duplicate', 'Duplicate')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => update.mutate({ isActive: !data.isActive })}
+                >
+                  {data.isActive
+                    ? t('vault.disable', 'Disable')
+                    : t('vault.enable', 'Enable')}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-error" onSelect={removeEntity}>
+                  {t('vault.deleteEntity', 'Delete entity')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
       {/* Details — read-only, grouped, sensitive values masked. */}
       <Card className="space-y-5 p-4">

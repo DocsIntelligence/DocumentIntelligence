@@ -21,6 +21,7 @@ import { LayoutContext } from './layout-context';
 import { SearchCommandPalette, openSearchPalette } from '../../features/search';
 import { useEstateCapability } from '../../features/estate';
 import { ThemeToggle } from '../../theme/ThemeToggle';
+import { PaletteSwitch } from '../../theme/PaletteSwitch';
 
 /**
  * Authenticated app shell: a fixed left sidebar on md+ screens, and a
@@ -434,9 +435,12 @@ function Sidebar({
 
         {/* User footer */}
         <div className="border-t border-border p-3">
-          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
             <LanguageSwitcher className="flex-1" />
-            <ThemeToggle />
+            <div className="flex items-center gap-1.5">
+              <PaletteSwitch />
+              <ThemeToggle />
+            </div>
           </div>
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <UserAvatar name={userName} src={userPicture} size="sm" />

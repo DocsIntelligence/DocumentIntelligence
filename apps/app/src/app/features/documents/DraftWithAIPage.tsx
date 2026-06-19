@@ -7,6 +7,7 @@ import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { PageHeader } from '../../components/page-header';
 import {
   DOCUMENT_PRESETS,
   type DocumentPreset,
@@ -94,17 +95,13 @@ export function DraftWithAIPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {t('dashboard.draftAiTitle', 'Draft with AI')}
-        </h1>
-        <p className="mt-1 text-foreground/60">
-          {t(
-            'newDoc.draftAiPageDesc',
-            'Describe the document you need in plain English — or pick a starting point below.',
-          )}
-        </p>
-      </div>
+      <PageHeader
+        title={t('dashboard.draftAiTitle', 'Draft with AI')}
+        subtitle={t(
+          'newDoc.draftAiPageDesc',
+          'Describe the document you need in plain English — or pick a starting point below.',
+        )}
+      />
 
       <Card className="rounded-xl">
         <form onSubmit={draft} className="grid gap-2">
