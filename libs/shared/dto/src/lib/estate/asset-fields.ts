@@ -39,29 +39,37 @@ const SHARES: AssetTypeMeta = {
         { value: 'other', label: 'Other' },
       ],
     },
-    { key: 'ticker', label: 'Ticker / symbol', type: 'text', placeholder: 'e.g. INFY' },
-    { key: 'avgBuyPrice', label: 'Avg. buy price (₹)', type: 'number' },
-    { key: 'dematAccount', label: 'Demat account', type: 'text' },
+    { key: 'ticker', label: 'Ticker / symbol', type: 'text', placeholder: 'e.g. INFY, TCS' },
+    { key: 'isin', label: 'ISIN', type: 'text', placeholder: 'e.g. INE009A01021' },
+    { key: 'avgBuyPrice', label: 'Avg. buy price', type: 'currency', placeholder: 'per share' },
+    { key: 'sector', label: 'Sector', type: 'text', placeholder: 'e.g. IT, Banking' },
+    { key: 'dematAccount', label: 'Demat account', type: 'text', placeholder: 'NSDL/CDSL DP ID' },
   ],
 };
 
 const FD_LIKE = (dateLabel: string): AssetTypeMeta => ({
   dateLabel,
   fields: [
-    { key: 'interestRate', label: 'Interest rate', type: 'number', suffix: '%' },
+    { key: 'principal', label: 'Principal deposited', type: 'currency', placeholder: 'amount invested' },
+    { key: 'interestRate', label: 'Interest rate', type: 'number', suffix: '%', placeholder: 'e.g. 7.1' },
     {
       key: 'payoutFrequency',
-      label: 'Payout',
+      label: 'Interest payout',
       type: 'select',
       options: [
-        { value: 'cumulative', label: 'Cumulative' },
+        { value: 'cumulative', label: 'Cumulative (on maturity)' },
         { value: 'monthly', label: 'Monthly' },
         { value: 'quarterly', label: 'Quarterly' },
         { value: 'yearly', label: 'Yearly' },
       ],
     },
-    { key: 'tenureMonths', label: 'Tenure (months)', type: 'number' },
-    { key: 'branch', label: 'Branch', type: 'text' },
+    { key: 'startDate', label: 'Start date', type: 'date' },
+    { key: 'tenureMonths', label: 'Tenure (months)', type: 'number', placeholder: 'e.g. 60' },
+    { key: 'autoRenew', label: 'Auto-renew on maturity', type: 'select', options: [
+      { value: 'yes', label: 'Yes' },
+      { value: 'no', label: 'No' },
+    ] },
+    { key: 'branch', label: 'Branch', type: 'text', placeholder: 'branch name' },
   ],
 });
 
@@ -76,11 +84,21 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
           { value: 'savings', label: 'Savings' },
           { value: 'current', label: 'Current' },
           { value: 'salary', label: 'Salary' },
-          { value: 'nri', label: 'NRI' },
+          { value: 'nri', label: 'NRI (NRE/NRO)' },
         ],
       },
       { key: 'ifsc', label: 'IFSC', type: 'text', placeholder: 'e.g. HDFC0000123' },
-      { key: 'branch', label: 'Branch', type: 'text' },
+      { key: 'branch', label: 'Branch', type: 'text', placeholder: 'branch name / city' },
+      {
+        key: 'jointHolding',
+        label: 'Holding',
+        type: 'select',
+        options: [
+          { value: 'single', label: 'Single' },
+          { value: 'either_or_survivor', label: 'Either or survivor' },
+          { value: 'joint', label: 'Joint' },
+        ],
+      },
     ],
   },
 
@@ -88,9 +106,14 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
   bond: {
     dateLabel: 'Maturity date',
     fields: [
-      { key: 'issuer', label: 'Issuer', type: 'text' },
-      { key: 'couponRate', label: 'Coupon rate', type: 'number', suffix: '%' },
-      { key: 'faceValue', label: 'Face value (₹)', type: 'currency' },
+      { key: 'issuer', label: 'Issuer', type: 'text', placeholder: 'e.g. NHAI, REC, govt.' },
+      { key: 'isin', label: 'ISIN', type: 'text', placeholder: 'e.g. INE...' },
+      { key: 'couponRate', label: 'Coupon rate', type: 'number', suffix: '%', placeholder: 'e.g. 7.5' },
+      { key: 'faceValue', label: 'Face value', type: 'currency', placeholder: 'per bond' },
+      { key: 'taxFree', label: 'Tax-free', type: 'select', options: [
+        { value: 'yes', label: 'Yes' },
+        { value: 'no', label: 'No' },
+      ] },
     ],
   },
   ppf: {
@@ -98,14 +121,16 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
     fields: [
       { key: 'accountNo', label: 'Account number', type: 'text' },
       { key: 'branch', label: 'Branch / post office', type: 'text' },
+      { key: 'openedDate', label: 'Opened on', type: 'date' },
+      { key: 'annualContribution', label: 'Annual contribution', type: 'currency', placeholder: 'e.g. 150000' },
     ],
   },
 
   mutual_fund: {
     fields: [
-      { key: 'fundHouse', label: 'Fund house (AMC)', type: 'text', placeholder: 'e.g. HDFC AMC' },
-      { key: 'folioNo', label: 'Folio number', type: 'text' },
-      { key: 'scheme', label: 'Scheme', type: 'text' },
+      { key: 'fundHouse', label: 'Fund house (AMC)', type: 'text', placeholder: 'e.g. HDFC AMC, SBI MF' },
+      { key: 'scheme', label: 'Scheme name', type: 'text', placeholder: 'e.g. HDFC Flexi Cap - Direct Growth' },
+      { key: 'folioNo', label: 'Folio number', type: 'text', placeholder: 'AMC folio' },
       {
         key: 'category',
         label: 'Category',
@@ -114,11 +139,34 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
           { value: 'equity', label: 'Equity' },
           { value: 'debt', label: 'Debt' },
           { value: 'hybrid', label: 'Hybrid' },
-          { value: 'liquid', label: 'Liquid' },
+          { value: 'liquid', label: 'Liquid / money-market' },
+          { value: 'elss', label: 'ELSS (tax-saver)' },
+          { value: 'index', label: 'Index / ETF' },
           { value: 'other', label: 'Other' },
         ],
       },
-      { key: 'nav', label: 'NAV (₹)', type: 'number' },
+      {
+        key: 'plan',
+        label: 'Plan',
+        type: 'select',
+        options: [
+          { value: 'direct', label: 'Direct' },
+          { value: 'regular', label: 'Regular' },
+        ],
+      },
+      {
+        key: 'mode',
+        label: 'Investment mode',
+        type: 'select',
+        options: [
+          { value: 'sip', label: 'SIP' },
+          { value: 'lumpsum', label: 'Lumpsum' },
+          { value: 'both', label: 'SIP + lumpsum' },
+        ],
+      },
+      { key: 'sipAmount', label: 'SIP amount (monthly)', type: 'currency', placeholder: 'if any' },
+      { key: 'investedAmount', label: 'Total invested (cost)', type: 'currency', placeholder: 'for gain calc' },
+      { key: 'nav', label: 'Latest NAV', type: 'number', placeholder: 'per unit' },
     ],
   },
 
@@ -141,8 +189,9 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
           { value: 'other', label: 'Other' },
         ],
       },
-      { key: 'sumAssured', label: 'Sum assured (₹)', type: 'currency' },
-      { key: 'premium', label: 'Premium (₹)', type: 'currency' },
+      { key: 'insurer', label: 'Insurer', type: 'text', placeholder: 'e.g. LIC, HDFC Life' },
+      { key: 'sumAssured', label: 'Sum assured', type: 'currency', placeholder: 'cover amount' },
+      { key: 'premium', label: 'Premium', type: 'currency', placeholder: 'per payment' },
       {
         key: 'premiumFrequency',
         label: 'Premium frequency',
@@ -156,27 +205,89 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
         ],
       },
       { key: 'policyTerm', label: 'Policy term', type: 'text', placeholder: 'e.g. 20 years' },
+      { key: 'maturityValue', label: 'Maturity / fund value', type: 'currency', placeholder: 'if applicable' },
+      { key: 'nomineeOnPolicy', label: 'Nominee on policy', type: 'text', placeholder: 'as registered with insurer' },
     ],
   },
 
   property: {
+    dateLabel: 'Lease / agreement valid till',
     fields: [
       {
         key: 'propertyKind',
         label: 'Property type',
         type: 'select',
         options: [
-          { value: 'residential', label: 'Residential' },
+          { value: 'residential_flat', label: 'Residential — flat / apartment' },
+          { value: 'residential_house', label: 'Residential — independent house' },
+          { value: 'plot', label: 'Plot / land' },
+          { value: 'agricultural', label: 'Agricultural land' },
           { value: 'commercial', label: 'Commercial' },
-          { value: 'land', label: 'Land / plot' },
+          { value: 'industrial', label: 'Industrial' },
           { value: 'other', label: 'Other' },
         ],
       },
-      { key: 'address', label: 'Address', type: 'text' },
-      { key: 'city', label: 'City', type: 'text' },
-      { key: 'areaSqft', label: 'Area', type: 'number', suffix: 'sq.ft' },
-      { key: 'ownershipPct', label: 'Your share', type: 'number', suffix: '%' },
-      { key: 'rera', label: 'RERA / survey no.', type: 'text' },
+      {
+        key: 'ownership',
+        label: 'Ownership',
+        type: 'select',
+        options: [
+          { value: 'sole', label: 'Sole owner' },
+          { value: 'joint', label: 'Joint' },
+          { value: 'ancestral', label: 'Ancestral / HUF' },
+          { value: 'inherited', label: 'Inherited' },
+        ],
+      },
+      { key: 'ownershipPct', label: 'Your ownership share', type: 'number', suffix: '%', placeholder: 'e.g. 50' },
+      { key: 'coOwners', label: 'Co-owners', type: 'text', placeholder: 'names, if joint' },
+      { key: 'addressLine', label: 'Address', type: 'text', placeholder: 'flat/plot, building, street' },
+      { key: 'locality', label: 'Locality / area', type: 'text', placeholder: 'e.g. Koramangala' },
+      { key: 'city', label: 'City', type: 'text', placeholder: 'e.g. Bengaluru' },
+      { key: 'state', label: 'State', type: 'text', placeholder: 'e.g. Karnataka' },
+      { key: 'pincode', label: 'PIN code', type: 'text', placeholder: '6 digits' },
+      { key: 'area', label: 'Area', type: 'number', placeholder: 'built-up / plot area' },
+      {
+        key: 'areaUnit',
+        label: 'Area unit',
+        type: 'select',
+        options: [
+          { value: 'sqft', label: 'sq.ft' },
+          { value: 'sqyd', label: 'sq.yd' },
+          { value: 'sqm', label: 'sq.m' },
+          { value: 'acre', label: 'acre' },
+          { value: 'guntha', label: 'guntha' },
+          { value: 'cent', label: 'cent' },
+        ],
+      },
+      { key: 'purchaseDate', label: 'Date of purchase', type: 'date' },
+      { key: 'purchasePrice', label: 'Purchase price', type: 'currency', placeholder: 'cost — for capital-gains' },
+      {
+        key: 'valuationBasis',
+        label: 'Current value basis',
+        type: 'select',
+        options: [
+          { value: 'market', label: 'Market estimate' },
+          { value: 'circle_rate', label: 'Circle / guidance rate' },
+          { value: 'registered', label: 'Registered / agreement value' },
+          { value: 'broker', label: 'Broker valuation' },
+        ],
+      },
+      { key: 'loanOutstanding', label: 'Home-loan outstanding', type: 'currency', placeholder: 'if mortgaged' },
+      { key: 'loanLender', label: 'Loan lender', type: 'text', placeholder: 'bank/NBFC' },
+      {
+        key: 'occupancy',
+        label: 'Occupancy',
+        type: 'select',
+        options: [
+          { value: 'self', label: 'Self-occupied' },
+          { value: 'rented', label: 'Let out / rented' },
+          { value: 'vacant', label: 'Vacant' },
+        ],
+      },
+      { key: 'rentMonthly', label: 'Monthly rent received', type: 'currency', placeholder: 'if rented' },
+      { key: 'tenantName', label: 'Tenant', type: 'text', placeholder: 'if rented' },
+      { key: 'surveyNo', label: 'Survey / khata / RERA no.', type: 'text', placeholder: 'land record id' },
+      { key: 'registrationNo', label: 'Registration / sale-deed no.', type: 'text', placeholder: 'sub-registrar doc no.' },
     ],
   },
 
@@ -193,39 +304,54 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
           { value: 'digital', label: 'Digital / SGB' },
         ],
       },
-      { key: 'grams', label: 'Weight', type: 'number', suffix: 'g' },
+      { key: 'grams', label: 'Weight', type: 'number', suffix: 'g', placeholder: 'net gold weight' },
       {
         key: 'purity',
         label: 'Purity',
         type: 'select',
         options: [
-          { value: '24K', label: '24K' },
-          { value: '22K', label: '22K' },
-          { value: '18K', label: '18K' },
+          { value: '24K', label: '24K (999)' },
+          { value: '22K', label: '22K (916)' },
+          { value: '18K', label: '18K (750)' },
           { value: 'other', label: 'Other' },
         ],
       },
+      { key: 'storedAt', label: 'Stored at', type: 'text', placeholder: 'e.g. bank locker, home safe' },
+      { key: 'hallmark', label: 'Hallmark / certificate', type: 'text', placeholder: 'BIS / SGB cert no.' },
     ],
   },
 
   crypto: {
     fields: [
-      { key: 'coin', label: 'Coin / token', type: 'text', placeholder: 'e.g. BTC' },
-      { key: 'platform', label: 'Exchange / wallet', type: 'text' },
-      { key: 'quantity', label: 'Quantity', type: 'number' },
+      { key: 'coin', label: 'Coin / token', type: 'text', placeholder: 'e.g. BTC, ETH' },
+      { key: 'platform', label: 'Exchange / wallet', type: 'text', placeholder: 'e.g. CoinDCX, Ledger' },
+      {
+        key: 'custody',
+        label: 'Custody',
+        type: 'select',
+        options: [
+          { value: 'exchange', label: 'On exchange' },
+          { value: 'self', label: 'Self-custody (wallet)' },
+        ],
+      },
+      { key: 'quantity', label: 'Quantity', type: 'number', placeholder: 'coins/tokens held' },
+      { key: 'avgBuyPrice', label: 'Avg. buy price', type: 'currency', placeholder: 'per coin' },
     ],
   },
 
   epf: {
     fields: [
-      { key: 'uan', label: 'UAN', type: 'text' },
-      { key: 'employer', label: 'Employer', type: 'text' },
+      { key: 'uan', label: 'UAN', type: 'text', placeholder: '12-digit UAN' },
+      { key: 'memberId', label: 'Member ID', type: 'text' },
+      { key: 'employer', label: 'Current employer', type: 'text' },
+      { key: 'employeeShare', label: 'Employee share', type: 'currency', placeholder: 'if split shown' },
+      { key: 'employerShare', label: 'Employer share', type: 'currency', placeholder: 'if split shown' },
     ],
   },
 
   nps: {
     fields: [
-      { key: 'pran', label: 'PRAN', type: 'text' },
+      { key: 'pran', label: 'PRAN', type: 'text', placeholder: '12-digit PRAN' },
       {
         key: 'tier',
         label: 'Tier',
@@ -235,17 +361,118 @@ export const ASSET_TYPE_FIELDS: Record<string, AssetTypeMeta> = {
           { value: 'tier2', label: 'Tier II' },
         ],
       },
+      {
+        key: 'scheme',
+        label: 'Scheme preference',
+        type: 'select',
+        options: [
+          { value: 'auto', label: 'Auto choice' },
+          { value: 'active', label: 'Active choice' },
+        ],
+      },
+      { key: 'fundManager', label: 'Pension fund manager', type: 'text', placeholder: 'e.g. HDFC PF' },
     ],
   },
 
   vehicle: {
     fields: [
-      { key: 'regNo', label: 'Registration no.', type: 'text' },
-      { key: 'make', label: 'Make', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' },
-      { key: 'year', label: 'Year', type: 'number' },
+      {
+        key: 'vehicleKind',
+        label: 'Vehicle type',
+        type: 'select',
+        options: [
+          { value: 'car', label: 'Car' },
+          { value: 'two_wheeler', label: 'Two-wheeler' },
+          { value: 'commercial', label: 'Commercial' },
+          { value: 'other', label: 'Other' },
+        ],
+      },
+      { key: 'regNo', label: 'Registration no.', type: 'text', placeholder: 'e.g. KA01AB1234' },
+      { key: 'make', label: 'Make', type: 'text', placeholder: 'e.g. Maruti' },
+      { key: 'model', label: 'Model', type: 'text', placeholder: 'e.g. Baleno' },
+      { key: 'year', label: 'Year of manufacture', type: 'number', placeholder: 'e.g. 2021' },
+      { key: 'purchasePrice', label: 'Purchase price', type: 'currency', placeholder: 'on-road cost' },
+      { key: 'loanOutstanding', label: 'Loan outstanding', type: 'currency', placeholder: 'if financed' },
     ],
   },
+};
+
+/**
+ * Default asset-class + liquidity maps (code fallback — overridable per type via
+ * the EstateVaultConfig `assetClass`/`liquidity` fields). Used by the wealth
+ * analytics to compute the asset-class mix, liquidity buckets, and allocation
+ * gaps. Keep in sync conceptually with the asset-type catalog keys.
+ */
+export const ASSET_CLASSES = [
+  'equity',
+  'debt',
+  'cash',
+  'real_estate',
+  'gold',
+  'retirement',
+  'insurance',
+  'alternative',
+  'other',
+] as const;
+export type AssetClass = (typeof ASSET_CLASSES)[number];
+
+export const DEFAULT_ASSET_CLASS: Record<string, AssetClass> = {
+  bank: 'cash',
+  fixed_deposit: 'debt',
+  bond: 'debt',
+  ppf: 'debt',
+  mutual_fund: 'equity', // refined by details.category at analysis time
+  stocks: 'equity',
+  shares: 'equity',
+  equity: 'equity',
+  insurance: 'insurance',
+  epf: 'retirement',
+  nps: 'retirement',
+  property: 'real_estate',
+  gold: 'gold',
+  crypto: 'alternative',
+  vehicle: 'other',
+  other: 'other',
+};
+
+export const DEFAULT_LIQUIDITY: Record<string, 'high' | 'medium' | 'low'> = {
+  bank: 'high',
+  mutual_fund: 'high',
+  stocks: 'high',
+  shares: 'high',
+  equity: 'high',
+  crypto: 'high',
+  fixed_deposit: 'medium',
+  bond: 'medium',
+  gold: 'medium',
+  nps: 'low',
+  epf: 'low',
+  ppf: 'low',
+  insurance: 'low',
+  property: 'low',
+  vehicle: 'low',
+  other: 'medium',
+};
+
+export function assetClassForType(type: string): AssetClass {
+  return DEFAULT_ASSET_CLASS[type] ?? 'other';
+}
+
+export function liquidityForType(type: string): 'high' | 'medium' | 'low' {
+  return DEFAULT_LIQUIDITY[type] ?? 'medium';
+}
+
+/** Human label for an asset class (for charts/narrative). */
+export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
+  equity: 'Equity',
+  debt: 'Debt / fixed income',
+  cash: 'Cash & equivalents',
+  real_estate: 'Real estate',
+  gold: 'Gold',
+  retirement: 'Retirement (EPF/NPS)',
+  insurance: 'Insurance',
+  alternative: 'Alternatives',
+  other: 'Other',
 };
 
 export function metaForType(type: string): AssetTypeMeta {

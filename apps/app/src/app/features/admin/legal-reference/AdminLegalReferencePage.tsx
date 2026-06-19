@@ -1,8 +1,12 @@
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '../../../components/page-header';
+import {
+  PageHeader,
+  type PageHeaderAction,
+} from '../../../components/page-header';
 import { CitationEditor } from './CitationEditor';
 import { LegalReferenceManager } from './LegalReferenceManager';
+import { ReformLookup } from './ReformLookup';
 
 /**
  * Shared shell — matches the look of every other admin page
@@ -11,15 +15,24 @@ import { LegalReferenceManager } from './LegalReferenceManager';
 function ConfigShell({
   title,
   subtitle,
+  back = false,
+  secondaryActions,
   children,
 }: {
   title: string;
   subtitle: string;
+  back?: boolean;
+  secondaryActions?: PageHeaderAction[];
   children: ReactNode;
 }) {
   return (
     <div className="space-y-6">
-      <PageHeader back={false} title={title} subtitle={subtitle} />
+      <PageHeader
+        back={back}
+        title={title}
+        subtitle={subtitle}
+        secondaryActions={secondaryActions}
+      />
       {children}
     </div>
   );
@@ -35,8 +48,31 @@ export function AdminLegalReferencePage() {
         'legalRefs.adminSubtitle',
         'Curated statutes referenced by AI-drafted documents + the public /law catalog. Narrower wins: DB row overrides code seed.',
       )}
+      secondaryActions={[
+        {
+          label: t('reform.lookupAction', '2024 reform lookup'),
+          to: '/config/legal-reference/reform',
+        },
+      ]}
     >
       <LegalReferenceManager />
+    </ConfigShell>
+  );
+}
+
+/** /config/legal-reference/reform — old→new criminal-code diff / lookup tool. */
+export function ReformLookupPage() {
+  const { t } = useTranslation();
+  return (
+    <ConfigShell
+      back
+      title={t('reform.title', 'Criminal-law reform lookup')}
+      subtitle={t(
+        'reform.subtitle',
+        'Old IPC / CrPC / Indian Evidence Act references → their BNS / BNSS / BSA successors (effective 1 Jul 2024).',
+      )}
+    >
+      <ReformLookup />
     </ConfigShell>
   );
 }

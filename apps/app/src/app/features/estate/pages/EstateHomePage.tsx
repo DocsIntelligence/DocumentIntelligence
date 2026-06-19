@@ -8,7 +8,7 @@ import {
   SelectValue,
   Spinner,
 } from '@org/ui';
-import type { PortfolioAnalysis } from '@org/api-client';
+import type { AssetTypeAnalysis, PortfolioAnalysis } from '@org/api-client';
 import { cn } from '@org/utils';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ import {
   HBarList,
   TrendChart,
   colorAt,
+  compactMoney,
   type DonutSlice,
 } from '../components/charts';
 import { useActiveProfile } from '../profile-context';
@@ -377,12 +378,93 @@ function WealthAnalysisCard() {
         <p className="text-sm text-foreground/55">
           {t(
             'estate.wealthAnalysisHint',
-            'Get an AI read on concentration, liquidity and nominee coverage across everything you own.',
+            'Get a planner read on diversification, asset-class mix, liquidity, maturities and nominee coverage across everything you own.',
           )}
         </p>
       ) : (
-        <div className="space-y-3 text-sm">
+        <div className="space-y-4 text-sm">
           <p className="text-foreground/80">{data.summary}</p>
+
+          {/* Headline metrics */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat
+              label={t('estate.diversification', 'Diversification')}
+              value={`${data.metrics.diversificationScore}/100`}
+            />
+            <Stat
+              label={t('estate.liquidShare', 'Liquid')}
+              value={`${data.metrics.liquidSharePct}%`}
+            />
+            <Stat
+              label={t('estate.nomineeCoverage', 'Nominee cover')}
+              value={`${data.metrics.nomineeCoveragePct}%`}
+            />
+            <Stat
+              label={t('estate.topHolding', 'Top holding')}
+              value={
+                data.metrics.topHolding
+                  ? `${data.metrics.topHolding.pct}%`
+                  : '—'
+              }
+              sub={data.metrics.topHolding?.label}
+            />
+          </div>
+
+          {/* Asset-class mix */}
+          {data.metrics.byClass.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-medium text-foreground/55">
+                {t('estate.assetClassMix', 'Asset-class mix')}
+              </p>
+              <HBarList
+                rows={data.metrics.byClass.map<DonutSlice>((c, i) => ({
+                  label: `${c.label} · ${c.pct}%`,
+                  value: c.value,
+                  color: colorAt(i),
+                }))}
+                currency={data.metrics.currency}
+              />
+            </div>
+          )}
+
+          {/* Liquidity + maturity ladder */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {data.metrics.byLiquidity.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-foreground/55">
+                  {t('estate.liquidity', 'Liquidity')}
+                </p>
+                <ul className="space-y-1 text-foreground/75">
+                  {data.metrics.byLiquidity.map((b) => (
+                    <li key={b.key} className="flex justify-between gap-3">
+                      <span className="truncate">{b.label}</span>
+                      <span className="tabular-nums">{b.pct}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.metrics.maturityLadder.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-foreground/55">
+                  {t('estate.maturityLadder', 'Maturity ladder')}
+                </p>
+                <ul className="space-y-1 text-foreground/75">
+                  {data.metrics.maturityLadder.map((b) => (
+                    <li key={b.bucket} className="flex justify-between gap-3">
+                      <span className="truncate">
+                        {b.label} · {b.count}
+                      </span>
+                      <span className="tabular-nums">
+                        {compactMoney(b.value, data.metrics.currency)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
           {data.risks.length > 0 && (
             <div>
               <p className="text-xs font-medium text-foreground/55">
@@ -427,9 +509,146 @@ function WealthAnalysisCard() {
               </ul>
             </div>
           )}
+          {data.plannerNotes.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-foreground/55">
+                {t('estate.plannerNotes', 'Planner notes')}
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-foreground/70">
+                {data.plannerNotes.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Per-type drill-down */}
+          {data.metrics.byType.length > 0 && (
+            <TypeDrilldown types={data.metrics.byType} />
+          )}
         </div>
       )}
     </Card>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 p-3">
+      <p className="text-xs text-foreground/55">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+        {value}
+      </p>
+      {sub && <p className="truncate text-xs text-foreground/50">{sub}</p>}
+    </div>
+  );
+}
+
+/** Drill into a single asset type (e.g. all mutual funds) for a focused read. */
+function TypeDrilldown({
+  types,
+}: {
+  types: { key: string; label: string; pct: number }[];
+}) {
+  const { t } = useTranslation();
+  const svc = useEstateService();
+  const [active, setActive] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<AssetTypeAnalysis | null>(null);
+
+  const open = async (type: string) => {
+    setActive(type);
+    setLoading(true);
+    setData(null);
+    try {
+      setData(await svc.analyzeAssetType(type));
+    } catch {
+      toast.error(t('estate.analyzeFailed', 'Could not analyze right now.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-border/60 pt-3">
+      <p className="mb-2 text-xs font-medium text-foreground/55">
+        {t('estate.analyzeByType', 'Analyse by type')}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {types.map((tp) => (
+          <button
+            key={tp.key}
+            type="button"
+            onClick={() => open(tp.key)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs transition-colors',
+              active === tp.key
+                ? 'border-primary bg-primary/10 text-foreground'
+                : 'border-border/60 text-foreground/70 hover:bg-muted/40',
+            )}
+          >
+            {tp.label} · {tp.pct}%
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <div className="mt-3 rounded-lg border border-border/60 p-3">
+          {loading ? (
+            <p className="flex items-center gap-2 text-foreground/60">
+              <Spinner className="h-4 w-4" />
+              {t('estate.analyzing', 'Analysing…')}
+            </p>
+          ) : data ? (
+            <div className="space-y-2">
+              <p className="text-foreground/80">{data.summary}</p>
+              {data.subAllocation.length > 0 && (
+                <ul className="space-y-1 text-foreground/70">
+                  {data.subAllocation.map((s) => (
+                    <li key={s.key} className="flex justify-between gap-3">
+                      <span className="truncate">{s.label}</span>
+                      <span className="tabular-nums">{s.pct}%</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {data.topHoldings.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-foreground/55">
+                    {t('estate.topHoldings', 'Top holdings')}
+                  </p>
+                  <ul className="mt-1 space-y-1 text-foreground/70">
+                    {data.topHoldings.map((h, i) => (
+                      <li key={i} className="flex justify-between gap-3">
+                        <span className="truncate">{h.label}</span>
+                        <span className="tabular-nums">
+                          {compactMoney(h.value, data.currency)} · {h.pct}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {data.observations.length > 0 && (
+                <ul className="list-disc space-y-0.5 pl-5 text-xs text-foreground/60">
+                  {data.observations.map((o, i) => (
+                    <li key={i}>{o}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
   );
 }
 

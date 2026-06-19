@@ -9,6 +9,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,7 +42,13 @@ import { cn } from '@org/utils';
 import { useMediaQuery } from '@org/hooks';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { diffText, isUnchanged, type DiffSegment } from './revision-diff';
+import {
+  diffHtmlBlocks,
+  diffText,
+  isUnchanged,
+  reconstructHtml,
+  type BlockDiffHunk,
+} from './revision-diff';
 
 import { EditorSideMenu, type RailItem } from './EditorActivityRail';
 import { LayoutPresetGroup } from './LayoutPresetGroup';
@@ -590,29 +597,71 @@ function TemplateEditorInner({
     }
   }, [editor, onAiRevise, reviseInstruction, reviseLanguage, html, t]);
 
+  // Block-level diff of the staged revision → per-change accept/reject. Each
+  // `change` hunk gets a decision (accepted by default); the final document is
+  // reconstructed from only the hunks the user kept.
+  const revisionHunks = useMemo<BlockDiffHunk[] | null>(
+    () =>
+      pendingRevision
+        ? diffHtmlBlocks(pendingRevision.before, pendingRevision.after)
+        : null,
+    [pendingRevision],
+  );
+  const [hunkDecisions, setHunkDecisions] = useState<Record<number, boolean>>(
+    {},
+  );
+  // Reset decisions whenever a fresh revision is staged.
+  useEffect(() => {
+    setHunkDecisions({});
+  }, [pendingRevision]);
+
+  const changeHunks = useMemo(
+    () => (revisionHunks ?? []).filter((h) => h.type === 'change'),
+    [revisionHunks],
+  );
+  const acceptedCount = useMemo(
+    () => changeHunks.filter((h) => hunkDecisions[h.id] !== false).length,
+    [changeHunks, hunkDecisions],
+  );
+
   const acceptRevision = useCallback(() => {
-    if (!editor || !pendingRevision) return;
-    editor.commands.setContent(pendingRevision.after);
-    setHtml(pendingRevision.after);
+    if (!editor || !pendingRevision || !revisionHunks) return;
+    const next = reconstructHtml(revisionHunks, hunkDecisions);
+    editor.commands.setContent(next);
+    setHtml(next);
     setActivePage(0);
     setPendingRevision(null);
-    toast.success(t('editor.toast.revisionApplied', 'Revision applied'));
-  }, [editor, pendingRevision, t]);
+    toast.success(
+      acceptedCount > 0
+        ? t('editor.toast.revisionApplied', 'Revision applied')
+        : t('editor.toast.revisionNoneApplied', 'No changes applied'),
+    );
+  }, [
+    editor,
+    pendingRevision,
+    revisionHunks,
+    hunkDecisions,
+    acceptedCount,
+    t,
+  ]);
 
   const rejectRevision = useCallback(() => {
     setPendingRevision(null);
     toast.message(t('editor.toast.revisionDiscarded', 'Revision discarded'));
   }, [t]);
 
-  // Inline word-level diff of the staged revision (plain text — shows what the
-  // AI changed, not HTML structure).
-  const revisionDiff = useMemo<DiffSegment[] | null>(() => {
-    if (!pendingRevision) return null;
-    return diffText(
-      stripHtmlToText(pendingRevision.before),
-      stripHtmlToText(pendingRevision.after),
-    );
-  }, [pendingRevision]);
+  const setHunkDecision = useCallback((id: number, accept: boolean) => {
+    setHunkDecisions((prev) => ({ ...prev, [id]: accept }));
+  }, []);
+  const setAllHunks = useCallback(
+    (accept: boolean) => {
+      setHunkDecisions(
+        Object.fromEntries(changeHunks.map((h) => [h.id, accept])),
+      );
+    },
+    [changeHunks],
+  );
+
   const revisionUnchanged = useMemo(
     () =>
       pendingRevision
@@ -1546,12 +1595,12 @@ function TemplateEditorInner({
                 {t('editor.diff.red', 'red')}
               </span>{' '}
               {t(
-                'editor.diff.isRemoved',
-                'is removed. Accept to apply, or reject to keep the current document.',
+                'editor.diff.isRemovedPerChange',
+                'is removed. Tick the changes you want to keep, then apply.',
               )}
             </DialogDescription>
           </DialogHeader>
-          {revisionUnchanged ? (
+          {revisionUnchanged || changeHunks.length === 0 ? (
             <p className="py-3 text-sm text-foreground/60">
               {t(
                 'editor.diff.noChanges',
@@ -1559,33 +1608,92 @@ function TemplateEditorInner({
               )}
             </p>
           ) : (
-            <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-secondary-accent/40 p-3 text-sm leading-relaxed text-foreground/80">
-              {revisionDiff?.map((seg, idx) =>
-                seg.op === 'equal' ? (
-                  <span key={idx} className="text-foreground/70">
-                    {seg.text}
-                  </span>
-                ) : seg.op === 'added' ? (
-                  <span key={idx} className="rounded-sm bg-success/25">
-                    {seg.text}
-                  </span>
-                ) : (
-                  <span
-                    key={idx}
-                    className="rounded-sm bg-error/20 line-through opacity-80"
+            <>
+              <div className="flex items-center justify-between gap-2 text-xs text-foreground/60">
+                <span>
+                  {t(
+                    'editor.diff.selectedCount',
+                    '{{n}} of {{total}} changes selected',
+                    { n: acceptedCount, total: changeHunks.length },
+                  )}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAllHunks(true)}
                   >
-                    {seg.text}
-                  </span>
-                ),
-              )}
-            </div>
+                    {t('editor.diff.acceptAll', 'Accept all')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAllHunks(false)}
+                  >
+                    {t('editor.diff.rejectAll', 'Reject all')}
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                {changeHunks.map((h) => {
+                  const accepted = hunkDecisions[h.id] !== false;
+                  const segs = diffText(
+                    stripHtmlToText(h.before.join(' ')),
+                    stripHtmlToText(h.after.join(' ')),
+                  );
+                  return (
+                    <label
+                      key={h.id}
+                      className={cn(
+                        'flex cursor-pointer gap-2.5 rounded-md border p-2.5 text-sm transition-colors',
+                        accepted
+                          ? 'border-primary/40 bg-primary/5'
+                          : 'border-border bg-secondary/20 opacity-70',
+                      )}
+                    >
+                      <Checkbox
+                        checked={accepted}
+                        onCheckedChange={(v) =>
+                          setHunkDecision(h.id, v === true)
+                        }
+                        className="mt-0.5 shrink-0"
+                      />
+                      <span className="min-w-0 whitespace-pre-wrap leading-relaxed text-foreground/80">
+                        {segs.map((seg, idx) =>
+                          seg.op === 'equal' ? (
+                            <span key={idx} className="text-foreground/55">
+                              {seg.text}
+                            </span>
+                          ) : seg.op === 'added' ? (
+                            <span key={idx} className="rounded-sm bg-success/25">
+                              {seg.text}
+                            </span>
+                          ) : (
+                            <span
+                              key={idx}
+                              className="rounded-sm bg-error/20 line-through opacity-80"
+                            >
+                              {seg.text}
+                            </span>
+                          ),
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={rejectRevision}>
-              {t('editor.diff.reject', 'Reject')}
+              {t('editor.diff.reject', 'Discard all')}
             </Button>
             <Button size="sm" onClick={acceptRevision}>
-              {t('editor.diff.accept', 'Accept revision')}
+              {revisionUnchanged || changeHunks.length === 0
+                ? t('editor.diff.apply', 'Apply')
+                : t('editor.diff.applyN', 'Apply {{n}} change(s)', {
+                    n: acceptedCount,
+                  })}
             </Button>
           </DialogFooter>
         </DialogContent>

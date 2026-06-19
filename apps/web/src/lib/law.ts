@@ -59,6 +59,38 @@ export async function fetchPublicCitation(id: string): Promise<PublicCitation | 
   }
 }
 
+export interface PublicCitationAttachment {
+  id: string;
+  kind: string;
+  title: string;
+  filename: string;
+  contentType: string;
+  byteSize: number | null;
+  /** Resolved download URL (presigned S3 or public local-fs stream). */
+  url: string;
+}
+
+/**
+ * Public downloadable files attached to a citation (bare-act PDFs, commentary,
+ * judgments). The API already filters to public files of a public citation, so
+ * a private citation just yields []. Failures degrade to [] — the section hides
+ * rather than breaking the page.
+ */
+export async function fetchPublicCitationAttachments(
+  id: string,
+): Promise<PublicCitationAttachment[]> {
+  try {
+    const res = await fetch(
+      `${WEB_ENV.apiUrl}/public/law/${encodeURIComponent(id)}/attachments`,
+      FETCH_OPTS,
+    );
+    if (!res.ok) return [];
+    return (await res.json()) as PublicCitationAttachment[];
+  } catch {
+    return [];
+  }
+}
+
 /** Build the canonical `/law/:id` slug from a citation id. */
 export function citationSlug(id: string): string {
   return id.replace(/\./g, '-');

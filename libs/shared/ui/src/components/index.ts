@@ -9,6 +9,7 @@ export * from './data-table';
 export * from './date-picker';
 export * from './dialog';
 export * from './dropdown-menu';
+export * from './filter-bar';
 export * from './form-field';
 export {
   Form,

@@ -172,6 +172,21 @@ export class EstateController {
     );
   }
 
+  @Post('portfolio/analyze/type/:type')
+  @ApiOperation({
+    summary: 'Focused analysis of a single asset type (e.g. all mutual funds)',
+  })
+  async analyzeAssetType(
+    @CurrentUser() user: User,
+    @Param('type') type: string,
+    @Query('profileId') profileId?: string,
+  ) {
+    return this.portfolio.analyzeType(
+      await this.profiles.resolve(user.id, profileId),
+      type,
+    );
+  }
+
   @Get('search')
   @ApiOperation({
     summary:

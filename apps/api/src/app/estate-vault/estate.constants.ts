@@ -19,6 +19,16 @@ export const DEFAULT_ESTATE_CONFIG: EstateVaultConfigDto = {
   maxNomineesPerAsset: 4,
   freshnessThresholdDays: 180,
   dormancyThresholdDays: 365,
+  analysis: {
+    maturingWindowDays: 90,
+    concentrationWarnPct: 40,
+    concentrationHighPct: 60,
+    minNomineeCoveragePct: 100,
+    emergencyFundMonths: 6,
+    // Empty by default = descriptive analysis (no prescribed "ideal" mix). Orgs
+    // /users can set a target allocation to get allocation-gap suggestions.
+    idealAllocation: {},
+  },
   toggles: {
     netWorthDashboard: true,
     gapNudges: true,

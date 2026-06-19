@@ -139,7 +139,7 @@ export type DocumentExportDownload =
     };
 
 export interface CreateExportPayload {
-  format?: 'pdf';
+  format?: 'pdf' | 'png' | 'docx';
   pageSize?: PageSize;
 }
 

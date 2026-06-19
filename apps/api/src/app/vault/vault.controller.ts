@@ -26,6 +26,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CreateVaultEntityDto,
   ListVaultEntitiesQueryDto,
+  RecordVaultSignatureDto,
   UpdateVaultEntityDto,
 } from './vault.dto';
 import { VaultService } from './vault.service';
@@ -57,6 +58,14 @@ export class VaultController {
   @ApiOperation({ summary: 'List my vault entities, paginated (fields masked)' })
   list(@CurrentUser() user: User, @Query() query: ListVaultEntitiesQueryDto) {
     return this.vault.list(user.id, query);
+  }
+
+  @Get('signatures')
+  @ApiOperation({
+    summary: 'All my saved signatures across entities (masked) — signing picker',
+  })
+  allSignatures(@CurrentUser() user: User) {
+    return this.vault.allSignatures(user.id);
   }
 
   @Post('entities')
@@ -161,5 +170,47 @@ export class VaultController {
     @Param('docId') docId: string,
   ) {
     return this.vault.removeDocument(user.id, id, docId);
+  }
+
+  // ── Signatures ───────────────────────────────────────────────────────────
+
+  @Post('entities/:id/signatures')
+  @ApiOperation({ summary: 'Save a reusable signature (drawn/uploaded/typed)' })
+  addSignature(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: RecordVaultSignatureDto,
+  ) {
+    return this.vault.addSignature(user.id, id, body);
+  }
+
+  @Get('entities/:id/signatures/:sigId/reveal')
+  @ApiOperation({ summary: 'Reveal a signature (decrypted image/typed; audited)' })
+  revealSignature(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Param('sigId') sigId: string,
+  ) {
+    return this.vault.revealSignature(user.id, id, sigId);
+  }
+
+  @Post('entities/:id/signatures/:sigId/default')
+  @ApiOperation({ summary: 'Make this the default signature for the entity' })
+  setDefaultSignature(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Param('sigId') sigId: string,
+  ) {
+    return this.vault.setDefaultSignature(user.id, id, sigId);
+  }
+
+  @Delete('entities/:id/signatures/:sigId')
+  @ApiOperation({ summary: 'Delete a saved signature' })
+  removeSignature(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Param('sigId') sigId: string,
+  ) {
+    return this.vault.removeSignature(user.id, id, sigId);
   }
 }

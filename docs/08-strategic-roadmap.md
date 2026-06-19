@@ -53,10 +53,24 @@ pre-2024 text will hallucinate repealed sections. This is simultaneously your bi
 
 ---
 
+> **🔄 STATUS CORRECTION (2026-06-19).** Several *factual premises* below have since changed —
+> corrected here; the strategic *argument* is unchanged (and, if anything, reinforced):
+> - **Citation validation is now BUILT** (Tier 1 done): server-side validator + `CitationFillerService`
+>   wired into generate/revise. ✅ The "single most important unbuilt feature" of §0.3 / §5 is shipped.
+>   **BUT** it is still *runtime-unverified* — no browser proof it catches a planted repealed-code ref.
+> - **Schedule-1 eSign hard-gate is now BUILT** (Tier 1 done). The §2 risk #4 is closed.
+> - **There are now 18 structured `DocumentTypeBundle`s, not 4** — incl. three court bundles (§138,
+>   consumer complaint, anticipatory bail) that were previously freeform AI presets (closing §2 risk #2
+>   for those three). The table below is historical.
+> - **What has NOT changed: verification debt is still the whole story** (§0.1, §2 risk #1). We added
+>   3 more bundles this session, every one marked "NOT runtime-verified." The Phase 0 browser walk +
+>   `VERIFICATION_LOG.md` remains the unmet exit gate that should precede any further breadth.
+
 ## 2. Code reality (audited, not assumed)
 
-**Better than the docs claim:** there are now **4 real `DocumentTypeBundle`s**, not one —
-each with full `schema + form-metadata + prompts + risks` *and* a registered template:
+**Better than the docs claim** *(historical — as of 2026-06-12; see the correction banner above — there
+are now 18 bundles)*: there were then **4 real `DocumentTypeBundle`s**, not one — each with full
+`schema + form-metadata + prompts + risks` *and* a registered template:
 
 | Doc type | Bundle LOC | Template | Status |
 |---|---|---|---|
@@ -66,16 +80,18 @@ each with full `schema + form-metadata + prompts + risks` *and* a registered tem
 | `affidavit` | 330 | `default` | Real |
 
 This **validates the core architectural bet at the code level**: the bundle abstraction scales
-to new doc types without ad-hoc hacks. Keep enforcing it at PR review.
+to new doc types without ad-hoc hacks. Keep enforcing it at PR review. *(Confirmed at scale since:
+18 bundles, no ad-hoc hacks outside the bundle pattern.)*
 
-**The real risks (all confidence: high):**
-1. **Verification debt is the whole story** — "tsc 0 / build ✓" ≠ "works." First real run will
-   surface 5–15 bugs.
-2. **Court docs are AI presets, not bundles** — the *most legally dangerous* outputs (bail,
-   plaint) are the *least* structurally controlled. 9 presets emit freeform HTML.
-3. **Citation correctness asserted, not enforced** — no server-side validation. Paper moat.
-4. **Schedule-1 eSign hard-gate still open** — free, provider-independent legal safety switch,
-   deferred for no good reason.
+**The real risks (status as of 2026-06-19):**
+1. **Verification debt is the whole story** *(STILL OPEN, confidence: high)* — "tsc 0 / build ✓" ≠
+   "works." First real run will surface 5–15 bugs. 18 bundles now, none browser-verified.
+2. **Court docs are AI presets, not bundles** *(PARTLY CLOSED)* — §138, consumer complaint, and
+   anticipatory bail are now structured bundles with deterministic risk rules. The remaining
+   freeform court presets (plaint, written statement, vakalatnama, writ) still emit freeform HTML.
+3. ~~**Citation correctness asserted, not enforced**~~ *(CLOSED in code — validator + filler wired;
+   runtime proof still pending)*.
+4. ~~**Schedule-1 eSign hard-gate still open**~~ *(CLOSED — hard-gate by doc type shipped)*.
 
 ---
 

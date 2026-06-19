@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { PageSize } from '@prisma/client';
 import { Queue } from 'bullmq';
+import type { ExportFormat } from '@org/dto';
 import { DatabaseService } from '../../database/database.service';
 import { errorMessage } from '../../common/error.util';
 import { PDF_RENDER_QUEUE } from './pdf-render.processor';
@@ -41,7 +42,11 @@ export class ExportsService {
     private readonly db: DatabaseService,
   ) {}
 
-  async enqueueExport(userId: string, documentId: string, pageSize?: PageSize) {
+  async enqueueExport(
+    userId: string,
+    documentId: string,
+    opts: { format?: ExportFormat; pageSize?: PageSize } = {},
+  ) {
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
       include: { template: true },
@@ -49,12 +54,13 @@ export class ExportsService {
     if (!doc) throw new NotFoundException('Document not found');
     await this.assertCanExport(userId, doc);
 
-    const targetPageSize = pageSize ?? doc.pageSize;
+    const targetPageSize = opts.pageSize ?? doc.pageSize;
+    const format = opts.format ?? 'pdf';
 
     const exp = await this.db.documentExport.create({
       data: {
         documentId: doc.id,
-        format: 'pdf',
+        format,
         pageSize: targetPageSize,
         status: 'pending',
         error: null,
@@ -66,6 +72,7 @@ export class ExportsService {
       documentId: doc.id,
       pageSize: targetPageSize,
       componentKey: doc.template.componentKey,
+      format,
     };
 
     if (this.enabled && this.queue) {

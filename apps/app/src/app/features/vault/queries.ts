@@ -1,6 +1,7 @@
 import type {
   CreateVaultEntityPayload,
   ListVaultEntitiesQuery,
+  RecordVaultSignaturePayload,
   UpdateVaultEntityPayload,
 } from '@org/api-client';
 import {
@@ -19,6 +20,7 @@ export const vaultKeys = {
     ['vault', 'entities', params] as const,
   entity: (id: string) => ['vault', 'entity', id] as const,
   entityKinds: ['vault', 'entity-kinds'] as const,
+  signatures: ['vault', 'signatures'] as const,
 };
 
 /** Active entity kinds the user can create — DB-driven, falls back to
@@ -59,7 +61,7 @@ export function useCreateVaultEntity() {
       void qc.invalidateQueries({ queryKey: vaultKeys.list });
       toast.success('Entity saved');
     },
-    onError: () => toast.error('Could not save entity'),
+    onError: (err) => toast.error(extractMessage(err, 'Could not save entity')),
   });
 }
 
@@ -73,7 +75,7 @@ export function useUpdateVaultEntity(id: string) {
       void qc.invalidateQueries({ queryKey: vaultKeys.list });
       toast.success('Saved');
     },
-    onError: () => toast.error('Could not save'),
+    onError: (err) => toast.error(extractMessage(err, 'Could not save')),
   });
 }
 
@@ -86,7 +88,7 @@ export function useDuplicateVaultEntity() {
       void qc.invalidateQueries({ queryKey: vaultKeys.list });
       toast.success('Entity duplicated');
     },
-    onError: () => toast.error('Could not duplicate'),
+    onError: (err) => toast.error(extractMessage(err, 'Could not duplicate')),
   });
 }
 
@@ -99,7 +101,7 @@ export function useDeleteVaultEntity() {
       void qc.invalidateQueries({ queryKey: vaultKeys.list });
       toast.success('Entity deleted');
     },
-    onError: () => toast.error('Could not delete'),
+    onError: (err) => toast.error(extractMessage(err, 'Could not delete')),
   });
 }
 
@@ -113,7 +115,7 @@ export function useAddVaultDocument(id: string) {
       void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
       toast.success('Document attached');
     },
-    onError: () => toast.error('Upload failed'),
+    onError: (err) => toast.error(extractMessage(err, 'Upload failed')),
   });
 }
 
@@ -178,6 +180,83 @@ export function useRemoveVaultDocument(id: string) {
   return useMutation({
     mutationFn: (docId: string) => svc.removeDocument(id, docId),
     onSuccess: () => qc.invalidateQueries({ queryKey: vaultKeys.entity(id) }),
-    onError: () => toast.error('Could not remove document'),
+    onError: (err) => toast.error(extractMessage(err, 'Could not remove document')),
   });
+}
+
+// ── Signatures ─────────────────────────────────────────────────────────────
+
+/** All the user's saved signatures across entities — for the signing picker. */
+export function useAllVaultSignatures(enabled = true) {
+  const svc = useVaultService();
+  return useQuery({
+    queryKey: vaultKeys.signatures,
+    queryFn: () => svc.allSignatures(),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useAddVaultSignature(id: string) {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: RecordVaultSignaturePayload) =>
+      svc.addSignature(id, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
+      void qc.invalidateQueries({ queryKey: vaultKeys.signatures });
+      toast.success('Signature saved');
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Could not save signature')),
+  });
+}
+
+export function useSetDefaultVaultSignature(id: string) {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sigId: string) => svc.setDefaultSignature(id, sigId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
+      void qc.invalidateQueries({ queryKey: vaultKeys.signatures });
+    },
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not set default signature')),
+  });
+}
+
+export function useRemoveVaultSignature(id: string) {
+  const svc = useVaultService();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sigId: string) => svc.removeSignature(id, sigId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vaultKeys.entity(id) });
+      void qc.invalidateQueries({ queryKey: vaultKeys.signatures });
+    },
+    onError: (err) => toast.error(extractMessage(err, 'Could not remove signature')),
+  });
+}
+
+/** Pull the server's error message out of an Axios-style error, else fallback.
+ *  Surfaces real reasons (e.g. "remove from the Wealth Vault first") instead of
+ *  a generic toast. */
+function extractMessage(err: unknown, fallback: string): string {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'response' in err &&
+    err.response &&
+    typeof err.response === 'object' &&
+    'data' in err.response &&
+    err.response.data &&
+    typeof err.response.data === 'object' &&
+    'message' in err.response.data
+  ) {
+    const msg = (err.response.data as { message: unknown }).message;
+    if (typeof msg === 'string') return msg;
+    if (Array.isArray(msg)) return msg.join(', ');
+  }
+  return fallback;
 }

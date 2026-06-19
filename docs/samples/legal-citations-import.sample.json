@@ -1,0 +1,36 @@
+[
+  {
+    "id": "bns.103",
+    "act": "Bharatiya Nyaya Sanhita, 2023",
+    "actShort": "BNS",
+    "section": "103",
+    "title": "Punishment for murder",
+    "summary": "Section 103 prescribes the punishment for murder as defined in Section 101. Sub-section (1) provides that whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to a fine. Sub-section (2) addresses murder committed by a group of five or more persons acting together on a ground such as race, caste, community, sex, place of birth, language, or personal belief, making each member liable to death or life imprisonment plus fine.\n\nFor a drafter, the key is to plead the ingredients of murder under Section 101 precisely and to distinguish the act from culpable homicide not amounting to murder (Section 105). Where the group/'mob lynching' limb is invoked, plead the common ground and the participation of five or more persons.",
+    "fullText": "103. (1) Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine. (2) When a group of five or more persons acting in concert commits murder on the ground of race, caste or community, sex, place of birth, language, personal belief or any other similar ground, each member of such group shall be punished with death or with imprisonment for life, and shall also be liable to fine.",
+    "draftingTips": "- Plead each ingredient of murder under BNS §101 before invoking §103.\n- Distinguish from culpable homicide not amounting to murder (BNS §105) to pre-empt the defence.\n- For the §103(2) group limb, plead the shared ground and that five or more persons acted in concert.\n- Note this replaces IPC §302 for offences on or after 1 July 2024.",
+    "topics": ["criminal", "bns", "murder", "offences-against-body"],
+    "appliesTo": ["legal_notice", "writ_petition", "anticipatory_bail"],
+    "confidence": "high",
+    "supersedes": "ipc.302",
+    "externalUrl": "https://www.indiacode.nic.in/handle/123456789/20062",
+    "effectiveFrom": "2024-07-01",
+    "verifyNote": "Verify the section text against the official Bharatiya Nyaya Sanhita, 2023 bare act before binding use."
+  },
+  {
+    "id": "bns.351",
+    "act": "Bharatiya Nyaya Sanhita, 2023",
+    "actShort": "BNS",
+    "section": "351",
+    "title": "Criminal intimidation",
+    "summary": "Section 351 defines criminal intimidation and prescribes its punishment. A person commits criminal intimidation by threatening another with injury to person, reputation, or property (or to anyone the other is interested in) with intent to cause alarm or to compel an act the person is not legally bound to do, or to omit an act they are legally entitled to do.\n\nThe section graduates punishment: simple criminal intimidation, and an aggravated form where the threat is to cause death or grievous hurt, destruction of property by fire, or an offence punishable with death or life imprisonment.",
+    "fullText": "351. (1) Whoever threatens another with any injury to his person, reputation or property, or to the person or reputation of any one in whom that person is interested, with intent to cause alarm to that person, or to cause that person to do any act which he is not legally bound to do, or to omit to do any act which that person is legally entitled to do, as the means of avoiding the execution of such threat, commits criminal intimidation.",
+    "draftingTips": "- Identify the specific threat and the intent (alarm, compulsion, or deterrence).\n- For the aggravated limb, plead the nature of the threatened injury (death, grievous hurt, fire).\n- Replaces IPC §503/§506 for offences on or after 1 July 2024.",
+    "topics": ["criminal", "bns", "criminal-intimidation"],
+    "appliesTo": ["legal_notice"],
+    "confidence": "high",
+    "supersedes": "ipc.503",
+    "externalUrl": "https://www.indiacode.nic.in/handle/123456789/20062",
+    "effectiveFrom": "2024-07-01",
+    "verifyNote": "Verify the section text and numbering against the official BNS, 2023 bare act."
+  }
+]

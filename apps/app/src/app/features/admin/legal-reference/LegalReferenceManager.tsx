@@ -6,17 +6,14 @@ import {
   Badge,
   Button,
   DataTable,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  FilterBar,
   Spinner,
   Switch,
   type DataTableColumn,
 } from '@org/ui';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { APP_ENV, lawUrl } from '../../../../config';
+import { CitationPdfImportDialog } from './CitationPdfImportDialog';
 
 const API_BASE_URL = APP_ENV.apiUrl;
 
@@ -74,6 +71,9 @@ export function LegalReferenceManager() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Whenever a filter changes, reset to page 0. (Sort + search already do.)
   useEffect(() => {
@@ -184,6 +184,48 @@ export function LegalReferenceManager() {
       toast.error(`Delete failed: ${(err as Error).message}`);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const runBulk = async (
+    action: 'delete' | 'activate' | 'deactivate' | 'makePublic' | 'makePrivate',
+    ids: string[],
+    clear: () => void,
+  ) => {
+    if (ids.length === 0) return;
+    if (action === 'delete') {
+      const ok = await confirm({
+        title: t('legalRefs.bulkDeleteTitle', 'Delete {{n}} citation(s)?', {
+          n: ids.length,
+        }),
+        description: t(
+          'legalRefs.bulkDeleteDesc',
+          'DB rows are removed. In-code seeds in the selection are untouched (they can only be deactivated).',
+        ),
+        confirmLabel: t('common.delete', 'Delete'),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setBulkBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/legal-ai/admin/citations/bulk`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { affected }: { affected: number } = await res.json();
+      toast.success(
+        t('legalRefs.bulkDone', '{{n}} citation(s) updated', { n: affected }),
+      );
+      clear();
+      reload();
+    } catch (err) {
+      toast.error(`Bulk action failed: ${(err as Error).message}`);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -347,97 +389,140 @@ export function LegalReferenceManager() {
               {t('legalRefs.openPublic', 'Public catalog ↗')}
             </Link>
           </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            {t('legalRefs.importBulk', 'Bulk import')}
+          </Button>
           <Button onClick={() => navigate('/config/legal-reference/new')}>
             {t('legalRefs.add', '+ Add citation')}
           </Button>
         </div>
       </div>
 
+      <CitationPdfImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={reload}
+      />
+
       <DataTable
         tableId="admin.legal-reference.citations"
         data={data?.items ?? []}
         columns={columns}
         rowKey={(r) => r.id}
-        searchPlaceholder={t(
-          'legalRefs.searchPlaceholder',
-          'Search id / act / section / title / topic…',
-        )}
         pageSizeOptions={[10, 25, 50, 100]}
         empty={t('legalRefs.empty', 'No citations match your filters.')}
-        toolbar={
+        selection={{ selectedIds: selected, onChange: setSelected }}
+        selectionLabel={(n) => t('legalRefs.nSelected', '{{n}} selected', { n })}
+        bulkActions={(ids, clear) => (
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={activeFilter}
-              onValueChange={(v) =>
-                setActiveFilter(v as 'any' | 'true' | 'false')
-              }
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => runBulk('activate', ids, clear)}
             >
-              <SelectTrigger className="h-9 w-36 text-sm">
-                <SelectValue
-                  placeholder={t('legalRefs.filter.activeAny', 'Any status')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">
-                  {t('legalRefs.filter.activeAny', 'Any status')}
-                </SelectItem>
-                <SelectItem value="true">
-                  {t('legalRefs.filter.activeTrue', 'Active')}
-                </SelectItem>
-                <SelectItem value="false">
-                  {t('legalRefs.filter.activeFalse', 'Inactive')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={publicFilter}
-              onValueChange={(v) =>
-                setPublicFilter(v as 'any' | 'true' | 'false')
-              }
+              {t('legalRefs.bulkEnable', 'Enable')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => runBulk('deactivate', ids, clear)}
             >
-              <SelectTrigger className="h-9 w-40 text-sm">
-                <SelectValue
-                  placeholder={t(
-                    'legalRefs.filter.visibilityAny',
-                    'Any visibility',
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">
-                  {t('legalRefs.filter.visibilityAny', 'Any visibility')}
-                </SelectItem>
-                <SelectItem value="true">
-                  {t('legalRefs.filter.publicTrue', 'Public')}
-                </SelectItem>
-                <SelectItem value="false">
-                  {t('legalRefs.filter.publicFalse', 'Private')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={actFilter} onValueChange={setActFilter}>
-              <SelectTrigger className="h-9 w-56 text-sm">
-                <SelectValue
-                  placeholder={t('legalRefs.filter.codeAny', 'All codes')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__any__">
-                  {t('legalRefs.filter.codeAny', 'All codes')}
-                </SelectItem>
-                {acts.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {a}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                {t('common.clearAll', 'Clear all')}
-              </Button>
-            )}
+              {t('legalRefs.bulkDisable', 'Disable')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => runBulk('makePublic', ids, clear)}
+            >
+              {t('legalRefs.bulkPublic', 'Make public')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => runBulk('makePrivate', ids, clear)}
+            >
+              {t('legalRefs.bulkPrivate', 'Make private')}
+            </Button>
+            <Button
+              variant="error"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => runBulk('delete', ids, clear)}
+            >
+              {t('common.delete', 'Delete')}
+            </Button>
           </div>
+        )}
+        toolbar={
+          <FilterBar
+            search={{
+              value: query,
+              onChange: (v) => {
+                setQuery(v);
+                setPage(0);
+              },
+              placeholder: t(
+                'legalRefs.searchPlaceholder',
+                'Search id / act / section / title / topic…',
+              ),
+            }}
+            selects={[
+              {
+                id: 'active',
+                value: activeFilter === 'any' ? '' : activeFilter,
+                onChange: (v) =>
+                  setActiveFilter((v || 'any') as 'any' | 'true' | 'false'),
+                options: [
+                  {
+                    value: 'true',
+                    label: t('legalRefs.filter.activeTrue', 'Active'),
+                  },
+                  {
+                    value: 'false',
+                    label: t('legalRefs.filter.activeFalse', 'Inactive'),
+                  },
+                ],
+                allLabel: t('legalRefs.filter.activeAny', 'Any status'),
+                widthClassName: 'w-36',
+              },
+              {
+                id: 'public',
+                value: publicFilter === 'any' ? '' : publicFilter,
+                onChange: (v) =>
+                  setPublicFilter((v || 'any') as 'any' | 'true' | 'false'),
+                options: [
+                  {
+                    value: 'true',
+                    label: t('legalRefs.filter.publicTrue', 'Public'),
+                  },
+                  {
+                    value: 'false',
+                    label: t('legalRefs.filter.publicFalse', 'Private'),
+                  },
+                ],
+                allLabel: t('legalRefs.filter.visibilityAny', 'Any visibility'),
+                widthClassName: 'w-40',
+              },
+              {
+                id: 'act',
+                value: actFilter === '__any__' ? '' : actFilter,
+                onChange: (v) => setActFilter(v || '__any__'),
+                options: acts.map((a) => ({ value: a, label: a })),
+                allLabel: t('legalRefs.filter.codeAny', 'All codes'),
+                widthClassName: 'w-56',
+              },
+            ]}
+            onClear={() => {
+              clearFilters();
+              setQuery('');
+              setPage(0);
+            }}
+            clearLabel={t('common.clearAll', 'Clear all')}
+          />
         }
         server={{
           page,

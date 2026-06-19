@@ -2,11 +2,7 @@ import type { BatchSummary } from '@org/api-client';
 import {
   Badge,
   Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  FilterBar,
   DataTable,
   type DataTableColumn,
 } from '@org/ui';
@@ -287,36 +283,29 @@ export function BatchesPage() {
             </Button>
           )}
           toolbar={
-            <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              <Select
-                value={statusFilter ?? '__any__'}
-                onValueChange={(v) =>
-                  setStatusFilter(v === '__any__' ? null : v)
-                }
-              >
-                <SelectTrigger className="h-9 w-44 text-sm">
-                  <SelectValue
-                    placeholder={t(
-                      'intelligence.batches.filter.allStatuses',
-                      'All statuses',
-                    )}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__any__">
-                    {t(
-                      'intelligence.batches.filter.allStatuses',
-                      'All statuses',
-                    )}
-                  </SelectItem>
-                  {BATCH_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s.replace(/_/g, ' ')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <FilterBar
+              selects={[
+                {
+                  id: 'status',
+                  value: statusFilter ?? '',
+                  onChange: (v) => setStatusFilter(v || null),
+                  options: BATCH_STATUSES.map((s) => ({
+                    value: s,
+                    label: s.replace(/_/g, ' '),
+                  })),
+                  allLabel: t(
+                    'intelligence.batches.filter.allStatuses',
+                    'All statuses',
+                  ),
+                  widthClassName: 'w-44',
+                },
+              ]}
+              onClear={() => {
+                setStatusFilter(null);
+                setQuery('');
+              }}
+              clearLabel={t('common.clear', 'Clear')}
+            />
           }
           empty={t(
             'intelligence.batches.noMatch',

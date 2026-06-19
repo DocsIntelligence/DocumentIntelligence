@@ -29,47 +29,50 @@ export function useExportPdf(documentId: string) {
     [],
   );
 
-  const start = useCallback(async () => {
-    cancelled.current = false;
-    setState({ phase: 'idle' });
-    try {
-      const exp = await docs.enqueueExport(documentId, {});
-      if (exp.status === 'failed') {
-        setState({
-          phase: 'failed',
-          error: exp.error ?? 'Export failed before queueing.',
-        });
-        return;
-      }
-      setState({ phase: 'queued', exportId: exp.id });
+  const start = useCallback(
+    async (format: 'pdf' | 'png' | 'docx' = 'pdf') => {
+      cancelled.current = false;
+      setState({ phase: 'idle' });
+      try {
+        const exp = await docs.enqueueExport(documentId, { format });
+        if (exp.status === 'failed') {
+          setState({
+            phase: 'failed',
+            error: exp.error ?? 'Export failed before queueing.',
+          });
+          return;
+        }
+        setState({ phase: 'queued', exportId: exp.id });
 
-      const final = await pollUntilTerminal(
-        () => docs.getExport(documentId, exp.id),
-        cancelled,
-      );
-      if (cancelled.current) return;
-      if (final.status === 'failed') {
-        setState({
-          phase: 'failed',
-          error: final.error ?? 'Export failed.',
-        });
-        return;
+        const final = await pollUntilTerminal(
+          () => docs.getExport(documentId, exp.id),
+          cancelled,
+        );
+        if (cancelled.current) return;
+        if (final.status === 'failed') {
+          setState({
+            phase: 'failed',
+            error: final.error ?? 'Export failed.',
+          });
+          return;
+        }
+        const dl = await docs.getExportDownload(documentId, exp.id);
+        if (!dl.ready) {
+          setState({
+            phase: 'failed',
+            error: dl.error ?? 'Could not fetch download URL.',
+          });
+          return;
+        }
+        setState({ phase: 'ready', exportId: exp.id, url: dl.url });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast.error(`Export failed: ${msg}`);
+        setState({ phase: 'failed', error: msg });
       }
-      const dl = await docs.getExportDownload(documentId, exp.id);
-      if (!dl.ready) {
-        setState({
-          phase: 'failed',
-          error: dl.error ?? 'Could not fetch download URL.',
-        });
-        return;
-      }
-      setState({ phase: 'ready', exportId: exp.id, url: dl.url });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Export failed: ${msg}`);
-      setState({ phase: 'failed', error: msg });
-    }
-  }, [docs, documentId]);
+    },
+    [docs, documentId],
+  );
 
   return { state, start };
 }

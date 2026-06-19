@@ -32,6 +32,40 @@ export type UpdateVaultEntityDto = z.infer<typeof updateVaultEntitySchema>;
 
 // ── Admin: configurable field catalog + doc kinds + entity kinds (docs/10) ─
 
+// ── Signatures (docs/10): reusable, encrypted signatures saved per entity ──
+
+export const vaultSignatureMethods = ['draw', 'upload', 'typed'] as const;
+
+/**
+ * Record a reusable signature against a vault entity. Mirrors the
+ * document-signing capture payload (draw/upload → PNG data URL; typed → text +
+ * font) and adds a user `label` + `isDefault`. The server encrypts the payload
+ * at rest. Shared so the API (createZodDto) and the client validate identically.
+ */
+export const recordVaultSignatureSchema = z
+  .object({
+    method: z.enum(vaultSignatureMethods),
+    label: z
+      .string()
+      .trim()
+      .min(1, 'Give this signature a name')
+      .max(80)
+      .default('Signature'),
+    /** data:image/…;base64,… for method 'draw' or 'upload'. ~2 MB cap. */
+    image: z.string().startsWith('data:image/').max(2_000_000).optional(),
+    /** The typed name for method 'typed'. */
+    typedText: z.string().min(1).max(200).optional(),
+    /** Font-family label used to render a typed signature. */
+    font: z.string().max(120).optional(),
+    /** Make this the entity's default signature. */
+    isDefault: z.boolean().default(false),
+  })
+  .refine((v) => (v.method === 'typed' ? !!v.typedText : !!v.image), {
+    message:
+      'draw/upload signatures require an image; typed signatures require typedText',
+  });
+export type RecordVaultSignatureDto = z.infer<typeof recordVaultSignatureSchema>;
+
 export const vaultFieldTypes = [
   'text', 'textarea', 'date', 'number', 'tel', 'email', 'select', 'lookup',
 ] as const;

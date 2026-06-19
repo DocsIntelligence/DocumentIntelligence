@@ -7,6 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FilterBar,
   Input,
   Label,
   Select,
@@ -218,30 +219,26 @@ export function GroupsPage() {
           </Button>
         )}
         toolbar={
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={kindFilter ?? '__any__'}
-              onValueChange={(v) =>
-                setKindFilter(v === '__any__' ? null : v)
-              }
-            >
-              <SelectTrigger className="h-9 w-44 text-sm">
-                <SelectValue
-                  placeholder={t('groups.filter.allKinds', 'All kinds')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__any__">
-                  {t('groups.filter.allKinds', 'All kinds')}
-                </SelectItem>
-                {kindOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterBar
+            selects={[
+              {
+                id: 'kind',
+                value: kindFilter ?? '',
+                onChange: (v) => setKindFilter(v || null),
+                options: kindOptions.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                })),
+                allLabel: t('groups.filter.allKinds', 'All kinds'),
+                widthClassName: 'w-44',
+              },
+            ]}
+            onClear={() => {
+              setKindFilter(null);
+              setQuery('');
+            }}
+            clearLabel={t('common.clear', 'Clear')}
+          />
         }
         empty={t('groups.noMatch', 'No groups match these filters.')}
       />

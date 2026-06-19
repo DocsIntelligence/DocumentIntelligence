@@ -15,7 +15,11 @@ import { sourcePart } from '../intelligence/engines/vlm-extraction.engine';
 import { ParsingService } from '../intelligence/parsing.service';
 import { VaultCryptoService } from './vault-crypto.service';
 import { VaultConfigService } from './vault-config.service';
-import { CreateVaultEntityDto, UpdateVaultEntityDto } from './vault.dto';
+import {
+  CreateVaultEntityDto,
+  UpdateVaultEntityDto,
+  RecordVaultSignatureDto,
+} from './vault.dto';
 import { maskFields } from './vault.fields';
 
 const STORAGE_FOLDER = 'vault';
@@ -120,19 +124,35 @@ export class VaultService {
     return { items, total };
   }
 
-  /** Detail with MASKED fields + documents (no presigned URLs here). */
+  /** Detail with MASKED fields + documents + signature metadata (no images,
+   *  no presigned URLs here — signature images come from an audited reveal). */
   async get(userId: string, id: string) {
     const e = await this.loadEntity(userId, id);
     const docs = await this.db.vaultDocument.findMany({
       where: { entityId: id },
       orderBy: { createdAt: 'desc' },
     });
+    const sigs = await this.db.vaultSignature.findMany({
+      where: { entityId: id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        label: true,
+        method: true,
+        isDefault: true,
+        createdAt: true,
+      },
+    });
     const defs = await this.config.fieldDefs(e.ownerOrgId, e.kind);
+    const link = await this.estateLink(e.id);
     return {
       id: e.id,
       kind: e.kind,
       label: e.label,
       isActive: e.isActive,
+      /** Set when this entity backs a Wealth Vault profile/nominee — the UI
+       *  disables delete (it must be removed from the Wealth Vault instead). */
+      estateLink: link,
       fields: maskFields(defs, this.crypto.decryptFields(e.dataEncrypted)),
       schema: defs,
       documents: docs.map((d) => ({
@@ -143,6 +163,7 @@ export class VaultService {
         byteSize: d.byteSize,
         createdAt: d.createdAt,
       })),
+      signatures: sigs,
       updatedAt: e.updatedAt,
     };
   }
@@ -217,12 +238,55 @@ export class VaultService {
 
   async remove(userId: string, id: string) {
     const e = await this.loadEntity(userId, id);
+    // Estate/Wealth Vault references a Vault person by id (no DB FK — plain
+    // `vaultEntityId` columns). Deleting it here would orphan the linked estate
+    // profile or nominee, so block it: it must be removed from the Wealth Vault
+    // (which owns those links), not from the document vault.
+    await this.assertNotLinkedToEstate(id);
     const docs = await this.db.vaultDocument.findMany({ where: { entityId: id } });
     // Best-effort: purge the S3 objects before the rows cascade away.
     await Promise.allSettled(docs.map((d) => this.storage.delete(d.s3Key)));
     await this.db.vaultEntity.delete({ where: { id: e.id } });
     this.logger.log(`Vault entity ${id} deleted by ${userId}`);
     return { id };
+  }
+
+  /**
+   * If a Vault entity backs an Estate/Wealth-Vault profile or nominee, return
+   * the link (there is no DB FK — estate stores a plain `vaultEntityId`), else
+   * null. Used to block deletion + to flag it in the UI.
+   */
+  async estateLink(
+    vaultEntityId: string,
+  ): Promise<{ kind: 'profile' | 'nominee'; label: string } | null> {
+    const [profile, nominee] = await Promise.all([
+      this.db.estateProfile.findFirst({
+        where: { vaultEntityId },
+        select: { label: true },
+      }),
+      this.db.nominee.findFirst({
+        where: { vaultEntityId },
+        select: { name: true },
+      }),
+    ]);
+    if (profile) return { kind: 'profile', label: profile.label ?? '' };
+    if (nominee) return { kind: 'nominee', label: nominee.name ?? '' };
+    return null;
+  }
+
+  /** Throw if a Vault entity backs an Estate-Vault profile or nominee. */
+  private async assertNotLinkedToEstate(vaultEntityId: string) {
+    const link = await this.estateLink(vaultEntityId);
+    if (link?.kind === 'profile') {
+      throw new BadRequestException(
+        `This person backs a Wealth Vault profile${link.label ? ` (“${link.label}”)` : ''}. Remove it from the Wealth Vault first — deleting it here would break that link.`,
+      );
+    }
+    if (link?.kind === 'nominee') {
+      throw new BadRequestException(
+        `This person is a nominee${link.label ? ` (${link.label})` : ''} in your Wealth Vault. Remove the nominee from the Wealth Vault first — deleting it here would break that link.`,
+      );
+    }
   }
 
   // ── Documents ─────────────────────────────────────────────────────────────
@@ -279,6 +343,134 @@ export class VaultService {
     await this.storage.delete(doc.s3Key).catch(() => undefined);
     await this.db.vaultDocument.delete({ where: { id: docId } });
     return { id: docId };
+  }
+
+  // ── Signatures (docs/10): reusable, encrypted, mask-by-default ─────────────
+
+  /** Save a reusable signature against the entity. The payload (image OR typed
+   *  text + font) is encrypted at rest; only metadata is ever returned here. */
+  async addSignature(userId: string, id: string, dto: RecordVaultSignatureDto) {
+    await this.loadEntity(userId, id);
+    const payload =
+      dto.method === 'typed'
+        ? { method: dto.method, typedText: dto.typedText, font: dto.font }
+        : { method: dto.method, image: dto.image };
+
+    // First signature for an entity is its default automatically.
+    const existing = await this.db.vaultSignature.count({ where: { entityId: id } });
+    const makeDefault = dto.isDefault || existing === 0;
+    if (makeDefault) {
+      await this.db.vaultSignature.updateMany({
+        where: { entityId: id },
+        data: { isDefault: false },
+      });
+    }
+
+    const sig = await this.db.vaultSignature.create({
+      data: {
+        entityId: id,
+        method: dto.method,
+        label: dto.label,
+        isDefault: makeDefault,
+        dataEncrypted: this.crypto.encrypt(JSON.stringify(payload)),
+      },
+      select: { id: true, label: true, method: true, isDefault: true, createdAt: true },
+    });
+    await this.audit(id, userId, 'create', `signature:${sig.label}`);
+    return sig;
+  }
+
+  /** Decrypt one signature's payload (image / typed text). Audited as a reveal. */
+  async revealSignature(userId: string, id: string, sigId: string) {
+    await this.loadEntity(userId, id);
+    const sig = await this.db.vaultSignature.findUnique({ where: { id: sigId } });
+    if (!sig || sig.entityId !== id)
+      throw new NotFoundException('Signature not found');
+    await this.audit(id, userId, 'reveal', `signature:${sig.label}`);
+    const payload = JSON.parse(this.crypto.decrypt(sig.dataEncrypted)) as {
+      image?: string;
+      typedText?: string;
+      font?: string;
+    };
+    return {
+      id: sig.id,
+      label: sig.label,
+      method: sig.method,
+      isDefault: sig.isDefault,
+      image: payload.image,
+      typedText: payload.typedText,
+      font: payload.font,
+    };
+  }
+
+  /** Make one signature the entity's default (clears the others). */
+  async setDefaultSignature(userId: string, id: string, sigId: string) {
+    await this.loadEntity(userId, id);
+    const sig = await this.db.vaultSignature.findUnique({ where: { id: sigId } });
+    if (!sig || sig.entityId !== id)
+      throw new NotFoundException('Signature not found');
+    await this.db.vaultSignature.updateMany({
+      where: { entityId: id },
+      data: { isDefault: false },
+    });
+    await this.db.vaultSignature.update({
+      where: { id: sigId },
+      data: { isDefault: true },
+    });
+    await this.audit(id, userId, 'update', `signature-default:${sig.label}`);
+    return { id: sigId, isDefault: true };
+  }
+
+  /** All signatures the user can access (across their entities), MASKED — for
+   *  the "use a saved signature" picker in the document-signing flow. */
+  async allSignatures(userId: string) {
+    const orgIds = await this.userOrgIds(userId);
+    const sigs = await this.db.vaultSignature.findMany({
+      where: {
+        entity: { OR: [{ ownerUserId: userId }, { ownerOrgId: { in: orgIds } }] },
+      },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        label: true,
+        method: true,
+        isDefault: true,
+        createdAt: true,
+        entityId: true,
+        entity: { select: { label: true } },
+      },
+    });
+    return sigs.map((s) => ({
+      id: s.id,
+      label: s.label,
+      method: s.method,
+      isDefault: s.isDefault,
+      createdAt: s.createdAt,
+      entityId: s.entityId,
+      entityLabel: s.entity.label,
+    }));
+  }
+
+  async removeSignature(userId: string, id: string, sigId: string) {
+    await this.loadEntity(userId, id);
+    const sig = await this.db.vaultSignature.findUnique({ where: { id: sigId } });
+    if (!sig || sig.entityId !== id)
+      throw new NotFoundException('Signature not found');
+    await this.db.vaultSignature.delete({ where: { id: sigId } });
+    // If we removed the default and others remain, promote the most recent.
+    if (sig.isDefault) {
+      const next = await this.db.vaultSignature.findFirst({
+        where: { entityId: id },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (next)
+        await this.db.vaultSignature.update({
+          where: { id: next.id },
+          data: { isDefault: true },
+        });
+    }
+    await this.audit(id, userId, 'update', `signature-remove:${sig.label}`);
+    return { id: sigId };
   }
 
   // ── Scan an uploaded document → suggested field values (docs/10 Part B) ────

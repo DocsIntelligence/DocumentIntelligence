@@ -48,13 +48,11 @@ import {
   FieldsIcon,
   HistoryIcon as RailHistoryIcon,
   InsightsIcon,
-  PagesIcon,
   ShareIcon as RailShareIcon,
   SignaturesIcon,
   UsageIcon,
 } from '../../editor/rail-icons';
 import { RisksPanel } from './RisksPanel';
-import { SectionsTree } from './SectionsTree';
 import { labelFor } from './sectionLabels';
 import { useExportPdf } from './useExportPdf';
 
@@ -95,7 +93,6 @@ export function BuilderShell({ documentId }: Props) {
   const [langBusy, setLangBusy] = useState(false);
   const [signaturesOpen, setSignaturesOpen] = useState(false);
   type SidebarTab =
-    | 'sections'
     | 'risks'
     | 'legal-ai-citations'
     | 'legal-ai-insights'
@@ -103,7 +100,9 @@ export function BuilderShell({ documentId }: Props) {
     | 'comments'
     | 'history'
     | 'share';
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('sections');
+  // Document sections now live directly in the side menu (not behind a panel),
+  // so the content column defaults to the first real panel.
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('risks');
   const [showPreview, setShowPreview] = useState(true);
   const [showSidebar, setShowSidebar] = useState(true);
 
@@ -391,15 +390,25 @@ export function BuilderShell({ documentId }: Props) {
   // switch the active section content, action-kind items dispatch a
   // dialog. Grouped headers cluster related items together.
   const menuItems: RailItem[] = [
-    {
-      id: 'sections',
-      kind: 'panel',
-      group: t('builder.group.content', 'Content'),
-      label: t('builder.tab.sections', 'Sections'),
-      icon: <PagesIcon />,
-      active: sidebarTab === 'sections',
-      onClick: () => setSidebarTab('sections'),
-    },
+    // Document sections, listed directly in the rail. Clicking scrolls the
+    // form to that section (and highlights it) — no separate "Sections" panel.
+    ...sections.map((s) => ({
+      id: `section:${s.key}`,
+      kind: 'panel' as const,
+      group: t('builder.tab.sections', 'Sections'),
+      label: s.label,
+      icon: (
+        <span
+          aria-hidden
+          className="size-1.5 rounded-full bg-current opacity-60"
+        />
+      ),
+      active: activeSection === s.key,
+      onClick: () => {
+        setActiveSection(s.key);
+        formRef.current?.scrollToSection(s.key);
+      },
+    })),
     {
       id: 'risks',
       kind: 'panel',
@@ -482,7 +491,6 @@ export function BuilderShell({ documentId }: Props) {
       <EditorSideMenu items={menuItems} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex-none border-b border-border px-3 py-2 text-xs font-semibold text-foreground/80">
-          {sidebarTab === 'sections' && t('builder.tab.sections', 'Sections')}
           {sidebarTab === 'risks' && t('builder.risks', 'Risks')}
           {sidebarTab === 'legal-ai-citations' &&
             t('editor.toolbar.citations', 'Citations')}
@@ -495,16 +503,6 @@ export function BuilderShell({ documentId }: Props) {
           {sidebarTab === 'share' && t('builder.share', 'Share')}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {sidebarTab === 'sections' && (
-            <SectionsTree
-              sections={sections}
-              activeKey={activeSection}
-              onSelect={(k) => {
-                setActiveSection(k);
-                formRef.current?.scrollToSection(k);
-              }}
-            />
-          )}
           {sidebarTab === 'risks' && (
             <RisksPanel
               warnings={warnings}
@@ -631,6 +629,33 @@ export function BuilderShell({ documentId }: Props) {
 
         {/* Row 2 — grouped secondary actions (scrolls on small screens) */}
         <div className="flex items-center gap-1 overflow-x-auto px-2 pb-1.5 text-foreground/75 sm:px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={exportState.phase === 'queued'}
+            onClick={() => {
+              if (exportState.phase !== 'queued') void startExport('png');
+            }}
+            className="h-7 flex-none gap-1.5 px-2 text-xs"
+            title={t('builder.exportPngTooltip', 'Export as a PNG image')}
+          >
+            {t('builder.exportPng', 'PNG image')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={exportState.phase === 'queued'}
+            onClick={() => {
+              if (exportState.phase !== 'queued') void startExport('docx');
+            }}
+            className="h-7 flex-none gap-1.5 px-2 text-xs"
+            title={t(
+              'builder.exportDocxTooltip',
+              'Export as an editable Word (.docx) document',
+            )}
+          >
+            {t('builder.exportDocx', 'Word (.docx)')}
+          </Button>
           <Button
             variant="ghost"
             size="sm"

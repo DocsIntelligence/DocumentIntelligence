@@ -115,6 +115,12 @@ export interface EstateAssetType {
   isActive: boolean;
   /** Type holds a quantity (MF/ETF units, shares, grams) — drives the units UI. */
   tracksUnits: boolean;
+  /** Resolved per-type detail fields (config override → code registry default). */
+  fields?: AssetFieldDef[];
+  /** Relabel the maturity-date field (e.g. "Valid till"). */
+  dateLabel?: string;
+  assetClass?: string;
+  liquidity?: 'high' | 'medium' | 'low';
 }
 
 export interface EstateCapability {
@@ -328,26 +334,79 @@ export interface EstateDocAnswer {
   citations: { page: number; snippet: string; score: number }[];
 }
 
+/** A labelled allocation slice (by type / class / liquidity / category). */
+export interface PortfolioSlice {
+  key: string;
+  label: string;
+  value: number;
+  pct: number;
+}
+
 /** AI wealth analysis of the whole portfolio. Metrics are deterministic; the
- *  narrative (summary/risks/suggestions) interprets them. */
+ *  narrative (summary/plannerNotes) interprets them. Risks/suggestions are
+ *  derived deterministically from the metrics + the org's analysis config. */
 export interface PortfolioAnalysis {
   metrics: {
     netWorth: number;
     currency: string;
     assetCount: number;
+    byType: PortfolioSlice[];
+    byClass: PortfolioSlice[];
+    byLiquidity: PortfolioSlice[];
+    byCategory: PortfolioSlice[];
     topHolding: { label: string; pct: number } | null;
-    concentration: { label: string; value: number; pct: number }[];
-    categorySplit: { category: string; value: number; pct: number }[];
+    top3Pct: number;
+    diversificationScore: number;
+    liquidSharePct: number;
     nomineeCoveragePct: number;
     assetsWithoutNominee: number;
-    maturingSoon: { count: number; days: number };
+    maturityLadder: { bucket: string; label: string; count: number; value: number }[];
+    maturingSoon: { count: number; value: number; days: number };
+    insuranceCover: number;
+    allocationGaps: {
+      class: string;
+      label: string;
+      currentPct: number;
+      targetPct: number;
+      deltaPct: number;
+    }[];
   };
   summary: string;
+  plannerNotes: string[];
   risks: { title: string; detail: string; severity: 'info' | 'warning' | 'high' }[];
   suggestions: { title: string; detail: string }[];
 }
 
-/** One asset-type row in the module config catalog (admin-editable, docs/13 §0.3). */
+/** Focused analysis of one asset type (e.g. all mutual funds). */
+export interface AssetTypeAnalysis {
+  type: string;
+  label: string;
+  assetClass: string;
+  total: number;
+  currency: string;
+  count: number;
+  unitsTotal: number | null;
+  topHoldings: { label: string; value: number; pct: number }[];
+  subAllocation: PortfolioSlice[];
+  concentrationPct: number;
+  withoutNominee: number;
+  summary: string;
+  observations: string[];
+}
+
+/** A configurable per-type detail field (mirrors the @org/dto registry). */
+export interface AssetFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'currency';
+  options?: { value: string; label: string }[];
+  placeholder?: string;
+  suffix?: string;
+}
+
+/** One asset-type row in the module config catalog (admin-editable, docs/13 §0.3).
+ *  `fields`/`dateLabel`/`assetClass`/`liquidity` are resolved server-side
+ *  (config override → code registry/default) so the form can render them. */
 export interface EstateConfigAssetType {
   key: string;
   label: string;
@@ -355,6 +414,11 @@ export interface EstateConfigAssetType {
   valuation: 'manual' | 'spot_gold' | 'circle_rate' | string;
   sortOrder: number;
   isActive: boolean;
+  tracksUnits?: boolean;
+  assetClass?: string;
+  liquidity?: 'high' | 'medium' | 'low';
+  dateLabel?: string;
+  fields?: AssetFieldDef[];
 }
 
 export interface EstateVaultToggles {
@@ -481,6 +545,12 @@ export const createEstateService = (http: HttpClient) => ({
   analyzePortfolio: () =>
     http
       .post<PortfolioAnalysis>('/estate/portfolio/analyze', {}, {
+        timeout: AI_EXTRACT_TIMEOUT_MS,
+      })
+      .then((r) => r.data),
+  analyzeAssetType: (type: string) =>
+    http
+      .post<AssetTypeAnalysis>(`/estate/portfolio/analyze/type/${type}`, {}, {
         timeout: AI_EXTRACT_TIMEOUT_MS,
       })
       .then((r) => r.data),

@@ -1,9 +1,16 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { createVaultEntitySchema, updateVaultEntitySchema } from '@org/dto';
+import {
+  createVaultEntitySchema,
+  updateVaultEntitySchema,
+  recordVaultSignatureSchema,
+} from '@org/dto';
 
 export class CreateVaultEntityDto extends createZodDto(createVaultEntitySchema) {}
 export class UpdateVaultEntityDto extends createZodDto(updateVaultEntitySchema) {}
+export class RecordVaultSignatureDto extends createZodDto(
+  recordVaultSignatureSchema,
+) {}
 
 /** Server-side pagination/search/sort for the entities list (scales to many). */
 const ListVaultEntitiesQuerySchema = z.object({

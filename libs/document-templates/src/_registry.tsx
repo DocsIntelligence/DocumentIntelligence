@@ -3,6 +3,9 @@ import type { PageSizeKey } from './_internals/page-sizes';
 import { RentAgreementClassic } from './rent-agreement/classic';
 import { RtiDefault } from './rti/default';
 import { LegalNoticeFormal } from './legal-notice/formal';
+import { ChequeBounceFormal } from './cheque-bounce-notice/formal';
+import { ConsumerComplaintStandard } from './consumer-complaint/standard';
+import { AnticipatoryBailStandard } from './anticipatory-bail/standard';
 import { AffidavitDefault } from './affidavit/default';
 import { NdaStandard } from './nda/standard';
 import { PromissoryNoteStandard } from './promissory-note/standard';
@@ -43,6 +46,12 @@ const registry: Record<string, TemplateComponent<unknown>> = {
   'rti.default': RtiDefault as TemplateComponent<unknown>,
   // Pre-litigation legal notice (branches on noticeType, incl. NI Act §138).
   'legal-notice.formal': LegalNoticeFormal as TemplateComponent<unknown>,
+  // Dedicated §138 cheque-bounce demand notice (payee/drawer/cheque timeline).
+  'cheque-bounce.formal': ChequeBounceFormal as TemplateComponent<unknown>,
+  // CPA 2019 consumer complaint (forum-branched filing section; pecuniary jurisdiction).
+  'consumer-complaint.standard': ConsumerComplaintStandard as TemplateComponent<unknown>,
+  // BNSS §482 anticipatory-bail application (Sessions / High Court; apprehension + grounds).
+  'anticipatory-bail.standard': AnticipatoryBailStandard as TemplateComponent<unknown>,
   // General-purpose affidavit (deponent + numbered declarations + attestation).
   'affidavit.default': AffidavitDefault as TemplateComponent<unknown>,
   // Non-disclosure agreement (mutual/one-way; Indian Contract Act, 1872).

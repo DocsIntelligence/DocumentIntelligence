@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge, Button, Spinner, Textarea } from '@org/ui';
 import { APP_ENV, lawUrl } from '../../../config';
+import { ReformBadge } from '../admin/legal-reference/ReformLookup';
 import { CitationHoverProvider } from './CitationHoverProvider';
 
 interface Citation {
@@ -261,15 +262,18 @@ export function CitationHealth({ documentId }: { documentId: string }) {
             </span>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={refresh}
-          title={t('common.refresh', 'Refresh')}
-          className="h-6 px-1.5 text-foreground/50"
-        >
-          ↻
-        </Button>
+        <div className="flex flex-none items-center gap-1.5">
+          <ReformBadge />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={refresh}
+            title={t('common.refresh', 'Refresh')}
+            className="h-6 px-1.5 text-foreground/50"
+          >
+            ↻
+          </Button>
+        </div>
       </div>
 
       {/* Improve with AI — one CTA, two tools, mutually exclusive ──── */}

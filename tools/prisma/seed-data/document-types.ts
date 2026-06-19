@@ -132,6 +132,93 @@ export const documentTypes: DocumentTypeSeed[] = [
     ],
   },
   {
+    key: 'cheque_bounce_notice',
+    name: 'Cheque Bounce Notice (§138)',
+    category: 'notices',
+    description:
+      'Dedicated §138 NI Act demand notice — guides the statutory timeline (30-day demand window, 15-day payment window, §141 company-officer liability, §142 complaint limitation) with deterministic checks.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'gavel',
+    sortOrder: 31,
+    schemaShape: {
+      sections: [
+        'payee',
+        'drawer',
+        'cheque',
+        'underlyingLiability',
+        'demandAmount',
+      ],
+    },
+    templates: [
+      {
+        key: 'cheque-bounce-formal',
+        name: 'Formal (English)',
+        componentKey: 'cheque-bounce.formal',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
+    key: 'consumer_complaint',
+    name: 'Consumer Complaint (CPA 2019)',
+    category: 'court',
+    description:
+      'Consumer complaint before a District / State / National Commission — guides pecuniary jurisdiction (by consideration paid), §69 limitation, §2(7) consumer eligibility, §34(2) territorial jurisdiction, and §39 reliefs with deterministic checks.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'gavel',
+    sortOrder: 32,
+    schemaShape: {
+      sections: [
+        'complainant',
+        'oppositeParties',
+        'transaction',
+        'grievance',
+        'reliefSought',
+      ],
+    },
+    templates: [
+      {
+        key: 'consumer-complaint-standard',
+        name: 'Standard (English)',
+        componentKey: 'consumer-complaint.standard',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
+    key: 'anticipatory_bail',
+    name: 'Anticipatory Bail Application (§482 BNSS)',
+    category: 'court',
+    description:
+      'Pre-arrest bail application under §482 BNSS (the CrPC §438 successor) before the Court of Session / High Court — applicant, FIR, offences, apprehension of arrest, grounds, and §482(2) conditions, with deterministic checks.',
+    defaultPageSize: PageSize.a4,
+    jurisdictions: ['IN-*'],
+    iconKey: 'gavel',
+    sortOrder: 33,
+    schemaShape: {
+      sections: [
+        'applicant',
+        'fir',
+        'offences',
+        'apprehensionGrounds',
+        'groundsForBail',
+      ],
+    },
+    templates: [
+      {
+        key: 'anticipatory-bail-standard',
+        name: 'Standard (English)',
+        componentKey: 'anticipatory-bail.standard',
+        language: 'en',
+        jurisdictions: ['IN-*'],
+      },
+    ],
+  },
+  {
     key: 'affidavit',
     name: 'Affidavit',
     category: 'declarations',

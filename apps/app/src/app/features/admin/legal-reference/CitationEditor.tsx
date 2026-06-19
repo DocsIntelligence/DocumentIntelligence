@@ -124,8 +124,10 @@ export function CitationEditor({ mode }: Props) {
           topics: (c.topics ?? []).join(', '),
           appliesTo: (c.appliesTo ?? []).join(', '),
           commonlyPairedWith: (c.commonlyPairedWith ?? []).join(', '),
-          isActive: true,
-          isPublic: true,
+          // Clone starts as a fresh, visible citation; edit reflects the
+          // live row so the toggles aren't lying about the real state.
+          isActive: mode === 'clone' ? true : (c.isActive ?? true),
+          isPublic: mode === 'clone' ? true : (c.isPublic ?? true),
         };
         setForm(base);
       })
@@ -154,23 +156,29 @@ export function CitationEditor({ mode }: Props) {
     }
     setSaving(true);
     try {
+      // The editor is the authoritative full-edit surface, so cleared
+      // optional fields are sent as `null` (explicit clear) rather than
+      // omitted — the server's skip-undefined upsert treats `null` as "clear"
+      // and `undefined` as "leave alone".
       const body = {
         id: form.id.trim(),
         act: form.act.trim(),
-        actShort: form.actShort.trim() || undefined,
-        section: form.section.trim() || undefined,
+        actShort: form.actShort.trim() || null,
+        section: form.section.trim() || null,
         title: form.title.trim(),
         summary: form.summary.trim(),
-        effectiveFrom: form.effectiveFrom.trim() || undefined,
-        supersedes: form.supersedes.trim() || undefined,
+        effectiveFrom: form.effectiveFrom.trim() || null,
+        supersedes: form.supersedes.trim() || null,
         confidence: form.confidence,
-        verifyNote: form.verifyNote.trim() || undefined,
-        externalUrl: form.externalUrl.trim() || undefined,
+        verifyNote: form.verifyNote.trim() || null,
+        externalUrl: form.externalUrl.trim() || null,
         jurisdiction: form.jurisdiction.trim() || 'IN',
-        draftingTips: form.draftingTips.trim() || undefined,
+        draftingTips: form.draftingTips.trim() || null,
         topics: splitCsv(form.topics),
         appliesTo: splitCsv(form.appliesTo),
         commonlyPairedWith: splitCsv(form.commonlyPairedWith),
+        isActive: form.isActive,
+        isPublic: form.isPublic,
       };
       const res = await fetch(
         `${API_BASE_URL}/legal-ai/admin/citations/${encodeURIComponent(body.id)}`,
@@ -463,8 +471,248 @@ export function CitationEditor({ mode }: Props) {
           />
         </div>
       </Card>
+
+      {mode === 'edit' && form.id && (
+        <CitationAttachments citationId={form.id} />
+      )}
     </div>
   );
+}
+
+interface Attachment {
+  id: string;
+  kind: string;
+  title: string;
+  filename: string;
+  contentType: string;
+  byteSize: number | null;
+  isPublic: boolean;
+  url: string;
+  createdAt: string;
+}
+
+const ATTACHMENT_KINDS = [
+  'bare-act',
+  'commentary',
+  'judgment',
+  'circular',
+  'notification',
+  'other',
+] as const;
+
+/**
+ * Attach longer reference documents (bare-act PDFs, commentary, judgments) to a
+ * citation. Public files surface on the `/law/:id` page for download — the
+ * citation's own "Public" toggle still gates the whole page. Edit-mode only:
+ * attachments hang off a saved citation id.
+ */
+function CitationAttachments({ citationId }: { citationId: string }) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<Attachment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<string>('bare-act');
+  const [isPublic, setIsPublic] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
+
+  const base = `${API_BASE_URL}/legal-ai/admin/citations/${encodeURIComponent(
+    citationId,
+  )}/attachments`;
+
+  const reload = () => {
+    setLoading(true);
+    fetch(base, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((rows) => setItems(Array.isArray(rows) ? rows : []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(reload, [base]);
+
+  const upload = async () => {
+    if (!file) {
+      toast.info(t('legalRefs.att.pickFile', 'Choose a file to attach first.'));
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('title', title.trim() || file.name);
+      fd.append('kind', kind);
+      fd.append('isPublic', String(isPublic));
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? JSON.stringify(body));
+      toast.success(t('legalRefs.att.uploaded', 'Document attached'));
+      setFile(null);
+      setTitle('');
+      reload();
+    } catch (err) {
+      toast.error(`${t('legalRefs.att.uploadFailed', 'Upload failed')}: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const togglePublic = async (att: Attachment, next: boolean) => {
+    // Optimistic — revert on failure.
+    setItems((xs) => xs.map((x) => (x.id === att.id ? { ...x, isPublic: next } : x)));
+    try {
+      const res = await fetch(`${base}/${att.id}/public`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: next }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch {
+      setItems((xs) => xs.map((x) => (x.id === att.id ? { ...x, isPublic: !next } : x)));
+      toast.error(t('legalRefs.att.toggleFailed', 'Could not update visibility'));
+    }
+  };
+
+  const remove = async (att: Attachment) => {
+    if (!window.confirm(t('legalRefs.att.confirmDelete', 'Remove this attachment?')))
+      return;
+    try {
+      const res = await fetch(`${base}/${att.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setItems((xs) => xs.filter((x) => x.id !== att.id));
+      toast.success(t('legalRefs.att.removed', 'Attachment removed'));
+    } catch (err) {
+      toast.error(`${t('legalRefs.att.removeFailed', 'Could not remove')}: ${(err as Error).message}`);
+    }
+  };
+
+  return (
+    <Card className="rounded-xl p-6 space-y-4">
+      <div>
+        <h4 className="text-sm font-medium text-foreground">
+          {t('legalRefs.att.title', 'Attached documents')}
+        </h4>
+        <p className="text-xs text-foreground/50 mt-0.5">
+          {t(
+            'legalRefs.att.hint',
+            'Longer reference docs (bare-act PDF, commentary, judgment). Public files appear on the /law page for download.',
+          )}
+        </p>
+      </div>
+
+      {/* Existing attachments */}
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <Spinner className="size-4" />
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-xs text-foreground/45">
+          {t('legalRefs.att.empty', 'No documents attached yet.')}
+        </p>
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {items.map((att) => (
+            <li
+              key={att.id}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm"
+            >
+              <div className="min-w-0 flex-1">
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline truncate block"
+                  title={att.filename}
+                >
+                  {att.title}
+                </a>
+                <p className="text-[11px] text-foreground/45 truncate">
+                  {att.kind} · {att.filename}
+                  {att.byteSize ? ` · ${formatBytes(att.byteSize)}` : ''}
+                </p>
+              </div>
+              <label className="flex items-center gap-1.5 text-[11px] text-foreground/55 shrink-0">
+                {t('legalRefs.att.public', 'Public')}
+                <Switch
+                  checked={att.isPublic}
+                  onCheckedChange={(v) => togglePublic(att, v)}
+                />
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive shrink-0"
+                onClick={() => remove(att)}
+              >
+                {t('common.delete', 'Delete')}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Upload row */}
+      <div className="space-y-3 rounded-lg border border-dashed border-border p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label={t('legalRefs.att.fileLabel', 'File (PDF / Word / image, ≤25 MB)')}>
+            <Input
+              type="file"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </Field>
+          <Field label={t('legalRefs.att.titleLabel', 'Title (optional)')}>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={file?.name ?? t('legalRefs.att.titlePlaceholder', 'e.g. BNS §103 — bare act')}
+            />
+          </Field>
+          <Field label={t('legalRefs.att.kindLabel', 'Kind')}>
+            <Select value={kind} onValueChange={setKind}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ATTACHMENT_KINDS.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {k}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="flex items-end justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm text-foreground/70">
+              <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+              {t('legalRefs.att.publicOnUpload', 'Show on public page')}
+            </label>
+            <Button size="sm" onClick={upload} disabled={uploading || !file}>
+              {uploading ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                t('legalRefs.att.upload', 'Attach')
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function Field({

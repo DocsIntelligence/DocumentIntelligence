@@ -16,25 +16,31 @@ import {
 type FormValues = Record<string, string>;
 type StoredDetails = Record<string, string | number | boolean> | null | undefined;
 
-/** Editable per-type detail fields, rendered from the static registry. */
+/**
+ * Editable per-type detail fields. Renders the resolved field list — caller may
+ * pass `fields` (org-configured, resolved server-side); falls back to the shared
+ * code registry so it always works without config.
+ */
 export function AssetDetailsFields({
   type,
   value,
   onChange,
+  fields,
 }: {
   type: string;
   value: FormValues;
   onChange: (next: FormValues) => void;
+  fields?: AssetFieldDef[];
 }) {
   const { t } = useTranslation();
-  const meta = metaForType(type);
-  if (meta.fields.length === 0) return null;
+  const resolved = fields ?? metaForType(type).fields;
+  if (resolved.length === 0) return null;
 
   const set = (key: string, v: string) => onChange({ ...value, [key]: v });
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {meta.fields.map((f) => {
+      {resolved.map((f) => {
         const label = t(`estate.field.${f.key}`, f.label);
         const v = value[f.key] ?? '';
         if (f.type === 'select') {
@@ -86,15 +92,17 @@ export function AssetDetailsFields({
 export function AssetDetailsView({
   type,
   details,
+  fields,
 }: {
   type: string;
   details: StoredDetails;
+  fields?: AssetFieldDef[];
 }) {
   const { t } = useTranslation();
-  const meta = metaForType(type);
+  const resolved = fields ?? metaForType(type).fields;
   if (!details) return null;
 
-  const rows = meta.fields
+  const rows = resolved
     .map((f) => ({ f, v: details[f.key] }))
     .filter((r) => r.v !== undefined && r.v !== '' && r.v !== null);
   if (rows.length === 0) return null;
@@ -127,10 +135,11 @@ function formatDetail(
 export function toDetailsPayload(
   type: string,
   value: FormValues,
+  fields?: AssetFieldDef[],
 ): Record<string, string | number> | undefined {
-  const meta = metaForType(type);
+  const resolved = fields ?? metaForType(type).fields;
   const out: Record<string, string | number> = {};
-  for (const f of meta.fields) {
+  for (const f of resolved) {
     const raw = (value[f.key] ?? '').trim();
     if (!raw) continue;
     if (f.type === 'number' || f.type === 'currency') {

@@ -65,14 +65,52 @@ export interface VaultEntitySummary {
   updatedAt: string;
 }
 
+export type VaultSignatureMethod = 'draw' | 'upload' | 'typed';
+
+/** Signature metadata as returned in the entity detail (no image — that comes
+ *  from an audited reveal). */
+export interface VaultSignatureSummary {
+  id: string;
+  label: string;
+  method: VaultSignatureMethod;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+/** A revealed signature — includes the decrypted image / typed text. */
+export interface VaultSignatureReveal extends VaultSignatureSummary {
+  image?: string;
+  typedText?: string;
+  font?: string;
+}
+
+/** A saved signature in the cross-entity picker (which entity it belongs to). */
+export interface VaultSignaturePickerItem extends VaultSignatureSummary {
+  entityId: string;
+  entityLabel: string;
+}
+
+export interface RecordVaultSignaturePayload {
+  method: VaultSignatureMethod;
+  label: string;
+  image?: string;
+  typedText?: string;
+  font?: string;
+  isDefault?: boolean;
+}
+
 export interface VaultEntityDetail {
   id: string;
   kind: VaultEntityKind;
   label: string;
   isActive: boolean;
+  /** Set when this entity backs a Wealth Vault profile/nominee — delete is then
+   *  blocked here (it must be removed from the Wealth Vault first). */
+  estateLink: { kind: 'profile' | 'nominee'; label: string } | null;
   fields: Record<string, string>; // masked
   schema: VaultFieldDef[];
   documents: VaultDocumentSummary[];
+  signatures: VaultSignatureSummary[];
   updatedAt: string;
 }
 
@@ -162,6 +200,32 @@ export const createVaultService = (http: HttpClient) => ({
   removeDocument: (id: string, docId: string) =>
     http
       .delete<{ id: string }>(`/vault/entities/${id}/documents/${docId}`)
+      .then((r) => r.data),
+
+  // ── Signatures ─────────────────────────────────────────────────────────
+  allSignatures: () =>
+    http
+      .get<VaultSignaturePickerItem[]>('/vault/signatures')
+      .then((r) => r.data),
+  addSignature: (id: string, payload: RecordVaultSignaturePayload) =>
+    http
+      .post<VaultSignatureSummary>(`/vault/entities/${id}/signatures`, payload)
+      .then((r) => r.data),
+  revealSignature: (id: string, sigId: string) =>
+    http
+      .get<VaultSignatureReveal>(
+        `/vault/entities/${id}/signatures/${sigId}/reveal`,
+      )
+      .then((r) => r.data),
+  setDefaultSignature: (id: string, sigId: string) =>
+    http
+      .post<{ id: string; isDefault: boolean }>(
+        `/vault/entities/${id}/signatures/${sigId}/default`,
+      )
+      .then((r) => r.data),
+  removeSignature: (id: string, sigId: string) =>
+    http
+      .delete<{ id: string }>(`/vault/entities/${id}/signatures/${sigId}`)
       .then((r) => r.data),
 
   /** Vision-scan an attached document → suggested canonical field values. */

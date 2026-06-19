@@ -11,11 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  FilterBar,
   Spinner,
 } from '@org/ui';
 import type { BatchRun } from '@org/api-client';
@@ -554,35 +550,33 @@ export function BatchDetailPage() {
               loading: runsQuery.isFetching && runsQuery.isPlaceholderData,
             }}
             toolbar={
-              <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  value={statusFilter ?? '__all'}
-                  onValueChange={(v) => {
-                    setStatusFilter(v === '__all' ? null : v);
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-44 text-sm">
-                    <SelectValue
-                      placeholder={t(
-                        'intelligence.batches.allStatuses',
-                        'All statuses',
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all">
-                      {t('intelligence.batches.allStatuses', 'All statuses')} (
-                      {batch.total})
-                    </SelectItem>
-                    {RUN_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status.replace(/_/g, ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <FilterBar
+                selects={[
+                  {
+                    id: 'status',
+                    value: statusFilter ?? '',
+                    onChange: (v) => {
+                      setStatusFilter(v || null);
+                      setPage(0);
+                    },
+                    options: RUN_STATUSES.map((status) => ({
+                      value: status,
+                      label: status.replace(/_/g, ' '),
+                    })),
+                    allLabel: t(
+                      'intelligence.batches.allStatuses',
+                      'All statuses',
+                    ),
+                    widthClassName: 'w-44',
+                  },
+                ]}
+                onClear={() => {
+                  setStatusFilter(null);
+                  setQuery('');
+                  setPage(0);
+                }}
+                clearLabel={t('common.clear', 'Clear')}
+              />
             }
             empty={t(
               'intelligence.batches.noRuns',

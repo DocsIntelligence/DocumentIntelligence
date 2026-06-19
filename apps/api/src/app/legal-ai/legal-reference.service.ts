@@ -51,6 +51,39 @@ export class LegalReferenceService {
   }
 
   /**
+   * Single citation for the ADMIN editor — unlike `get`, this includes
+   * INACTIVE citations (otherwise an admin could never re-open one they'd
+   * deactivated) and carries the live `isActive` / `isPublic` / `fullText`
+   * the editor needs to hydrate its toggles. Reads the DB row directly (not
+   * the active-only cache), falling back to the code seed.
+   */
+  async getAdmin(id: string): Promise<
+    | (Citation & {
+        isActive: boolean;
+        isPublic: boolean;
+        fullText?: string;
+        source: 'db' | 'code';
+      })
+    | null
+  > {
+    const row = await this.db.legalCitation.findUnique({ where: { id } });
+    if (row) {
+      return {
+        ...this.toCitation(row),
+        fullText: row.fullText ?? undefined,
+        isActive: row.isActive,
+        isPublic: row.isPublic,
+        source: 'db',
+      };
+    }
+    const code = CODE_CITATIONS.find((c) => c.id === id);
+    if (code) {
+      return { ...code, isActive: true, isPublic: true, source: 'code' };
+    }
+    return null;
+  }
+
+  /**
    * Citations that explicitly apply to a doc type (e.g. legal_notice →
    * [ni.138, ni.141, ni.142]). The filler uses this to decide which
    * `{{applicable_law}}` placeholders to fill with what.
@@ -95,29 +128,80 @@ export class LegalReferenceService {
   }
 
   // ── Admin write surface ───────────────────────────────────────────────
-  async createOrUpdate(input: Partial<Citation> & { id: string }) {
-    const data = {
-      id: input.id,
-      act: input.act ?? 'Unknown act',
-      actShort: input.actShort ?? null,
-      section: input.section ?? null,
-      title: input.title ?? 'Untitled',
-      summary: input.summary ?? '',
-      externalUrl: input.externalUrl ?? null,
-      effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : null,
-      supersedes: input.supersedes ?? null,
-      confidence: input.confidence ?? 'moderate',
-      verifyNote: input.verifyNote ?? null,
-      topics: input.topics ?? [],
-      appliesTo: input.appliesTo ?? [],
-      commonlyPairedWith: input.commonlyPairedWith ?? [],
-      draftingTips: input.draftingTips ?? null,
-      jurisdiction: input.jurisdiction ?? 'IN',
+  /**
+   * Upsert a citation. Only the columns actually present in `input` are
+   * written, so PARTIAL callers (e.g. the indiacode sync, which carries just
+   * summary + fullText + url) never clobber fields they didn't touch — and a
+   * sync no longer resets `isActive` / `isPublic`. Semantics:
+   *   • `undefined` → leave the column untouched (on update);
+   *   • `null`      → clear the column;
+   *   • a value     → set it.
+   * The `create` branch backfills NOT-NULL columns with sensible defaults so a
+   * brand-new id still inserts cleanly.
+   */
+  async createOrUpdate(
+    input: Partial<Citation> & {
+      id: string;
+      fullText?: string | null;
+      isActive?: boolean;
+      isPublic?: boolean;
+    },
+  ) {
+    const set: Record<string, unknown> = {};
+    const put = (key: string, val: unknown) => {
+      if (val !== undefined) set[key] = val;
     };
+    put('act', input.act);
+    put('actShort', input.actShort);
+    put('section', input.section);
+    put('title', input.title);
+    put('summary', input.summary);
+    put('fullText', input.fullText);
+    put('externalUrl', input.externalUrl);
+    put(
+      'effectiveFrom',
+      input.effectiveFrom === undefined
+        ? undefined
+        : input.effectiveFrom === null
+          ? null
+          : new Date(input.effectiveFrom),
+    );
+    put('supersedes', input.supersedes);
+    put('confidence', input.confidence);
+    put('verifyNote', input.verifyNote);
+    put('topics', input.topics);
+    put('appliesTo', input.appliesTo);
+    put('commonlyPairedWith', input.commonlyPairedWith);
+    put('draftingTips', input.draftingTips);
+    put('jurisdiction', input.jurisdiction);
+    put('isActive', input.isActive);
+    put('isPublic', input.isPublic);
+
     const row = await this.db.legalCitation.upsert({
       where: { id: input.id },
-      create: data,
-      update: data,
+      update: set,
+      create: {
+        id: input.id,
+        act: (set.act as string | undefined) ?? 'Unknown act',
+        actShort: (set.actShort as string | null | undefined) ?? null,
+        section: (set.section as string | null | undefined) ?? null,
+        title: (set.title as string | undefined) ?? 'Untitled',
+        summary: (set.summary as string | undefined) ?? '',
+        fullText: (set.fullText as string | null | undefined) ?? null,
+        externalUrl: (set.externalUrl as string | null | undefined) ?? null,
+        effectiveFrom: (set.effectiveFrom as Date | null | undefined) ?? null,
+        supersedes: (set.supersedes as string | null | undefined) ?? null,
+        confidence: (set.confidence as string | undefined) ?? 'moderate',
+        verifyNote: (set.verifyNote as string | null | undefined) ?? null,
+        topics: (set.topics as string[] | undefined) ?? [],
+        appliesTo: (set.appliesTo as string[] | undefined) ?? [],
+        commonlyPairedWith:
+          (set.commonlyPairedWith as string[] | undefined) ?? [],
+        draftingTips: (set.draftingTips as string | null | undefined) ?? null,
+        jurisdiction: (set.jurisdiction as string | undefined) ?? 'IN',
+        isActive: (set.isActive as boolean | undefined) ?? true,
+        isPublic: (set.isPublic as boolean | undefined) ?? true,
+      },
     });
     this.invalidate();
     return this.toCitation(row);
@@ -136,6 +220,33 @@ export class LegalReferenceService {
   async remove(id: string) {
     await this.db.legalCitation.delete({ where: { id } });
     this.invalidate();
+  }
+
+  /** Bulk catalog action over many citation ids (only DB rows are affected;
+   *  in-code seeds aren't in the table, so they're untouched). Returns the
+   *  number of rows changed. */
+  async bulkAction(
+    ids: string[],
+    action: 'delete' | 'activate' | 'deactivate' | 'makePublic' | 'makePrivate',
+  ): Promise<{ affected: number }> {
+    if (ids.length === 0) return { affected: 0 };
+    const where = { id: { in: ids } };
+    let affected = 0;
+    if (action === 'delete') {
+      affected = (await this.db.legalCitation.deleteMany({ where })).count;
+    } else {
+      const data =
+        action === 'activate'
+          ? { isActive: true }
+          : action === 'deactivate'
+            ? { isActive: false }
+            : action === 'makePublic'
+              ? { isPublic: true }
+              : { isPublic: false };
+      affected = (await this.db.legalCitation.updateMany({ where, data })).count;
+    }
+    this.invalidate();
+    return { affected };
   }
 
   /** Admin listing — paginated + searchable; merges in-code seed with DB rows

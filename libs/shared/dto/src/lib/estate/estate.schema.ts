@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ASSET_CLASSES } from './asset-fields';
 
 /**
  * Estate & Wealth Vault contracts (docs/13). Shared Zod schemas so the React
@@ -135,6 +136,19 @@ export const assetValuationModes = [
 
 export const assetCategories = ['financial', 'physical', 'other'] as const;
 
+/** One configurable detail field for an asset type (mirrors AssetFieldDef). */
+export const assetFieldDefSchema = z.object({
+  key: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_]+$/),
+  label: z.string().min(1).max(80),
+  type: z.enum(['text', 'number', 'date', 'select', 'currency']).default('text'),
+  options: z
+    .array(z.object({ value: z.string().max(80), label: z.string().max(80) }))
+    .optional(),
+  placeholder: z.string().max(120).optional(),
+  suffix: z.string().max(16).optional(),
+});
+export type AssetFieldDefDto = z.infer<typeof assetFieldDefSchema>;
+
 export const estateAssetTypeSchema = z.object({
   key: assetTypeKey,
   label: z.string().min(1).max(80),
@@ -145,8 +159,38 @@ export const estateAssetTypeSchema = z.object({
   /** This type holds a quantity (MF/ETF units, demat shares, grams of gold) —
    *  drives whether the UI shows a "units" field and the extractor asks for it. */
   tracksUnits: z.boolean().default(false),
+  /** Analytics asset-class (equity/debt/cash/real_estate/gold/…). When unset the
+   *  code default map (`DEFAULT_ASSET_CLASS`) is used. */
+  assetClass: z.enum(ASSET_CLASSES).optional(),
+  /** Liquidity bucket for the liquidity analysis. Code default when unset. */
+  liquidity: z.enum(['high', 'medium', 'low']).optional(),
+  /** Relabel the built-in maturity-date field for this type (e.g. "Valid till"). */
+  dateLabel: z.string().max(40).optional(),
+  /** Per-type detail fields. When unset, the code registry (ASSET_TYPE_FIELDS)
+   *  supplies them — so orgs can override/extend without losing the rich defaults. */
+  fields: z.array(assetFieldDefSchema).max(40).optional(),
 });
 export type EstateAssetTypeDto = z.infer<typeof estateAssetTypeSchema>;
+
+/** Wealth-analysis knobs (config-as-data) — drive the deterministic analytics. */
+export const estateAnalysisConfigSchema = z.object({
+  /** Window (days) for the "maturing soon" / liquidity-need check. */
+  maturingWindowDays: z.number().int().min(7).max(730).default(90),
+  /** A single type above this % of net worth is flagged as concentration risk. */
+  concentrationWarnPct: z.number().int().min(10).max(100).default(40),
+  concentrationHighPct: z.number().int().min(10).max(100).default(60),
+  /** Target nominee coverage (% of value) below which succession is flagged. */
+  minNomineeCoveragePct: z.number().int().min(0).max(100).default(100),
+  /** Months of expenses an emergency (liquid) buffer should ideally cover —
+   *  used only when a monthly-expense figure is supplied. */
+  emergencyFundMonths: z.number().int().min(0).max(24).default(6),
+  /** Target allocation by asset class (%). Keyed by an asset-class id (see
+   *  ASSET_CLASSES). Empty = no opinion on the “ideal” mix (purely descriptive). */
+  idealAllocation: z
+    .record(z.string(), z.number().min(0).max(100))
+    .default({}),
+});
+export type EstateAnalysisConfigDto = z.infer<typeof estateAnalysisConfigSchema>;
 
 export const estateVaultConfigSchema = z.object({
   enabled: z.boolean().default(true),
@@ -160,6 +204,15 @@ export const estateVaultConfigSchema = z.object({
   /** Freshness/dormancy thresholds (days) for gap nudges (§10.2). */
   freshnessThresholdDays: z.number().int().min(7).max(1095).default(180),
   dormancyThresholdDays: z.number().int().min(30).max(1825).default(365),
+  /** Wealth-analysis knobs (concentration thresholds, maturity window, ideal mix). */
+  analysis: estateAnalysisConfigSchema.default({
+    maturingWindowDays: 90,
+    concentrationWarnPct: 40,
+    concentrationHighPct: 60,
+    minNomineeCoveragePct: 100,
+    emergencyFundMonths: 6,
+    idealAllocation: {},
+  }),
   toggles: z
     .object({
       netWorthDashboard: z.boolean().default(true),

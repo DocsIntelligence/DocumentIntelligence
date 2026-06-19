@@ -3,7 +3,12 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { WEB_ENV } from '../../../config';
 import { SITE_NAME } from '../../../lib/site';
-import { citationSlug, fetchPublicCitation, slugToId } from '../../../lib/law';
+import {
+  citationSlug,
+  fetchPublicCitation,
+  fetchPublicCitationAttachments,
+  slugToId,
+} from '../../../lib/law';
 
 interface Params {
   id: string;
@@ -64,6 +69,10 @@ export default async function LawDetailPage({
   const predecessor = citation.supersedes
     ? await fetchPublicCitation(citation.supersedes)
     : null;
+
+  // Downloadable reference docs (bare-act PDFs, commentary). Public-only;
+  // empty array just hides the section.
+  const attachments = await fetchPublicCitationAttachments(citation.id);
 
   const head = `${citation.actShort ?? citation.act}${citation.section ? ` §${citation.section}` : ''} — ${citation.title}`;
   const url = `${WEB_ENV.webUrl}/law/${citationSlug(citation.id)}`;
@@ -208,6 +217,45 @@ export default async function LawDetailPage({
             </article>
           )}
 
+          {attachments.length > 0 && (
+            <article className="rounded-xl border border-border bg-card p-6">
+              <h2 className="text-sm font-medium uppercase tracking-wide text-foreground/55 mb-3">
+                Documents &amp; downloads
+              </h2>
+              <ul className="space-y-2">
+                {attachments.map((att) => (
+                  <li key={att.id}>
+                    <a
+                      href={att.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 hover:border-primary/50 transition-colors"
+                    >
+                      <span
+                        aria-hidden
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-info/10 text-info text-[10px] font-semibold uppercase"
+                      >
+                        {fileExt(att.filename)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-foreground truncate">
+                          {att.title}
+                        </span>
+                        <span className="block text-xs text-foreground/45">
+                          {att.kind}
+                          {att.byteSize ? ` · ${formatBytes(att.byteSize)}` : ''}
+                        </span>
+                      </span>
+                      <span className="text-sm text-primary shrink-0">
+                        Download ↓
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          )}
+
           {citation.verifyNote && (
             <p className="text-xs text-foreground/50 italic">
               {citation.verifyNote}
@@ -258,4 +306,15 @@ export default async function LawDetailPage({
       </div>
     </>
   );
+}
+
+function fileExt(filename: string): string {
+  const m = /\.([a-z0-9]+)$/i.exec(filename);
+  return (m ? m[1] : 'file').slice(0, 4);
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }

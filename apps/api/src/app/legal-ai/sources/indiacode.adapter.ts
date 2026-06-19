@@ -216,13 +216,24 @@ export class IndiaCodeSourceAdapter implements LegalSourceAdapter {
   async fetchSection(
     act: string,
     section: string,
+    knownUrl?: string,
   ): Promise<FetchedStatuteSection | null> {
-    const handle = this.resolveHandle(act);
-    if (!handle) {
-      this.logger.warn(`No indiacode handle for "${act}" — admin must paste text manually.`);
-      return null;
+    // Prefer the admin-pasted link when it points at our own source host —
+    // this is the "sync from link" path and is the ONLY way to fetch acts
+    // that aren't in the curated handle map. We restrict to indiacode.nic.in
+    // (and subdomains) to avoid turning this into an open SSRF fetcher and
+    // because the text-extraction heuristics assume the portal's markup.
+    let sourceUrl = this.sourceUrlFromKnown(knownUrl);
+    if (!sourceUrl) {
+      const handle = this.resolveHandle(act);
+      if (!handle) {
+        this.logger.warn(
+          `No indiacode handle for "${act}" and no usable link on the citation — admin must paste text manually.`,
+        );
+        return null;
+      }
+      sourceUrl = `https://www.indiacode.nic.in/handle/123456789/${handle}`;
     }
-    const sourceUrl = `https://www.indiacode.nic.in/handle/123456789/${handle}`;
 
     // ── Pass 1: plain HTTP fetch (fast + free). ────────────────────────
     const plain = await this.plainFetch(sourceUrl);
@@ -337,6 +348,30 @@ export class IndiaCodeSourceAdapter implements LegalSourceAdapter {
         `indiacode headless (${headless.name}) failed for ${act} §${section}: ${(err as Error).message}`,
       );
       return this.bestEffort(plain, sourceUrl, section);
+    }
+  }
+
+  /** Validate an admin-pasted link and return it only if it targets this
+   *  adapter's source host (indiacode.nic.in or a subdomain) over http(s).
+   *  Anything else (blank, malformed, off-host) → null, so the caller falls
+   *  back to handle resolution. */
+  private sourceUrlFromKnown(knownUrl?: string): string | null {
+    const raw = knownUrl?.trim();
+    if (!raw) return null;
+    try {
+      const u = new URL(raw);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+      const host = u.hostname.toLowerCase();
+      if (host === 'indiacode.nic.in' || host.endsWith('.indiacode.nic.in')) {
+        return u.toString();
+      }
+      this.logger.warn(
+        `Citation link host "${host}" is not indiacode.nic.in — ignoring it and resolving from the act name instead.`,
+      );
+      return null;
+    } catch {
+      this.logger.warn(`Citation link "${raw}" is not a valid URL — ignoring.`);
+      return null;
     }
   }
 

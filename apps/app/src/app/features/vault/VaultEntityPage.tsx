@@ -1,13 +1,18 @@
-import type { VaultFieldDef } from '@org/api-client';
+import type { VaultFieldDef, VaultSignatureReveal } from '@org/api-client';
 import { VAULT_DOC_KINDS } from '@org/api-client';
 import {
   Badge,
   Button,
   Card,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -18,19 +23,24 @@ import {
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useConfirm } from '../../components/confirm/ConfirmProvider';
 import { PageHeader } from '../../components/page-header';
 import { useVaultService } from '../documents/services-context';
 import {
   useAddVaultDocument,
+  useAddVaultSignature,
   useBulkScanVaultDocuments,
   useDeleteVaultEntity,
   useDuplicateVaultEntity,
   useRemoveVaultDocument,
+  useRemoveVaultSignature,
   useScanVaultDocument,
+  useSetDefaultVaultSignature,
   useUpdateVaultEntity,
   useVaultEntity,
 } from './queries';
+import { SignatureCapture } from '../documents/SignatureCapture';
 import { KIND_BADGE, KIND_LABEL } from './kinds';
 
 const SCANNABLE = new Set(
@@ -59,9 +69,15 @@ export function VaultEntityPage() {
   const removeDoc = useRemoveVaultDocument(id);
   const scan = useScanVaultDocument(id);
   const bulkScan = useBulkScanVaultDocuments(id);
+  const addSig = useAddVaultSignature(id);
+  const setDefaultSig = useSetDefaultVaultSignature(id);
+  const removeSig = useRemoveVaultSignature(id);
   const fileRef = useRef<HTMLInputElement>(null);
   const bulkRef = useRef<HTMLInputElement>(null);
   const [docKind, setDocKind] = useState('aadhaar');
+  const [addingSig, setAddingSig] = useState(false);
+  const [sigLabel, setSigLabel] = useState('Signature');
+  const [sigPreview, setSigPreview] = useState<VaultSignatureReveal | null>(null);
 
   // Group fields by their `group` for a tidy layout — same shape as the
   // edit page so users see the same arrangement before and after.
@@ -100,7 +116,40 @@ export function VaultEntityPage() {
     window.open(url, '_blank', 'noopener');
   };
 
+  const saveSignature = async (payload: {
+    method: 'draw' | 'upload' | 'typed';
+    image?: string;
+    typedText?: string;
+    font?: string;
+  }) => {
+    await addSig.mutateAsync({
+      ...payload,
+      label: sigLabel.trim() || 'Signature',
+    });
+    setAddingSig(false);
+    setSigLabel('Signature');
+  };
+
+  const previewSignature = async (sigId: string) => {
+    setSigPreview(await svc.revealSignature(id, sigId));
+  };
+
+  const estateLink = data.estateLink;
   const removeEntity = async () => {
+    if (estateLink) {
+      toast.error(
+        estateLink.kind === 'profile'
+          ? t(
+              'vault.deleteBlockedProfile',
+              'This person backs a Wealth Vault profile. Remove it from the Wealth Vault first.',
+            )
+          : t(
+              'vault.deleteBlockedNominee',
+              'This person is a Wealth Vault nominee. Remove the nominee from the Wealth Vault first.',
+            ),
+      );
+      return;
+    }
     const ok = await confirm({
       title: t('vault.deleteTitle', 'Delete this entity?'),
       description: t(
@@ -160,8 +209,15 @@ export function VaultEntityPage() {
                     ? t('vault.disable', 'Disable')
                     : t('vault.enable', 'Enable')}
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-error" onSelect={removeEntity}>
+                <DropdownMenuItem
+                  className="text-error"
+                  disabled={!!estateLink}
+                  onSelect={removeEntity}
+                >
                   {t('vault.deleteEntity', 'Delete entity')}
+                  {estateLink
+                    ? ` — ${t('vault.inWealthVault', 'in Wealth Vault')}`
+                    : ''}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -329,6 +385,135 @@ export function VaultEntityPage() {
           </div>
         )}
       </Card>
+
+      {/* Signatures — reusable, encrypted. Capture once here, then pick one when
+          signing a document instead of redrawing. Images are masked (shown only
+          on an audited reveal). */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-medium">
+              {t('vault.signatures', 'Signatures')}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'vault.signaturesHint',
+                'Saved signatures can be reused when signing documents.',
+              )}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant={addingSig ? 'ghost' : 'outline'}
+            onClick={() => setAddingSig((v) => !v)}
+          >
+            {addingSig
+              ? t('common.cancel', 'Cancel')
+              : t('vault.addSignature', 'Add signature')}
+          </Button>
+        </div>
+
+        {addingSig && (
+          <div className="space-y-2">
+            <Input
+              value={sigLabel}
+              onChange={(e) => setSigLabel(e.target.value)}
+              placeholder={t('vault.signatureLabel', 'Label (e.g. Full signature)')}
+              maxLength={80}
+            />
+            <SignatureCapture
+              defaultName={data.label}
+              saving={addSig.isPending}
+              onSubmit={saveSignature}
+              submitLabel={t('vault.saveSignature', 'Save to vault')}
+            />
+          </div>
+        )}
+
+        {data.signatures.length === 0 ? (
+          !addingSig && (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              {t('vault.noSignatures', 'No signatures saved yet.')}
+            </p>
+          )
+        ) : (
+          <div className="divide-y divide-border/60">
+            {data.signatures.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between gap-2 py-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-sm">{s.label}</p>
+                  <Badge variant="secondary">{s.method}</Badge>
+                  {s.isDefault && (
+                    <Badge variant="success">
+                      {t('vault.default', 'Default')}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => previewSignature(s.id)}
+                  >
+                    {t('vault.reveal', 'Reveal')}
+                  </Button>
+                  {!s.isDefault && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDefaultSig.mutate(s.id)}
+                      disabled={setDefaultSig.isPending}
+                    >
+                      {t('vault.makeDefault', 'Make default')}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-error"
+                    onClick={() => removeSig.mutate(s.id)}
+                  >
+                    {t('common.remove', 'Remove')}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Dialog
+        open={!!sigPreview}
+        onOpenChange={(open) => !open && setSigPreview(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{sigPreview?.label}</DialogTitle>
+          </DialogHeader>
+          {sigPreview &&
+            (sigPreview.method === 'typed' ? (
+              <div className="flex h-24 items-center justify-center rounded border border-border bg-white px-4">
+                <span
+                  className="text-3xl text-gray-900"
+                  style={{ fontFamily: sigPreview.font || 'cursive' }}
+                >
+                  {sigPreview.typedText}
+                </span>
+              </div>
+            ) : (
+              sigPreview.image && (
+                <img
+                  src={sigPreview.image}
+                  alt={sigPreview.label}
+                  className="max-h-48 w-full rounded border border-border bg-white object-contain p-2"
+                />
+              )
+            ))}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

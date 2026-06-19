@@ -53,10 +53,14 @@ export class CitationSyncService {
       );
     }
 
-    const fetched = await adapter.fetchSection(c.actShort ?? c.act, c.section);
+    const fetched = await adapter.fetchSection(
+      c.actShort ?? c.act,
+      c.section,
+      c.externalUrl,
+    );
     if (!fetched) {
       throw new BadRequestException(
-        `Could not resolve "${c.actShort ?? c.act} §${c.section}" on ${adapter.name}. Paste the section text manually instead.`,
+        `Could not resolve "${c.actShort ?? c.act} §${c.section}" on ${adapter.name}. Paste a working ${adapter.name} link into "External URL" and retry, or paste the section text manually.`,
       );
     }
 
@@ -72,10 +76,17 @@ export class CitationSyncService {
     });
     const parsed = this.parseJson(resp.text);
 
+    // Spread the full merged citation so a first-time sync of a code-seed
+    // citation MATERIALISES the row with its real act/title/section/topics —
+    // not the upsert's "Unknown act"/"Untitled" defaults — then overlay only
+    // the freshly fetched fields. `fullText` is persisted only when non-empty
+    // (an empty string means the AI couldn't isolate the section; we keep any
+    // text an admin pasted earlier rather than clobbering it).
     const updated = await this.refs.createOrUpdate({
-      id: c.id,
+      ...c,
       summary: parsed.summary || c.summary,
       draftingTips: parsed.draftingTips ?? c.draftingTips,
+      fullText: parsed.fullText ? parsed.fullText : undefined,
       externalUrl: fetched.sourceUrl,
     });
 
@@ -86,6 +97,50 @@ export class CitationSyncService {
       summary: parsed.summary ?? '',
       draftingTips: parsed.draftingTips ?? '',
       fullText: parsed.fullText ?? '',
+    };
+  }
+
+  /**
+   * Enrich a citation from text ALREADY stored on it (e.g. bulk-imported from a
+   * PDF) — no source re-fetch. Runs the same summariser over `fullText` and
+   * fills `summary` + `draftingTips`. On-demand by design: the bulk import
+   * leaves a stub, and the admin enriches one (or a hand-picked few) when they
+   * need it. The verbatim `fullText` is left untouched (the AI summarises it,
+   * never rewrites the statute).
+   */
+  async enrichFromStored(citationId: string): Promise<{
+    id: string;
+    summary: string;
+    draftingTips: string;
+  }> {
+    const c = await this.refs.getAdmin(citationId);
+    if (!c) throw new BadRequestException(`Unknown citation: ${citationId}`);
+    const text = (c.fullText ?? '').trim();
+    if (!text) {
+      throw new BadRequestException(
+        'No stored section text to enrich from. Sync the citation from its source, or paste the section text, first.',
+      );
+    }
+
+    const userMsg = `Section: ${c.actShort ?? c.act} §${c.section ?? ''} (${c.title}).\n\nRaw section text:\n\n${text}`;
+    const resp = await this.ai.generate(userMsg, {
+      systemPrompt: SUMMARISE_SYSTEM,
+      temperature: 0,
+      maxTokens: 2000,
+    });
+    const parsed = this.parseJson(resp.text);
+
+    const updated = await this.refs.createOrUpdate({
+      ...c,
+      summary: parsed.summary || c.summary,
+      draftingTips: parsed.draftingTips ?? c.draftingTips,
+      // Keep the verbatim imported fullText — never let the summariser rewrite
+      // the statutory text (the citation moat).
+    });
+    return {
+      id: updated.id,
+      summary: updated.summary ?? '',
+      draftingTips: updated.draftingTips ?? '',
     };
   }
 

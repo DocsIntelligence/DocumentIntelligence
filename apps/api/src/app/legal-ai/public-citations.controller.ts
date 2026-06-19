@@ -9,6 +9,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../auth/decorators/public.decorator';
+import { CitationAttachmentService } from './citation-attachment.service';
 import { LegalReferenceService } from './legal-reference.service';
 
 /**
@@ -25,6 +26,7 @@ export class PublicCitationsController {
   constructor(
     private readonly refs: LegalReferenceService,
     private readonly config: ConfigService,
+    private readonly attachments: CitationAttachmentService,
   ) {}
 
   /** Public host (e.g. https://yourdomain.com) for absolute sitemap URLs. */
@@ -83,6 +85,16 @@ export class PublicCitationsController {
       })
       .join('\n');
     return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${host}/law</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n${entries}\n</urlset>\n`;
+  }
+
+  @Public()
+  @Get(':id/attachments')
+  @ApiOperation({
+    summary: 'Public files attached to a citation (downloadable bare-acts, commentary)',
+  })
+  attachmentsFor(@Param('id') id: string) {
+    // listPublic() enforces both the citation's and each file's isPublic flag.
+    return this.attachments.listPublic(id.replace(/-/g, '.'));
   }
 
   @Public()

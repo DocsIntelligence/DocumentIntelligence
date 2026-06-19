@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PageSize, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import puppeteer, { type Browser } from 'puppeteer-core';
+import puppeteer, { type Browser, type Page } from 'puppeteer-core';
+import HTMLtoDOCX from '@turbodocx/html-to-docx';
+import type { ExportFormat } from '@org/dto';
 import {
   appendSignaturesToHtml,
   type SignatureSignerInput,
@@ -15,7 +17,20 @@ export interface PdfRenderJobPayload {
   documentId: string;
   pageSize: PageSize;
   componentKey: string;
+  /** Output format. `png` screenshots the same artboard page; defaults to pdf. */
+  format?: ExportFormat;
 }
+
+/** File extension + MIME per export format (used for the S3 object). */
+const OUTPUT_META: Record<ExportFormat, { ext: string; contentType: string }> = {
+  pdf: { ext: 'pdf', contentType: 'application/pdf' },
+  png: { ext: 'png', contentType: 'image/png' },
+  docx: {
+    ext: 'docx',
+    contentType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+};
 
 /**
  * Owns the actual Puppeteer → PDF → S3 pipeline. Decoupled from BullMQ so
@@ -54,7 +69,7 @@ export class PdfRendererService {
     // in-container hostname resolution we moved away from).
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
-      select: { data: true },
+      select: { data: true, title: true },
     });
     if (!doc) {
       await this.fail(exportId, `Document ${documentId} not found`);
@@ -118,17 +133,30 @@ export class PdfRendererService {
         timeout: 15_000,
       });
 
-      const buffer = Buffer.from(
-        await page.pdf({
-          printBackground: true,
-          preferCSSPageSize: true,
-          margin: { top: '0', right: '0', bottom: '0', left: '0' },
-        }),
-      );
+      const format: ExportFormat = payload.format ?? 'pdf';
+      let buffer: Buffer;
+      if (format === 'png') {
+        // Full-page PNG of the rendered artboard (same page, same fidelity).
+        buffer = Buffer.from(await page.screenshot({ type: 'png', fullPage: true }));
+      } else if (format === 'docx') {
+        // True OOXML Word doc built from the SAME rendered HTML the PDF uses —
+        // so it covers every template (freeform + structured bundles), not just
+        // docs that happen to carry raw `html`.
+        buffer = await this.renderDocx(page, doc.title);
+      } else {
+        buffer = Buffer.from(
+          await page.pdf({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margin: { top: '0', right: '0', bottom: '0', left: '0' },
+          }),
+        );
+      }
 
+      const out = OUTPUT_META[format];
       const upload = await this.storage.upload(buffer, {
-        filename: `${documentId}-${exportId}.pdf`,
-        contentType: 'application/pdf',
+        filename: `${documentId}-${exportId}.${out.ext}`,
+        contentType: out.contentType,
         folder: `documents/${documentId}/exports`,
       });
 
@@ -166,6 +194,62 @@ export class PdfRendererService {
         }
       }
     }
+  }
+
+  /**
+   * Build a true OOXML `.docx` from the already-rendered artboard page.
+   *
+   * We scrape each rendered `.doc-page`'s inner HTML (the same DOM Puppeteer
+   * would print to PDF) rather than the document's raw `data.html`, because
+   * structured-bundle templates have NO raw HTML — their content only exists
+   * once React has rendered. The Paginator's offscreen measurement mirror is a
+   * non-`.doc-page` sibling, so selecting `.doc-page` naturally excludes it; we
+   * also strip `aria-hidden` chrome (the "Page N of M" footers) and any
+   * `<style>`/`<script>`. Word re-paginates on its own, so we join logical
+   * pages with a hard page break and let it reflow.
+   *
+   * Fidelity note: the artboard's page styling lives in a `<style>` cascade
+   * (`.doc-page …`), not inline, so html-to-docx (which honours element tags +
+   * inline styles) won't carry the centered/underlined heading treatment — the
+   * structure, text, lists and tables transfer; fine-grained typography does
+   * not. This is the accepted v1 trade-off for an *editable* Word file.
+   */
+  private async renderDocx(page: Page, title: string): Promise<Buffer> {
+    const content = await page.evaluate(() => {
+      const strip = (root: Element): string => {
+        const clone = root.cloneNode(true) as Element;
+        clone
+          .querySelectorAll('[aria-hidden="true"], style, script')
+          .forEach((n) => n.remove());
+        return clone.innerHTML;
+      };
+      const pages = Array.from(document.querySelectorAll('.doc-page'));
+      const pageBreak = '<br style="page-break-before:always" />';
+      if (pages.length > 0) {
+        return pages.map(strip).join(pageBreak);
+      }
+      // Fallback for templates that don't use the paged layout (e.g. invoices):
+      // take the whole body, minus the offscreen mirror / chrome.
+      return strip(document.body);
+    });
+
+    const safeTitle = (title || 'Document').replace(/[<>&]/g, '');
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8" /><title>${safeTitle}</title></head>
+<body>${content}</body>
+</html>`;
+
+    const result = await HTMLtoDOCX(html, null, {
+      title: safeTitle,
+      orientation: 'portrait',
+      // 2cm margins (≈1134 twip) — matches the legacy client `.doc` export.
+      margins: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
+      font: 'Times New Roman',
+      fontSize: 24, // half-points → 12pt
+      table: { row: { cantSplit: true } },
+    });
+    return Buffer.from(result as ArrayBuffer);
   }
 
   /**

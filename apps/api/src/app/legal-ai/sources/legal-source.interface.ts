@@ -26,12 +26,21 @@ export interface LegalSourceAdapter {
 
   /**
    * Best-effort fetch of a section's bare-act text given:
-   *  • `act`     — short act name as stored on the citation (e.g. "NI Act",
-   *                "BNSS", "Constitution").
-   *  • `section` — section number string (e.g. "138", "223").
+   *  • `act`      — short act name as stored on the citation (e.g. "NI Act",
+   *                 "BNSS", "Constitution").
+   *  • `section`  — section number string (e.g. "138", "223").
+   *  • `knownUrl` — optional canonical URL the admin already pasted onto the
+   *                 citation (`externalUrl`). When present and pointing at the
+   *                 adapter's own source host, the adapter fetches it directly
+   *                 instead of guessing a URL from the act name. This is what
+   *                 makes "sync from link" honour the link.
    *
    * Returns `null` when the adapter can't resolve the act + section to a
    * URL (don't throw — the admin UI surfaces a "paste manually" fallback).
    */
-  fetchSection(act: string, section: string): Promise<FetchedStatuteSection | null>;
+  fetchSection(
+    act: string,
+    section: string,
+    knownUrl?: string,
+  ): Promise<FetchedStatuteSection | null>;
 }

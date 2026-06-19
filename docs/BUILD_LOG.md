@@ -2,6 +2,211 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+## 2026-06-19 — Legal citations: file attachments (PDFs/docs) + on-demand enrich + builder sections-in-rail
+
+Three things this session.
+
+**1. Citation file attachments** (user: "keep PDF files along with citation — longer proper docs, useful
+for public"). Full stack, follows the StorageService (S3/local-fs) + VaultDocument patterns:
+- **Prisma** `LegalCitationAttachment` (citationId→cascade, kind/title/filename/contentType/byteSize/s3Key/
+  isPublic/sortOrder) + `attachments[]` on `LegalCitation`. Migration `20260619100000_legal_citation_attachment`
+  (drift-safe IF NOT EXISTS). **Applied via `prisma:migrate` + regenerated client** (the pnpm client lives at
+  `.pnpm/@prisma+client@*/node_modules/.prisma/client`, not `node_modules/.prisma/client` — grep there).
+- **`CitationAttachmentService`**: upload (25 MB cap, PDF/Word/PNG/JPEG allow-list; materialises a code-seed
+  citation row first so the FK holds), list, `listPublic` (enforces BOTH citation.isPublic AND file.isPublic),
+  setPublic, remove (best-effort storage delete). `toView` resolves a presigned/local download URL per row.
+  Wired into `LegalAiModule` (added `StorageModule` import).
+- **Admin endpoints** on `legal-ai.controller`: `GET/POST admin/citations/:id/attachments` (FileInterceptor),
+  `PATCH …/:attId/public`, `DELETE …/:attId`. **Public**: `GET public/law/:id/attachments` (public-only).
+- **App** `CitationEditor.tsx`: edit-mode "Attached documents" card (upload w/ title+kind+public toggle, list
+  w/ download link + per-file public switch + delete). Raw `fetch` + i18n, matching the file's existing style.
+- **Web** public `/law/:id`: `fetchPublicCitationAttachments` in `lib/law.ts` + a "Documents & downloads" card
+  (file-ext chip, size, download link).
+
+**2. On-demand enrich-from-stored** (earlier this session): `CitationSyncService.enrichFromStored` reuses the
+SUMMARISE_SYSTEM summariser over a citation's already-stored `fullText` (e.g. bulk-imported) — no source
+re-fetch. Fixed the build: `refs.get` (public `Citation`, no `fullText`) → `refs.getAdmin` (exposes it).
+Endpoint `POST admin/citations/:id/enrich`.
+
+**3. Builder: document sections moved into the side menu** (user: "put all sections directly inside sidemenu
+instead of a new panel"). `BuilderShell.tsx`: the will/testator/executor/bequests/… anchors now render as a
+"Sections" group of rail items (click = setActiveSection + scrollToSection, highlights active) instead of
+behind the old "Sections" content panel. Dropped the `sections` SidebarTab (default now `risks`), the
+`SectionsTree` content block + its import, and the now-unused `PagesIcon`/`SectionsTree`.
+
+- **Verified:** `@org/api` build ✓, `@org/app` typecheck ✓, app+web lint 0 errors, web tsc ✓. Migration
+  applied to local DB. **NOT runtime-verified** (needs the API restarted to load the regenerated Prisma
+  client; upload/download needs running storage). Export (PNG/DOCX) still needs Browserless at `CHROME_URL`
+  (ws://localhost:8080) — not a code issue, the endpoint just isn't running.
+
+## 2026-06-19 — Vault: block deleting a person that backs a Wealth Vault profile/nominee
+
+Bug: Estate/Wealth Vault links a Vault PERSON by a plain `vaultEntityId` column (no DB foreign key), so
+deleting that person from the Document Vault silently orphaned the linked estate **profile** or **nominee**
+("links break"). Fix: deletion must happen from the Wealth Vault side, not the document vault.
+
+- **API** (`vault.service.ts`): new `estateLink(vaultEntityId)` looks up `EstateProfile`/`Nominee` by
+  `vaultEntityId` (global Prisma client — no new dep). `remove()` now calls `assertNotLinkedToEstate()` and
+  throws a clear `BadRequestException` if linked ("Remove it from the Wealth Vault first…"). `get()` returns
+  `estateLink: {kind:'profile'|'nominee', label} | null` so the UI can pre-empt it.
+- **Client** (`@org/api-client` `VaultEntityDetail.estateLink`; `VaultEntityPage`): the "Delete entity" menu
+  item is **disabled** when linked (shows "— in Wealth Vault"), and `removeEntity()` shows a clear toast if
+  somehow invoked. The backend guard remains the source of truth (the list-row delete, which lacks the flag,
+  still gets the 400 + message).
+- **Verified:** `@org/app` typecheck ✓, `@org/api` build ✓, lint 0 errors. NOT runtime-verified.
+
+## 2026-06-19 — Estate/Wealth Vault: richer configurable asset fields + wealth-planner analytics
+
+User feedback (looking at `/estate/assets/new` + the portfolio analysis): real-estate (and other) forms
+need proper labels/placeholders + more fields; the analysis must be far more detailed and act like a wealth
+planner, including per-asset-type analysis (e.g. mutual funds). Plus: "make things configurable, not
+hardcoded, proper structure." All delivered config-as-data (org→system→code, code = fallback).
+
+- **Part A — richer + configurable per-type fields** (`@org/dto` `estate/asset-fields.ts`): substantially
+  enriched the code registry with proper labels + placeholders, esp. **`property` (real estate)** — kind,
+  ownership + %/co-owners, full address (locality/city/state/PIN), area + unit, purchase date/price,
+  current-value basis, home-loan outstanding + lender, occupancy + rent + tenant, survey/khata/RERA +
+  registration no. Also enriched bank/FD/MF/insurance/stocks/gold/crypto/EPF/NPS/PPF/bond/vehicle. Added
+  `ASSET_CLASSES` + `DEFAULT_ASSET_CLASS`/`DEFAULT_LIQUIDITY` maps + `ASSET_CLASS_LABEL` + helpers.
+  **Configurable:** `estateAssetTypeSchema` gained optional `assetClass`/`liquidity`/`dateLabel`/`fields`
+  (+ new `assetFieldDefSchema`); `EstateVaultConfigService.assetTypes()` resolves each type's fields/
+  dateLabel/class/liquidity (config override → code registry). Client: `AssetDetailsFields`/`AssetDetailsView`/
+  `toDetailsPayload` accept an optional resolved `fields` (registry fallback); the new-asset page threads the
+  type's resolved `fields`/`dateLabel` from `useAssetTypes()`.
+- **Part B — wealth-planner analytics** (`portfolio-analysis.service.ts`, rewritten): deterministic metrics now
+  include allocation **by class / liquidity / category** (MF refined to debt/cash/hybrid via `details.category`),
+  **diversification score** (1−Herfindahl over types), top-3 concentration, liquid share %, **maturity ladder**
+  (configurable window), insurance cover, and **allocation gaps** vs a configured target mix. Risks +
+  suggestions are now **derived deterministically** (so the feature has full value with no AI key), with the
+  AI adding a `summary` + `plannerNotes` grounded strictly in the numbers. New `EstateVaultConfig.analysis`
+  block (maturingWindowDays, concentration warn/high %, minNomineeCoveragePct, emergencyFundMonths,
+  idealAllocation) drives all thresholds — configurable per org, code defaults in `DEFAULT_ESTATE_CONFIG`.
+- **Part C — per-type analysis**: `PortfolioAnalysisService.analyzeType()` + `POST /estate/portfolio/analyze/
+  type/:type` → per-type total/count/units, top holdings, **sub-allocation** (MF→category, property→kind,
+  insurance→kind, gold→form, stocks→sector), within-type concentration (HHI), MF unrealised-return-on-cost,
+  nominee gaps, + AI summary. Client `estate.analyzeAssetType()` + `AssetTypeAnalysis`/`PortfolioSlice` types.
+- **UI** (`EstateHomePage` WealthAnalysisCard): headline stats (diversification/liquid/nominee/top-holding),
+  asset-class mix bars (reused `HBarList`), liquidity + maturity-ladder lists, planner notes, and a per-type
+  **drill-down** (chips → focused panel with sub-allocation, top holdings, observations).
+- **Verified:** `@org/app` typecheck ✓, `@org/api` build ✓, lint 0 errors (dto/api-client/api/app). NOT
+  runtime-verified. ⚠️ existing estate config rows need a re-save (or rely on the resolver's code fallback)
+  to pick up the new `analysis` block + per-type class/liquidity/fields.
+
+## 2026-06-19 — Tier 0: truth-keeping pass (refresh stale docs + resolve strategy conflict)
+
+Closed 3 of the 4 Tier-0 "truth & verification" items (the 4th, the `VERIFICATION_LOG.md` browser walk,
+needs the app running and stays open). No code change — docs only.
+
+- **`04-progress-tracker.md`** was stuck at 2026-06-07 and flatly wrong (claimed "no other doc type built"
+  and "no Claude provider / no anthropic anywhere"). Verified against code: `claude.provider.ts` exists
+  (default `claude-opus-4-8`; `ANTHROPIC_API_KEY/MODEL/VISION_MODEL` in `config/schema.ts`), 18 structured
+  bundles exist, citation validation/fill + Schedule-1 gate are wired. Rewrote the file into a thin, accurate
+  **capability snapshot** that defers to `TASKS.md` + `BUILD_LOG.md` as the source of truth — removing the
+  third overlapping burn-down (doc-sprawl was itself a Tier-0 concern).
+- **`08-strategic-roadmap.md`** — added a dated "STATUS CORRECTION (2026-06-19)" banner and fixed §2 inline:
+  citation validation + Schedule-1 gate are BUILT (closing two of §2's four named risks in code), 18 bundles
+  not 4, three court doc types now structured bundles not freeform presets. Kept the strategic thesis intact
+  (verify-before-breadth) and noted the 3 new unverified bundles reinforce, not weaken, it.
+- **Strategy conflict resolved** (`06-platform-strategy.md` §5.1): the `07` pipeline is a *document-processing*
+  engine, not the *human workflow/assignment* engine the §5 cut-list bars → KEEP (freeze human-assignment
+  queues until multi-reviewer firms pay). "Marketplace of lawyers" stays permanently cut; the *template*
+  marketplace (`02/E`, `docs/12`) is DEFERRED behind the first-10-paying-users gate, not built. Nothing deleted.
+- **Remaining Tier-0:** only `VERIFICATION_LOG.md` (browser-walk the happy paths + the 3 new court bundles
+  after a DB reseed). Needs app + Postgres/Redis + AI keys.
+
+## 2026-06-19 — Tier 2: Anticipatory Bail (BNSS §482) structured DocumentTypeBundle
+
+Third structured court-doc bundle. A pre-arrest bail application under §482 BNSS (the CrPC §438 successor),
+filed before the Court of Session / High Court. Completes the three Tier-2 court bundles (§138, consumer, bail).
+
+- **`libs/document-schema/src/anticipatory-bail/`** (new bundle, key `anticipatory_bail`):
+  - `schema.ts` — Zod: applicant (name/guardian/age/occupation/address), optional `fir` (number/date/PS/
+    district — anticipatory bail can predate an FIR), `offences[]` (copied from FIR, descriptive),
+    `offenceIsNonBailable`, `apprehensionGrounds` (the core §482 plea), `groundsForBail[]`,
+    clean-antecedents / willing-to-cooperate / custody-not-required flags, `proposedConditions[]` (§482(2)),
+    `court` (sessions/high_court), advocate. Loose `…DraftSchema` for autosave.
+  - `risks.ts` — **deterministic** rules: missing applicant or apprehension → error; no-FIR-AND-no-apprehension
+    → warning; bailable-offence → info (anticipatory bail is for non-bailable); missing offences/grounds →
+    warning; **CrPC / §438 reference detector** → warning (must file under BNSS §482, not the repealed CrPC §438).
+  - `form-metadata.ts` — select(court)/list(offences/grounds/conditions)/number widgets, helper text on the
+    forum + apprehension fields. `prompts.ts` — versioned prompts that only refine apprehension/grounds; never
+    author sections, forum, or conclusions.
+- **`libs/document-templates/src/anticipatory-bail/standard/index.tsx`** — A4 application: forum-branched
+  cause-title (IN THE COURT OF SESSION / HIGH COURT), State respondent through the PS, "APPLICATION UNDER §482
+  BNSS", In-re FIR line, numbered grounds (apprehension → false implication → urged grounds → antecedents /
+  cooperation / no-custody), PRAYER (anticipatory bail u/s 482 + §482(2) conditions), signature (advocate or
+  applicant) + VERIFICATION. EditableField throughout.
+- **Wiring:** registered in `document-schema/src/index.ts` + `document-templates/src/_registry.tsx`
+  (`anticipatory-bail.standard`); seed (`anticipatory_bail`, category `court`, sortOrder 33).
+- **Citation (`@org/legal-reference`):** upgraded `bnss.482` to confidence `high` (web-verified: §482 BNSS is
+  the successor to CrPC §438, in force 1 Jul 2024; courts now have wider discretion — the §438(1) guiding
+  factors were dropped), expanded the summary with the **renumbering trap** (old CrPC §482 = HC inherent
+  powers → now BNSS §528), added `commonlyPairedWith` §480/§483 and the indiacode link.
+- **Verified:** `@org/app` typecheck ✓, `@org/api` build ✓, lint 0 errors. NOT runtime-verified.
+
+## 2026-06-19 — Tier 2: Consumer Complaint (CPA 2019) structured DocumentTypeBundle
+
+Second structured court-doc bundle (after §138). A consumer complaint filed before a District / State /
+National Consumer Disputes Redressal Commission, with the threshold gates that get complaints thrown out
+enforced deterministically.
+
+- **`libs/document-schema/src/consumer-complaint/`** (new bundle, key `consumer_complaint`):
+  - `schema.ts` — Zod: complainant (+occupation), `oppositeParties[]` (name/address/role, min 1), transaction
+    (`considerationPaid` drives jurisdiction — distinct from relief claimed; date/description/reference),
+    `grievanceType` enum + `grievance` narrative, `causeOfActionDate`, `reliefSought[]`, `compensationClaimed`,
+    `purchasedForCommercialPurpose`, `forum` tier. Exports `CPA_DISTRICT_MAX` (₹50L), `CPA_STATE_MAX` (₹2cr),
+    `recommendedForum()`. Loose `…DraftSchema` for autosave.
+  - `risks.ts` — **deterministic** (non-LLM) rules: pecuniary-jurisdiction mismatch (chosen forum vs the forum
+    implied by *consideration paid*, 2021 Rules) → error; §69 (>2yr since cause of action) → error; §2(7)
+    commercial-purpose → warning; §34(2) territorial (no OP address) → warning; §39 (no reliefs) → warning;
+    boundary-exactly-on-₹50L/₹2cr → info; missing complainant/OP/transaction/consideration/grievance → error.
+  - `form-metadata.ts` — select/currency/group(oppositeParties)/list widgets, helper text on the jurisdiction
+    + limitation fields. `prompts.ts` — versioned prompts that only refine transaction/grievance/facts/reliefs
+    narrative; never author sections, jurisdiction, or limitation.
+- **`libs/document-templates/src/consumer-complaint/standard/index.tsx`** — A4 petition: "BEFORE THE …
+  COMMISSION", memo of parties, **forum-branched heading** (COMPLAINT UNDER §35 / §47 / §58), numbered facts
+  (consumer §2(7) → transaction → grievance → §69 limitation → jurisdiction §34(2)), PRAYER (§39 reliefs +
+  compensation + costs), signature + VERIFICATION block. All statutory text author-written; EditableField throughout.
+- **Wiring:** registered in `document-schema/src/index.ts` + `document-templates/src/_registry.tsx`
+  (`consumer-complaint.standard`); `document-types` seed (`consumer_complaint`, category `court`, sortOrder 32,
+  template key `consumer-complaint-standard`).
+- **Citations (`@org/legal-reference`):** added 7 **web-verified** CPA entries — §2(7) consumer, §34 District
+  (pecuniary+territorial), §35 filing, §47 State, §58 National, §69 limitation, §39 reliefs — all confidence
+  `high`, `appliesTo:['consumer_complaint']`; upgraded the existing `cpa.2019` umbrella to `high` and noted the
+  30-Dec-2021 jurisdiction-rules notification. **Pecuniary thresholds verified** against the PIB press release +
+  indiacode (District ≤₹50L · State ≤₹2cr · National >₹2cr, keyed on *consideration paid*, NOT relief claimed).
+- **Verified:** `@org/app` typecheck ✓, `@org/api` build ✓ (compiles legal-reference + document-schema
+  server-side), lint 0 errors (legal-reference lint ✓; 19 pre-existing app warnings). NOT runtime-verified.
+
+## 2026-06-19 — Tier 2: §138 cheque-bounce notice promoted to a structured DocumentTypeBundle
+
+The generic `legal_notice` carried a cheque branch but never guided the §138 statutory timeline. Built a
+dedicated, first-class doc type so the timeline that makes-or-breaks a cheque prosecution is enforced.
+
+- **`libs/document-schema/src/cheque-bounce-notice/`** (new bundle, key `cheque_bounce_notice`):
+  - `schema.ts` — Zod: payee (holder in due course), drawer (`isCompany` + `officers[]` for §141),
+    cheque particulars (number/amount/bank/branch + cheque/presented/dishonour dates + return-memo reason),
+    `underlyingLiability` (the legally enforceable debt §138 requires), `demandAmount`, `complianceDays`
+    (min 15), delivery mode, optional advocate. Loose `…DraftSchema` for half-filled autosave.
+  - `risks.ts` — 12 **deterministic** (non-LLM) rules over the statutory timeline: proviso (b) demand-within-30-days
+    → error; proviso (c) <15-day payment window → error; cheque presented >3 months stale → warning; company
+    drawer without named §141 officers → warning; missing liability/particulars → error; demand < cheque → warning;
+    §142 one-month complaint-window → info. Each carries `fieldPath` + `ruleVersion`.
+  - `form-metadata.ts` — date/select/currency/list/phone/number/textarea widgets, `showIf` branches for advocate
+    (`throughAdvocate`) and §141 officers (`drawer.isCompany`), helper text on the deadline-bearing fields.
+  - `prompts.ts` — versioned prompts that only tighten the client's narrative/facts; never author sections/deadlines.
+- **`libs/document-templates/src/cheque-bounce-notice/formal/index.tsx`** — formal A4 §138 notice; all statutory
+  text author-written (§138 proviso (b)/(c), §141 officer block when company, §142 complaint window); `EditableField`
+  for click-to-edit-in-preview; amount-in-words via `formatINRWords`.
+- **Wiring:** registered in `document-schema/src/index.ts` (`import './cheque-bounce-notice'` + exports) and
+  `document-templates/src/_registry.tsx` (`cheque-bounce.formal`); `tools/prisma/seed-data/document-types.ts`
+  gained the `cheque_bounce_notice` seed (template key `cheque-bounce-formal` → componentKey `cheque-bounce.formal`,
+  category `notices`, A4, `IN-*`). `knownTemplates` = template key, matching the legal-notice pattern.
+- **Citations:** no lib change needed — `@org/legal-reference` `ni.138`/`ni.141`/`ni.142` already declare
+  `appliesTo: ['legal_notice','cheque_bounce_notice']`, so the citation validator + filler cover the new type.
+- **Verified:** `@org/app` typecheck ✓ (covers both libs via imports), lint 0 errors (19 pre-existing warnings).
+  State libs N/A (NI Act is a uniform central act). NOT runtime-verified.
+
 ## 2026-06-18 — M4: app-managed envelope encryption (per-asset DEK)
 
 Replaces the single-master-key path for estate assets with envelope encryption
@@ -3117,3 +3322,294 @@ Also fixed the 2 long-standing pre-existing type errors while in those files
 
 **Verify:** `nx typecheck app api-client dto` → GREEN (0 errors — baseline is now clean, no more
 "2 pre-existing"). `nx lint app` → 0 errors. Not runtime-verified in a browser.
+
+## 2026-06-19 — Tier 1a: per-change accept/reject diff UI for AI revise
+
+The AI-revise review modal already staged before/after with a plain-text word diff, but Accept
+applied the whole document (all-or-nothing). Made it **per-change**:
+- `features/editor/revision-diff.ts`: added `diffHtmlBlocks(before, after)` — splits both HTML
+  documents into top-level block elements (DOMParser; regex fallback), LCS-aligns them by
+  normalized text, and coalesces into `equal`/`change` hunks. Added `reconstructHtml(hunks, decisions)`
+  to rebuild the document from only the kept hunks (changes accepted by default).
+- `features/editor/TemplateEditor.tsx`: the review Dialog now lists each `change` hunk with a
+  Checkbox (intra-hunk word diff shown green/red), an "{n} of {total} selected" counter, and
+  Accept-all / Reject-all. "Apply {n} change(s)" reconstructs via `reconstructHtml`; "Discard all"
+  rejects. Block-level diff means accepted/rejected hunks always reconstruct into valid HTML.
+- Shared editor, so DraftEditorPage + EditorDemo both get it.
+- Verify: `nx typecheck app` green; `nx lint app` 0 errors (16 pre-existing warnings unchanged).
+  No backend change (revise still returns full HTML; selection happens client-side). NOT
+  runtime-verified — needs AI provider keys to generate a real revision.
+
+## 2026-06-19 — Tier 1b: citation coverage expansion + legal-reference admin flow fixes
+
+**Citation coverage (`@org/legal-reference/.../citations.ts`)** — +37 curated `CITATIONS`:
+
+- **11 stable-act refs** (NOT touched by the 2024 reform, so low risk; mapped to real
+  `DocumentTypeBundle` keys via `appliesTo` so `applicableFor()` actually fires): Transfer of Property Act
+  §105 (lease) + §106 (notice to quit) → `rent_agreement`; Indian Contract Act §73 + §74 (damages /
+  liquidated damages) → `nda`/`promissory_note`/`employment_offer`; Arbitration & Conciliation Act §7;
+  Indian Succession Act §63 (two-witness execution of wills) → `will`; Powers of Attorney Act 1882 →
+  `power_of_attorney`; Payment of Gratuity Act §4; Indian Stamp Act §17; DPDP Act 2023. `externalUrl`
+  deliberately omitted (not fabricating indiacode handle IDs — admin "Sync" fills them).
+- **26 web-verified criminal-reform `supersedes` remaps** (IPC→BNS / CrPC→BNSS / Evidence→BSA). Each was
+  cross-checked against 2+ independent sources by a research subagent before writing: IPC 304A→BNS 106,
+  498A→85, 304B→80, 124A→152, 499/500→356, 506→351, 379→303, 392→309, 406→316, 323→115, 376→64, 354→74,
+  363→137; CrPC 125→BNSS 144, 144→163, 156(3)→175(3), 161→180, 164→183, 41→35, 437→480, 439→483, 436→478,
+  320→359; IEA 65B→BSA 63, 45→39, 32→26, 25/26→23. These extend `validateCitations()`'s successor
+  suggestions far beyond the original 5 remaps. All confidence-flagged + `verifyNote` per the library's
+  accuracy policy. **BNS §152 explicitly flagged**: it is a NEW "endangering sovereignty/unity" offence with
+  different ingredients, NOT a 1:1 rename of sedition (IPC §124A was deleted). Caught a common error in
+  secondary sources: dying declaration is BSA §26 (NOT §30, which is maps/charts/plans). Verified:
+  legal-reference tsc ✓, lint ✓, no duplicate ids.
+
+**Legal-reference admin flow fixes** (user reported "add into masters is not easy" + "not able to sync
+properly from link, there are gaps"). Root-caused and fixed five defects:
+
+1. **Sync ignored the pasted link.** `CitationSyncService.syncFromSource` resolved the indiacode handle from
+   the act *name* (`ACT_HANDLE` map) and never looked at the citation's `externalUrl`. So a valid pasted link
+   for any act not in the curated map → "could not resolve". Now `LegalSourceAdapter.fetchSection` takes an
+   optional `knownUrl`; `IndiaCodeSourceAdapter.sourceUrlFromKnown()` honours it when it's an indiacode.nic.in
+   (or subdomain) http(s) URL, else falls back to handle resolution. Host-restricted to avoid open-SSRF.
+2. **Data-loss bug.** Syncing a code-seed citation called `createOrUpdate({id, summary, draftingTips,
+   externalUrl})`; the upsert's full-write `create`/`update` defaulted the omitted columns → `act`="Unknown
+   act", `title`="Untitled", `topics`/`appliesTo` emptied. DB-wins merge then poisoned the catalog entry.
+   Fixed two ways: `createOrUpdate` is now **skip-undefined** (only writes columns present in `input`;
+   `undefined`=leave, `null`=clear, value=set; `create` branch backfills NOT-NULL defaults), and the sync now
+   spreads the full merged citation (`...c`) before overlaying fetched fields.
+3. **`fullText` never persisted.** The AI extracted `fullText` and it was returned to the client but dropped.
+   `createOrUpdate` now accepts + writes `fullText` (non-empty only); sync passes it through.
+4. **Inactive citations couldn't be edited.** Admin GET used `refs.get` → active-only cache, so a deactivated
+   citation 404'd in the editor. Added `LegalReferenceService.getAdmin(id)` (reads the row directly, includes
+   inactive, returns live `isActive`/`isPublic`/`fullText`/`source`); controller `getAdminCitation` uses it.
+5. **Editor Active/Public toggles were dead.** Hydration hardcoded `true` and `save()` never sent them.
+   Editor now hydrates from the row (clone resets to visible) and sends `isActive`/`isPublic` + explicit
+   `null`s for cleared optional fields (matches the new skip-undefined semantics). `createOrUpdate` persists
+   both toggles.
+
+Verified: `@org/api` build ✓ (webpack), `@org/app` typecheck ✓, api lint ✓, app lint 0 errors (CitationEditor
+clean). NOT runtime-verified — a live indiacode sync needs the running API + network + AI keys.
+
+## 2026-06-19 — Tier 1c: 2024-reform currentness badge + CrPC→BNSS diff/lookup tool
+
+- **Lib** (`@org/legal-reference`): `reformRemaps()` builds the old→new mapping list off the `supersedes`
+  pointers already on the BNS/BNSS/BSA citations (no statute numbers authored here — derived from the
+  curated data), sorted by code then section. New types `RepealedCode` + `ReformRemap`, exported from index.
+- **`ReformLookup.tsx`** (`features/admin/legal-reference/`, pure client-side over the lib — no API round
+  trip): a currentness banner ("Citations are current to the 2024 criminal-law reform · effective 1 July
+  2024" + the three act-level reforms as cards), a single search box that matches code / section / topic
+  (normalises "CrPC 125"/"§125"/"s.125" → bare digits so one box covers both), and an old→new table grouped
+  by repealed code (IPC/CrPC/Evidence) — each row `IPC §302 → BNS §103 — Punishment for murder` with a
+  confidence chip and a link to the public `/law/:id` page. Routed at `/config/legal-reference/reform`
+  (`ReformLookupPage` in `AdminLegalReferencePage.tsx`, registered in `app.tsx`), reachable via a
+  "2024 reform lookup" secondary action on the catalog page header.
+- **`ReformBadge`** (exported from the same file): compact "✓ Current to 1 Jul 2024" pill linking to the
+  lookup tool; dropped into the `CitationHealth` side-panel status strip so drafters see the engine is
+  post-reform. `ConfigShell` gained `back` + `secondaryActions` passthrough; `PageHeaderAction` is now
+  re-exported from the page-header barrel.
+- Verified: `@org/app` typecheck ✓, `legal-reference` tsc ✓ + lint ✓, app lint 0 errors. NOT runtime-verified.
+
+## 2026-06-19 — Shared FilterBar: standardized search+dropdown filter row across all DataTables
+
+User report: the `/config/ai-usage` table's filter UI (search box + "All …"-sentinel Select dropdowns +
+Clear button in one flex-wrap row) is the good pattern — apply it to every table that has search + dropdowns.
+
+- **New `@org/ui` component `FilterBar`** (`libs/shared/ui/src/components/filter-bar.tsx`): a controlled
+  filter row — optional `search` box, an array of `selects` (each with an "All …" sentinel mapped to `''`
+  internally so callers never deal with Radix's empty-value restriction; per-select `hidden`, `widthClassName`,
+  `placeholder`), and a conditional `Clear` button (auto-shows when any filter is active; override via
+  `dirty`). i18n-free — all labels passed in by the caller. Designed to drop into the `DataTable` `toolbar`
+  prop (search stays on the DataTable for in-table rows) or render standalone (pass `search`).
+- **Migrated all 7 in-scope tables** (search + ≥1 dropdown) to FilterBar, replacing bespoke `<Select>` blocks:
+  BatchesPage, BatchDetailPage, ReviewQueuePage (conditional status/type via `hidden`), GroupsPage,
+  EstateAssetsPage (its stray Select pulled from outside the table into the `toolbar` slot), DocumentsList
+  (replaced the bespoke `DocumentsToolbar` + active-filter pills with FilterBar; deleted `ActiveFilterPill`),
+  and LegalReferenceManager. Net effects: a consistent **Clear** button on every table (most had none),
+  uniform sentinels/widths, and search now lives in one standard place. Also fixed a latent gap in
+  LegalReferenceManager — it set `searchPlaceholder` + `server.query` wiring but never passed `search`, so the
+  DataTable rendered NO search box; search is now provided via FilterBar's `search`.
+- Each page preserved its own state convention (null-vs-`'all'`-vs-tri-state `'any'`/`'true'`/`'false'`) by
+  mapping to/from FilterBar's `''`=all, plus existing side-effects (`setPage(0)`, conditional visibility).
+- Verified: `@org/app` typecheck ✓, app lint 0 errors (19 warnings, all pre-existing), `@org/ui` lint ✓.
+  NOT runtime-verified.
+
+## 2026-06-19 — DataTable: filter row inside the white box + no-shift Reset-columns
+
+Follow-up to the FilterBar work — user noted the migrated tables didn't match `/config/ai-usage`'s "white box
+holding table + filter", and that the Reset-columns button caused layout shift.
+
+- **Filter header moved INSIDE the table's bordered box** (`libs/shared/ui/.../data-table.tsx`): the search +
+  caller `toolbar` row now renders as a `border-b` header *inside* the same `rounded-xl border bg-card` box as
+  the grid (and pagination footer), so every table reads as one white card with filters on top — the
+  ai-usage look, applied uniformly to ALL DataTables at once. Previously the toolbar floated bare above the box.
+- **Reset-columns no longer shifts layout**: it now keeps a reserved slot in the header whenever a header is
+  shown (search/toolbar present) — `invisible pointer-events-none` (+ `aria-hidden`/`tabIndex=-1`) until a
+  custom column width/order exists, then it reveals in place. No add/remove of the element → no reflow. For
+  toolbar-less tables the header still only appears once columns are customized (unchanged).
+- Verified: `@org/ui` lint ✓, `@org/app` typecheck ✓, app lint 0 errors. NOT runtime-verified.
+
+## 2026-06-19 — DataTable: bulk-action bar folded into the in-box header (in-place swap)
+
+User follow-up: make the bulk-action bar part of the same white-box UI with less layout shift + better UX.
+
+- The selection bulk-action bar no longer renders as a separate bordered pill ABOVE the box (which pushed the
+  whole table down by the pill height + the `space-y-3` gap when you selected a row). It now takes over the
+  **same header slot INSIDE the box**, swapping in place with the filter row (Gmail/Linear pattern): when
+  `selectedIds.size > 0` the header shows `{n} selected` + the caller's `bulkActions` + a Clear (×) button;
+  otherwise it shows search/filters/reset.
+- **Less shift:** the header element + box already exist, so the swap is pure content change. Locked the
+  header to `min-h-[3.5rem]` so the filter row and the selection bar are exactly the same height — swapping
+  modes doesn't change header height at all. For tables that have filters (header already visible) there is
+  ZERO shift; for filter-less tables the only growth is the single in-box header strip (no external pill, no
+  gap) — strictly less than before.
+- **Clearer mode:** the header tints `bg-primary/10` while selecting so the selection mode is obvious.
+- Verified: `@org/ui` lint ✓, `@org/app` typecheck ✓, app lint 0 errors. NOT runtime-verified.
+
+## 2026-06-19 — Tier 3: PNG / preview-image export (server-rendered)
+
+Tier 3 export item — the `DocumentExport.format` enum already supported `png`, but only PDF was
+ever rendered. Wired PNG end-to-end, reusing the existing Puppeteer artboard pipeline (no new infra).
+
+- **New single source of truth** `libs/shared/dto/src/lib/documents/export.schema.ts`:
+  `EXPORT_FORMATS = ['pdf','png']`, `exportFormatSchema`, `ExportFormat`. Word/.doc stays client-side
+  (HTML → `export-word.ts`) and is intentionally absent. The API DTO (`exports.dto.ts`), the renderer
+  payload (`PdfRenderJobPayload.format`), `ExportsService.enqueueExport`, the controller, and the
+  api-client `CreateExportPayload` all now derive their format type from this enum instead of inlining
+  `'pdf'|'png'`.
+- **`ExportsService.enqueueExport(userId, documentId, { format?, pageSize? })`** — signature changed from a
+  bare `pageSize?` to an opts object; persists `format` on the `DocumentExport` row and threads it into the
+  render-job payload (both the queued and inline-no-Redis paths). Controller passes `{ format, pageSize }`.
+- **`PdfRendererService.render`** — when `payload.format === 'png'`, screenshots the *same* rendered
+  artboard page (`page.screenshot({ type: 'png', fullPage: true })`) for identical fidelity, instead of
+  `page.pdf()`. Uploads with the matching extension + `image/png` content-type; checksum/byteSize/status
+  flow unchanged. (Also added the missing `import type { ExportFormat } from '@org/dto'`.)
+- **Frontend**: `useExportPdf.start(format = 'pdf')` forwards the chosen format to `enqueueExport`; the
+  download URL already presigns the stored `s3Key` (now `.png`), so no client download changes were needed.
+  `BuilderShell` gained a "PNG image" button in the grouped secondary-action row (`startExport('png')`),
+  disabled while an export is queued, with i18n keys `builder.exportPng` / `builder.exportPngTooltip`.
+- Verified: `@org/app` typecheck ✓, `@org/api` build ✓, app lint 0 errors (19 pre-existing warnings),
+  `@org/dto` lint ✓. NOT runtime-verified (needs the Puppeteer/Chrome render worker running).
+
+## 2026-06-19 — Tier 3: True OOXML DOCX export (server-rendered, all doc types)
+
+Tier 3 export item — replace the fake client-side `.doc` (HTML wrapped as `application/msword`) with a
+**real OOXML `.docx`** generated server-side through the existing exports pipeline. Covers every template,
+not just docs that carry raw HTML.
+
+- **Dependency**: added `@turbodocx/html-to-docx` (maintained fork; pure-JS, bundles cleanly into the
+  webpack `@org/api` build — verified `webpack compiled successfully`). API target is `node`, no externals,
+  so the bundling was the gating risk and it passed.
+- **`@org/dto` `export.schema.ts`**: `EXPORT_FORMATS` now `['pdf','png','docx']` (single source of truth;
+  the API DTO, renderer payload and api-client all derive from it). Comment notes docx supersedes the
+  client `.doc` for the builder.
+- **`PdfRendererService`** (`pdf-renderer.service.ts`):
+  - New `OUTPUT_META: Record<ExportFormat,{ext,contentType}>` map drives the S3 object's filename + MIME
+    (replaces the old `isPng ? … : …` ternaries); docx → `…wordprocessingml.document`.
+  - New `renderDocx(page, title)`: after the artboard page is `__ARTBOARD_READY__`, `page.evaluate` scrapes
+    each rendered `.doc-page`'s inner HTML — the SAME DOM Puppeteer prints to PDF, so structured-bundle
+    templates (which have no raw `data.html`) are covered. The Paginator's offscreen measurement mirror is a
+    non-`.doc-page` sibling (auto-excluded); `aria-hidden` "Page N of M" footers + `<style>`/`<script>` are
+    stripped; logical pages joined with a hard page break (Word re-paginates). Converted via `HTMLtoDOCX`
+    (portrait, 2cm/1134-twip margins, Times New Roman 12pt, `cantSplit` rows) → `Buffer`.
+  - `doc` select now also pulls `title` (used as the DOCX title + `<title>`).
+  - The output block is a 3-way `format` switch (png screenshot / docx / pdf), all sharing the upload path.
+- **Frontend**: `useExportPdf.start(format)` union extended to `'docx'`; api-client `CreateExportPayload.format`
+  → `'pdf'|'png'|'docx'`; `BuilderShell` gained a "Word (.docx)" button (`startExport('docx')`) beside PDF/PNG.
+  The existing ready-handler `window.open(url)` triggers a native download for the docx MIME — no client change.
+- **Fidelity caveat (honest)**: the artboard's heading typography (centered h1, underlined h2) lives in a
+  `<style>` cascade, not inline styles, so html-to-docx (tags + inline styles only) doesn't carry it —
+  structure, text, lists and tables transfer; fine heading treatment does not. Accepted v1 trade-off for an
+  *editable* Word file. Follow-ups: per-pageSize DOCX (legal/foolscap dims) + inject inline heading styles.
+- Verified: `@org/api` build ✓, `@org/app` typecheck ✓, app/api/api-client/dto lint 0 errors (6 pre-existing
+  api warnings in mail/storage, unrelated). NOT runtime-verified (needs the artboard + Chrome render worker).
+
+## 2026-06-19 — Vault: reusable, encrypted signatures (saved once, reused when signing)
+
+User request: store signatures in the Vault alongside docs (multiple per entity), reusing the existing
+document-signing capture — so a signer never has to redraw their signature.
+
+- **Model**: new `VaultSignature` (entityId, method draw/upload/typed, label, isDefault, dataEncrypted,
+  timestamps) + `signatures VaultSignature[]` on `VaultEntity`. Migration `20260619000000_vault_signature`
+  (drift-safe: `CREATE TABLE IF NOT EXISTS` + guarded FK). `prisma generate` run. Payload (PNG data URL for
+  draw/upload, or typed text + font) is **AES-256-GCM encrypted at rest** via `VaultCryptoService.encrypt`,
+  exactly like entity fields — masked by default, only decrypted on an **audited reveal**.
+- **DTO**: `recordVaultSignatureSchema` in `@org/dto` (mirrors signers.dto `RecordSignatureSchema` + label +
+  isDefault; same `refine`), `createZodDto` on the server.
+- **Service** (`vault.service.ts`): `addSignature` (encrypts; first signature auto-defaults; setting default
+  clears others), `revealSignature` (audited), `setDefaultSignature`, `removeSignature` (promotes the most
+  recent when the default is deleted), `allSignatures(userId)` (cross-entity, masked, for the signing picker),
+  and masked signature metadata folded into `get()`. Controller: `POST …/signatures`, `GET …/:sigId/reveal`,
+  `POST …/:sigId/default`, `DELETE …/:sigId`, and a flat `GET /vault/signatures`.
+- **Shared capture**: extracted the `SignatureCapture` widget (draw/upload/typed) out of
+  `documents/SignaturesDialog.tsx` into `documents/SignatureCapture.tsx` (+ `SignaturePayload` type, optional
+  `submitLabel`) so the signing dialog and the vault share one identical capture UI.
+- **Vault UI**: "Signatures" section on `VaultEntityPage` — add (label + capture), list (masked: label +
+  method badge + Default badge), reveal-to-preview (Dialog), make-default, delete. api-client types +
+  methods + react-query hooks (`useAddVaultSignature`/`useSetDefaultVaultSignature`/`useRemoveVaultSignature`/
+  `useAllVaultSignatures`), invalidating both the entity and flat-signatures keys.
+- **Reuse in signing**: `SavedSignaturePicker` in `SignaturesDialog` — a "Use a saved signature" dropdown
+  (label · entity) that reveals the chosen signature and feeds its payload into the same sign handler as a
+  freshly-drawn one. Renders only when the user has saved signatures.
+- Verified: `@org/api` build ✓, `@org/app` typecheck ✓, app/api/api-client/dto lint 0 errors (warnings all
+  pre-existing). NOT runtime-verified (needs the app + Postgres + the new migration applied).
+
+## 2026-06-19 — Bulk statute-PDF import: upload the full BNS → a citation per section
+
+User request: "upload full BNS pdf and it creates all the sections from it" + (follow-up) "the doc is 112
+pages… do it in chunks/batches for big files." Built a bare-act PDF importer for the citation catalog.
+
+- **Moat discipline**: statute text is **extracted verbatim** from the PDF — never AI-generated (CLAUDE.md
+  non-negotiable: the AI never authors citations). Only the section *heading* is heuristically lifted; the
+  human-explainer `summary` is left a neutral stub and every row is flagged (`confidence`, `verifyNote`,
+  `isPublic:false`) as review-pending.
+- **`CitationImportService`** (`legal-ai/citation-import.service.ts`):
+  - `parsePdf` → `ParsingService.parse` (text-first, password-aware) → `segment()`: a **monotonic section
+    walk** — find a line-anchored `N.`, then the next `N+1.`, slice the body between; robust to stray "5."
+    tokens inside a section because it only ever advances to the number it's looking for. `skipFrontMatter`
+    jumps past the cover + "arrangement of sections" index using the enacting-formula / "Chapter I" marker.
+    Heading = the marginal note up to the first em-dash, when short + heading-like.
+  - **Big-file handling (the follow-up)**: `beginImport` parses once, stashes the full sections server-side
+    (in-memory `Map`, 20-min TTL, swept opportunistically) under a `randomUUID` `importId`, and returns only a
+    **lightweight preview** (id/section/title/charCount/200-char snippet). So a ~358-section act never
+    round-trips its full text through the browser or past Express's JSON body limit. `commitImport(importId,
+    {includeIds?, overwriteExisting})` writes in **batches of 25** via `legalRef.createOrUpdate`, skipping
+    existing ids unless overwrite is set. Warnings surfaced for 0 / <10 detected, and tiny-text sections.
+- **DTO** (`legal-ai.dto.ts`): `StatuteImportParseDto` (multipart fields, coerced; topics CSV→array) +
+  `StatuteImportCommitDto` (tiny JSON). **Endpoints** (`legal-ai.controller.ts`):
+  `POST admin/citations/import/parse` (`FileInterceptor`) + `POST admin/citations/import/commit`.
+  Registered `CitationImportService` in `LegalAiModule` (reuses the already-provided `ParsingService`).
+- **UI**: "Import from PDF" button in `LegalReferenceManager` → new `CitationPdfImportDialog` — metadata form
+  (prefilled for BNS: prefix `bns`, "Bharatiya Nyaya Sanhita, 2023", topics, 2024-07-01, confidence, optional
+  PDF password) + file → Parse → preview list with per-section checkboxes (select all/none) + warnings →
+  "Import N sections" (overwrite-existing toggle). Uses `fetch`+`credentials:'include'` like the rest of the
+  manager. `onImported` reloads the table.
+- Verified: `@org/api` build ✓, `@org/app` typecheck ✓, app/api lint 0 errors (warnings all pre-existing).
+  NOT runtime-verified — the parser is heuristic and unproven against a real BNS PDF; it's **preview-first by
+  design** so a human catches mis-segmentation before anything is committed.
+
+## 2026-06-19 — Statute import: JSON-array mode + legal-reference catalog bulk actions
+
+Follow-ups to the bulk statute import. (1) The PDF path leaves `summary` a stub (verbatim text only); user
+wanted the 2–3-para summary + all fields filled. (2) User chose to generate fully-formed records with their
+own AI and upload them as JSON. (3) User wanted bulk actions on the catalog (delete / make private / disable).
+
+- **JSON-array import** (`CitationImportService`): `ParsedStatuteSection` extended with optional per-record
+  fields (summary, fullText, draftingTips, topics, appliesTo, confidence, supersedes, externalUrl,
+  effectiveFrom, verifyNote, act, actShort). `beginJsonImport(jsonText, opts)` accepts a bare array or
+  `{sections|citations: […]}`, maps each loosely-typed record via `fromJsonItem` (derives id from
+  codePrefix+section when absent; skips records with no id/section or no title/summary/fullText; de-dupes
+  ids), and stages it through the SAME preview/commit path as the PDF importer. `commit` now lets per-section
+  values WIN over the batch defaults (real uploaded summary used as-is; a record without one still gets a
+  neutral stub — never model-authored). Endpoint `POST admin/citations/import/json` (multipart: a `.json`
+  FILE — so a 358-record array dodges Express's ~100 kb JSON body limit — or an inline `json` field).
+  `StatuteJsonImportDto`. Shared `stage()` + `buildPreview` (snippet falls back to summary when fullText is
+  empty).
+- **Import dialog**: "Bare-act PDF | JSON array" mode toggle. JSON mode = upload `.json` or paste into a
+  textarea, with an inline hint documenting the expected object shape (so the user knows what to ask their
+  LLM for). Same review table + commit. Title/description generalised; PDF-password field hidden in JSON mode.
+- **Catalog bulk actions** (`LegalReferenceManager`): `DataTable` `selection` + `bulkActions` bar — Enable,
+  Disable, Make public, Make private, Delete (delete confirmed). `LegalReferenceService.bulkAction(ids,
+  action)` → `deleteMany`/`updateMany` + cache invalidate (in-code seeds aren't in the table, so untouched);
+  `POST admin/citations/bulk` (`BulkCitationActionDto`, ≤1000 ids). Pairs with the importer — select the
+  freshly-imported sections and Make public in one go.
+- Verified: `@org/api` build ✓, `@org/app` typecheck ✓, app/api lint 0 errors (warnings pre-existing). NOT
+  runtime-verified.

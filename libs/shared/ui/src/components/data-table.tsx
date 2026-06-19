@@ -491,68 +491,98 @@ export function DataTable<T>({
   const colSpan =
     table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0);
 
+  // The filter/search row lives INSIDE the table's bordered box (as a header)
+  // so filters + grid read as one white card. The Reset-columns control keeps
+  // a reserved slot whenever a header is shown — it toggles visibility, never
+  // presence, so adjusting columns never shifts the layout.
+  //
+  // When rows are selected, the SAME header slot swaps to the bulk-action bar
+  // (Gmail/Linear-style) rather than inserting a separate pill above the box —
+  // the box and header are already there, so the swap is in-place with a locked
+  // min-height: no element add/remove, minimal layout shift.
+  const showResetSlot = resizableColumns || reorderableColumns;
+  const selectionActive =
+    !!selection && !!bulkActions && selection.selectedIds.size > 0;
+  const headerVisible =
+    selectionActive ||
+    !!search ||
+    !!toolbar ||
+    (showResetSlot && hasCustomLayout);
+
   return (
     <div className={cn('space-y-3', className)}>
-      {(search || toolbar || hasCustomLayout) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {search && (
-            <Input
-              value={activeQuery}
-              onChange={(e) => table.setGlobalFilter(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="h-9 w-full sm:w-64"
-            />
-          )}
-          {toolbar}
-          {hasCustomLayout && (resizableColumns || reorderableColumns) && (
-            <button
-              type="button"
-              onClick={resetTableLayout}
-              className="ml-auto rounded-md border border-border px-2 py-1 text-xs text-foreground/60 transition hover:bg-secondary hover:text-foreground"
-              title="Reset column widths and order"
-            >
-              Reset columns
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Standardized bulk-action bar — same chrome, theme + position on every
-          table: sits directly above the grid when ≥1 row is selected. */}
-      {selection && bulkActions && selection.selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2 text-sm">
-          <span className="font-medium text-foreground/80">
-            {selectionLabel
-              ? selectionLabel(selection.selectedIds.size)
-              : `${selection.selectedIds.size} selected`}
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            {bulkActions([...selection.selectedIds], () =>
-              selection.onChange(new Set()),
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        {/* Header slot — shared by the filter row and the bulk-action bar.
+            One white card, fixed header height, in-place mode swap. */}
+        {headerVisible && (
+          <div
+            className={cn(
+              'flex min-h-[3.5rem] flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 transition-colors',
+              selectionActive && 'bg-primary/10',
+            )}
+          >
+            {selection && bulkActions && selection.selectedIds.size > 0 ? (
+              <>
+                <span className="text-sm font-medium text-foreground">
+                  {selectionLabel
+                    ? selectionLabel(selection.selectedIds.size)
+                    : `${selection.selectedIds.size} selected`}
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {bulkActions([...selection.selectedIds], () =>
+                    selection.onChange(new Set()),
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => selection.onChange(new Set())}
+                  className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-foreground/60 transition hover:bg-secondary hover:text-foreground"
+                >
+                  <svg
+                    className="size-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                  Clear
+                </button>
+              </>
+            ) : (
+              <>
+                {search && (
+                  <Input
+                    value={activeQuery}
+                    onChange={(e) => table.setGlobalFilter(e.target.value)}
+                    placeholder={searchPlaceholder}
+                    className="h-9 w-full sm:w-64"
+                  />
+                )}
+                {toolbar}
+                {showResetSlot && (
+                  <button
+                    type="button"
+                    onClick={resetTableLayout}
+                    aria-hidden={!hasCustomLayout}
+                    tabIndex={hasCustomLayout ? 0 : -1}
+                    className={cn(
+                      'ml-auto rounded-md border border-border px-2 py-1 text-xs text-foreground/60 transition hover:bg-secondary hover:text-foreground',
+                      !hasCustomLayout && 'invisible pointer-events-none',
+                    )}
+                    title="Reset column widths and order"
+                  >
+                    Reset columns
+                  </button>
+                )}
+              </>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => selection.onChange(new Set())}
-            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-foreground/60 transition hover:bg-secondary hover:text-foreground"
-          >
-            <svg
-              className="size-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-            Clear
-          </button>
-        </div>
-      )}
+        )}
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {/* Desktop / tablet: the full table (horizontal scroll if needed). */}
         <div className="hidden overflow-x-auto sm:block">
           <table

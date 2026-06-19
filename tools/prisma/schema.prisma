@@ -1197,10 +1197,37 @@ model VaultEntity {
   updatedAt     DateTime @updatedAt
 
   documents  VaultDocument[]
+  signatures VaultSignature[]
   accessLogs VaultAccessLog[]
 
   @@index([ownerUserId, updatedAt])
   @@index([ownerOrgId, updatedAt])
+}
+
+/// A reusable signature saved against an entity (docs/10). Multiple per entity
+/// (e.g. full signature, initials). Sensitive — the payload (PNG data URL for
+/// draw/upload, or typed text + font) is AES-256-GCM encrypted at rest exactly
+/// like an entity's fields, masked by default, and only decrypted on an
+/// audited reveal. Reused to pre-fill the document-signing flow so the user
+/// never has to redraw their signature.
+model VaultSignature {
+  id            String   @id @default(cuid())
+  entityId      String
+  /// 'draw' | 'upload' | 'typed' — matches DocumentSigner.provider semantics.
+  method        String   @default("draw")
+  /// User label, e.g. "Default", "Initials". Not a secret.
+  label         String   @default("Signature")
+  /// The preferred signature for this entity (at most one; enforced in the service).
+  isDefault     Boolean  @default(false)
+  /// AES-256-GCM ciphertext of the payload JSON {image?,typedText?,font?}:
+  /// "iv:tag:ciphertext" (base64).
+  dataEncrypted String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entity VaultEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 /// An original document attached to an entity (Aadhaar card scan, PAN, etc.).
@@ -2037,9 +2064,40 @@ model LegalCitation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  attachments LegalCitationAttachment[]
+
   @@index([jurisdiction, isActive])
   @@index([ownerOrgId])
   @@index([isPublic])
+}
+
+/// A file attached to a citation — a bare-act PDF, a commentary excerpt, a
+/// judgment, a circular. Lets the curated catalog carry the "longer proper
+/// document" that won't fit in `fullText`, and surfaces it for download on the
+/// public `/law/:id` page when `isPublic`. The bytes live in object storage
+/// (StorageService, S3 or local-fs); only the key + metadata live here.
+model LegalCitationAttachment {
+  id         String @id @default(cuid())
+  citationId String
+  /// 'bare-act' | 'commentary' | 'judgment' | 'circular' | 'notification' | 'other'
+  kind        String  @default("other")
+  /// Human label shown on the download link (falls back to filename in UI).
+  title       String
+  filename    String
+  contentType String
+  byteSize    Int?
+  /// Object-storage key (StorageService). Download URLs are resolved at read
+  /// time (presigned for S3, public stream for local-fs) — never stored.
+  s3Key       String
+  /// Surface on the public `/law/:id` page. A private citation's files stay
+  /// private regardless; this lets a public citation hide an internal file.
+  isPublic  Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now())
+
+  citation LegalCitation @relation(fields: [citationId], references: [id], onDelete: Cascade)
+
+  @@index([citationId])
 }
 
 /// Section-grounded AI critique results, cached by (documentId, contentHash).

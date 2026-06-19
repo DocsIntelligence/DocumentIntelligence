@@ -131,6 +131,30 @@ the loop is proven and pulling revenue:
 
 Every "no" here is a "yes" to depth on the five JTBD.
 
+### 5.1 Conflict resolution (2026-06-19) — engine + marketplace
+
+`TASKS.md` Tier 0 flagged that `07` shipped a pipeline engine and `02/E` + `docs/12` plan a
+marketplace, seemingly against this cut-list. Resolved by drawing the distinction the cut-list
+intended (confidence: high):
+
+- **The pipeline engine (`07`) is NOT the cut item — KEEP it.** §5 cuts a *human workflow/assignment*
+  engine (queues, round-robin, multi-reviewer routing). What `07` built is a *document-processing*
+  pipeline (classify → extract → validate → review → approve → export) that powers Document
+  Intelligence — a real, differentiated read-side capability, not human task-assignment. The cut
+  still binds the **human** side: **do NOT build reviewer round-robin / SLA queues / assignment**
+  until multi-reviewer firms are the *proven, paying* ICP. (P4.5/P4.6 export+ingest targets are fine;
+  per-stage human-assignment queues are not.)
+- **"Marketplace of lawyers" stays CUT — permanent non-goal.** A services/labor marketplace pulls us
+  into labor margins. No change.
+- **"Template marketplace" (`02/E`, `docs/12`) is DEFERRED, not cut — gated.** An advocate-publishes-a-
+  template, revenue-share *content* marketplace is a two-sided supply+demand problem; with zero users
+  there is neither supply nor demand. Decision: **do not build until after the first 10 paying users**
+  (the `08` §6 gate). Until then it is one-author (us) templates only. Keep `DocumentTemplate.ownerType`
+  as latent capability; build no publishing/discovery/payout UI yet.
+
+Net: nothing to delete; freeze human-workflow + marketplace expansion behind the same usage gate as
+the rest of breadth. This **is** the narrowness doctrine, applied.
+
 ---
 
 ## 6. Positioning vs each incumbent

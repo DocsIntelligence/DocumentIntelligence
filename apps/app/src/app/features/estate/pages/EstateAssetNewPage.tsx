@@ -42,11 +42,15 @@ export function EstateAssetNewPage() {
   const [details, setDetails] = useState<Record<string, string>>({});
   const [extracting, setExtracting] = useState(false);
 
-  const tracksUnits =
-    (types ?? []).find((tp) => tp.key === type)?.tracksUnits ?? false;
+  const typeEntry = (types ?? []).find((tp) => tp.key === type);
+  const tracksUnits = typeEntry?.tracksUnits ?? false;
   const typeMeta = metaForType(type);
-  const maturityLabel = typeMeta.dateLabel
-    ? t(`estate.dateLabel.${type}`, typeMeta.dateLabel)
+  // Prefer org-configured fields/dateLabel (resolved server-side); fall back to
+  // the shared code registry so it works without any config.
+  const typeFields = typeEntry?.fields ?? typeMeta.fields;
+  const dateLabel = typeEntry?.dateLabel ?? typeMeta.dateLabel;
+  const maturityLabel = dateLabel
+    ? t(`estate.dateLabel.${type}`, dateLabel)
     : t('estate.maturityDate', 'Maturity date');
 
   const autofill = async (file: File | undefined) => {
@@ -93,7 +97,7 @@ export function EstateAssetNewPage() {
     if (tracksUnits && units.trim() && Number.isFinite(parsedUnits)) {
       payload.units = parsedUnits;
     }
-    const detailsPayload = toDetailsPayload(type, details);
+    const detailsPayload = toDetailsPayload(type, details, typeFields);
     if (detailsPayload) payload.details = detailsPayload;
     const asset = await create.mutateAsync(payload);
     navigate(`/estate/assets/${asset.id}`);
@@ -209,12 +213,17 @@ export function EstateAssetNewPage() {
           />
         </FormField>
 
-        {typeMeta.fields.length > 0 && (
+        {typeFields.length > 0 && (
           <div className="space-y-3 border-t border-border/60 pt-4">
             <p className="text-sm font-medium text-foreground">
               {t('estate.detailsSection', 'Details')}
             </p>
-            <AssetDetailsFields type={type} value={details} onChange={setDetails} />
+            <AssetDetailsFields
+              type={type}
+              value={details}
+              onChange={setDetails}
+              fields={typeFields}
+            />
           </div>
         )}
 

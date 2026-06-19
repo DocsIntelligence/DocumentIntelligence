@@ -13,9 +13,12 @@ export {
   getCitation,
   citationsForTopic,
   formatCitation,
+  reformRemaps,
   type Citation,
   type CitationConfidence,
   type CodeReform,
+  type RepealedCode,
+  type ReformRemap,
 } from './lib/citations';
 
 export {

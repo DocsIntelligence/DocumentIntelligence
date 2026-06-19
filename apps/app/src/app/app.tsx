@@ -15,6 +15,7 @@ import {
   CloneCitationPage,
   EditCitationPage,
   NewCitationPage,
+  ReformLookupPage,
 } from './features/admin/legal-reference/AdminLegalReferencePage';
 import {
   CloneDocTypePage,
@@ -187,6 +188,10 @@ export function App() {
         <Route
           path="/config/legal-reference"
           element={<AdminLegalReferencePage />}
+        />
+        <Route
+          path="/config/legal-reference/reform"
+          element={<ReformLookupPage />}
         />
         <Route
           path="/config/legal-reference/new"

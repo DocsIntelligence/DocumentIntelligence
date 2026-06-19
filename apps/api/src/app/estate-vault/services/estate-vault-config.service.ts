@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  assetClassForType,
   estateVaultConfigSchema,
+  liquidityForType,
+  metaForType,
+  type EstateAssetTypeDto,
   type EstateVaultConfigDto,
   type UpdateEstateVaultConfigDto,
 } from '@org/dto';
@@ -62,6 +66,7 @@ export class EstateVaultConfigService {
       ...current,
       ...patch,
       toggles: { ...current.toggles, ...(patch.toggles ?? {}) },
+      analysis: { ...current.analysis, ...(patch.analysis ?? {}) },
       assetTypes: patch.assetTypes ?? current.assetTypes,
     });
     await this.db.estateVaultConfig.upsert({
@@ -72,12 +77,28 @@ export class EstateVaultConfigService {
     return merged;
   }
 
-  /** Active asset types for an org, in display order. */
-  async assetTypes(orgId: string | null) {
+  /** Active asset types for an org, in display order, with detail fields +
+   *  analytics metadata resolved (config override → code registry/default). */
+  async assetTypes(orgId: string | null): Promise<EstateAssetTypeDto[]> {
     const cfg = await this.resolve(orgId);
     return cfg.assetTypes
       .filter((t) => t.isActive)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((t) => this.resolveType(t));
+  }
+
+  /** Fill a type's detail fields / dateLabel / class / liquidity from the code
+   *  registry when the config doesn't override them — so the rich defaults are
+   *  always present and orgs can still customise per type. */
+  resolveType(t: EstateAssetTypeDto): EstateAssetTypeDto {
+    const meta = metaForType(t.key);
+    return {
+      ...t,
+      assetClass: t.assetClass ?? assetClassForType(t.key),
+      liquidity: t.liquidity ?? liquidityForType(t.key),
+      dateLabel: t.dateLabel ?? meta.dateLabel,
+      fields: t.fields ?? meta.fields,
+    };
   }
 
   /** Validate/coerce a stored JSON blob, falling back to the code default. */

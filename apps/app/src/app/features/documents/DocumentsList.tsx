@@ -12,12 +12,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  FilterBar,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@org/ui';
 import { cn } from '@org/utils';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -668,14 +664,11 @@ export function DocumentsList({
   );
 }
 
-const ANY_STATUS = '__any__';
-const ANY_TYPE = '__any__';
-
 /**
- * Toolbar slot for the documents table: replaces the previous long row of
- * chips (which scaled badly past ~6 document types) with two dropdowns and an
- * active-filters strip. Hidden when the list is scoped to one group (the
- * group page provides its own narrower context).
+ * Toolbar slot for the documents table — the shared `FilterBar` (status + type
+ * dropdowns with "All …" sentinels + a Clear button), matching every other
+ * list in the app. Each select hides itself when the list is scoped to a
+ * single group (the group page provides its own narrower context).
  */
 function DocumentsToolbar({
   showStatus,
@@ -695,135 +688,37 @@ function DocumentsToolbar({
   types: ReadonlyArray<readonly [string, string]>;
 }) {
   const { t } = useTranslation();
-  const typeLabel = (key: string) => types.find(([k]) => k === key)?.[1] ?? key;
-  const hasFilters = !!statusFilter || !!typeFilter;
-  const clearAll = () => {
-    onStatusChange(null);
-    onTypeChange(null);
-  };
-
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {showStatus && (
-            <Select
-              value={statusFilter ?? ANY_STATUS}
-              onValueChange={(v) => onStatusChange(v === ANY_STATUS ? null : v)}
-            >
-              <SelectTrigger className="h-9 w-40 text-sm">
-                <SelectValue
-                  placeholder={t(
-                    'documents.filter.allStatuses',
-                    'All statuses',
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_STATUS}>
-                  {t('documents.filter.allStatuses', 'All statuses')}
-                </SelectItem>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`status.${s}`, s.replace(/_/g, ' '))}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {showType && types.length > 0 && (
-            <Select
-              value={typeFilter ?? ANY_TYPE}
-              onValueChange={(v) => onTypeChange(v === ANY_TYPE ? null : v)}
-            >
-              <SelectTrigger className="h-9 w-48 text-sm">
-                <SelectValue
-                  placeholder={t('documents.filter.allTypes', 'All types')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_TYPE}>
-                  {t('documents.filter.allTypes', 'All types')}
-                </SelectItem>
-                {types.map(([key, name]) => (
-                  <SelectItem key={key} value={key}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
-
-      {hasFilters && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-foreground/55">
-            {t('documents.filter.activeLabel', 'Filters:')}
-          </span>
-          {statusFilter && (
-            <ActiveFilterPill
-              label={t(
-                `status.${statusFilter}`,
-                statusFilter.replace(/_/g, ' '),
-              )}
-              kind={t('documents.filter.status', 'Status')}
-              onClear={() => onStatusChange(null)}
-            />
-          )}
-          {typeFilter && (
-            <ActiveFilterPill
-              label={typeLabel(typeFilter)}
-              kind={t('documents.filter.type', 'Type')}
-              onClear={() => onTypeChange(null)}
-            />
-          )}
-          <button
-            type="button"
-            onClick={clearAll}
-            className="ml-1 text-foreground/55 hover:text-foreground underline"
-          >
-            {t('documents.filter.clearAll', 'Clear all')}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActiveFilterPill({
-  kind,
-  label,
-  onClear,
-}: {
-  kind: string;
-  label: string;
-  onClear: () => void;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary/50 px-2 py-0.5 text-primary">
-      <span className="text-[10px] uppercase tracking-wide text-primary/70">
-        {kind}
-      </span>
-      <span className="font-medium">{label}</span>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={`Clear ${kind} filter`}
-        className="ml-0.5 rounded-full p-0.5 text-primary/70 hover:bg-primary/35 hover:text-primary"
-      >
-        <svg
-          className="size-3"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <path d="M3 3l6 6M9 3l-6 6" />
-        </svg>
-      </button>
-    </span>
+    <FilterBar
+      selects={[
+        {
+          id: 'status',
+          hidden: !showStatus,
+          value: statusFilter ?? '',
+          onChange: (v) => onStatusChange(v || null),
+          options: STATUSES.map((s) => ({
+            value: s,
+            label: t(`status.${s}`, s.replace(/_/g, ' ')),
+          })),
+          allLabel: t('documents.filter.allStatuses', 'All statuses'),
+          widthClassName: 'w-40',
+        },
+        {
+          id: 'type',
+          hidden: !showType || types.length === 0,
+          value: typeFilter ?? '',
+          onChange: (v) => onTypeChange(v || null),
+          options: types.map(([key, name]) => ({ value: key, label: name })),
+          allLabel: t('documents.filter.allTypes', 'All types'),
+          widthClassName: 'w-48',
+        },
+      ]}
+      onClear={() => {
+        onStatusChange(null);
+        onTypeChange(null);
+      }}
+      clearLabel={t('common.clear', 'Clear')}
+    />
   );
 }
 

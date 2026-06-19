@@ -11,6 +11,9 @@ export {
 import './rent-agreement';
 import './rti';
 import './legal-notice';
+import './cheque-bounce-notice';
+import './consumer-complaint';
+import './anticipatory-bail';
 import './affidavit';
 import './nda';
 import './promissory-note';
@@ -32,6 +35,15 @@ export type { RtiApplicationData } from './rti/schema';
 
 export { legalNoticeBundle } from './legal-notice';
 export type { LegalNoticeData } from './legal-notice/schema';
+
+export { chequeBounceNoticeBundle } from './cheque-bounce-notice';
+export type { ChequeBounceNoticeData } from './cheque-bounce-notice/schema';
+
+export { consumerComplaintBundle } from './consumer-complaint';
+export type { ConsumerComplaintData } from './consumer-complaint/schema';
+
+export { anticipatoryBailBundle } from './anticipatory-bail';
+export type { AnticipatoryBailData } from './anticipatory-bail/schema';
 
 export { affidavitBundle } from './affidavit';
 export type { AffidavitData } from './affidavit/schema';

@@ -38,7 +38,9 @@ export function MainLayout() {
   // Desktop-only sidebar collapse (mobile uses the drawer). Persisted so the
   // choice survives reloads; toggled from the page header's sidebar icon.
   const [collapsed, setCollapsed] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem('nav.collapsed') === '1',
+    () =>
+      typeof window !== 'undefined' &&
+      localStorage.getItem('nav.collapsed') === '1',
   );
   const toggleSidebar = () =>
     setCollapsed((c) => {
@@ -61,66 +63,71 @@ export function MainLayout() {
     <LayoutContext.Provider
       value={{ sidebarCollapsed: collapsed, toggleSidebar }}
     >
-    <div className="min-h-screen bg-secondary/50">
-      {/* Global ⌘K quick search (mounted once) */}
-      <SearchCommandPalette />
+      <div className="min-h-screen bg-secondary/50">
+        {/* Global ⌘K quick search (mounted once) */}
+        <SearchCommandPalette />
 
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-sidebar text-sidebar-foreground px-4 md:hidden">
-        <button
-          type="button"
-          aria-label={t('common.openMenu', 'Open menu')}
-          onClick={() => setMobileOpen(true)}
-          className="-ml-1 inline-flex size-9 items-center justify-center rounded-md text-foreground/70 hover:bg-secondary/60"
-        >
-          <MenuIcon />
-        </button>
-        <Link to="/dashboard" className="text-base font-semibold">
-          {APP_ENV.appName}
-        </Link>
-        <div className="ml-auto">
-          <UserAvatar name={user?.name} src={user?.picture} size="sm" />
-        </div>
-      </header>
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-sidebar text-sidebar-foreground px-4 md:hidden">
+          <button
+            type="button"
+            aria-label={t('common.openMenu', 'Open menu')}
+            onClick={() => setMobileOpen(true)}
+            className="-ml-1 inline-flex size-9 items-center justify-center rounded-md text-foreground/70 hover:bg-secondary/60"
+          >
+            <MenuIcon />
+          </button>
+          <Link to="/dashboard" className="text-base font-semibold">
+            {APP_ENV.appName}
+          </Link>
+          <div className="ml-auto">
+            <UserAvatar name={user?.name} src={user?.picture} size="sm" />
+          </div>
+        </header>
 
-      {/* Sidebar (drawer on mobile, fixed on desktop) */}
-      <Sidebar
-        userName={user?.name}
-        userEmail={user?.email}
-        userPicture={user?.picture}
-        isAdmin={user?.role === 'admin'}
-        mobileOpen={mobileOpen}
-        collapsed={collapsed}
-        onClose={() => setMobileOpen(false)}
-        onToggleCollapse={toggleSidebar}
-        onLogout={onLogout}
-      />
+        {/* Sidebar (drawer on mobile, fixed on desktop) */}
+        <Sidebar
+          userName={user?.name}
+          userEmail={user?.email}
+          userPicture={user?.picture}
+          isAdmin={user?.role === 'admin'}
+          mobileOpen={mobileOpen}
+          collapsed={collapsed}
+          onClose={() => setMobileOpen(false)}
+          onToggleCollapse={toggleSidebar}
+          onLogout={onLogout}
+        />
 
-      {/* Desktop fallback to reopen the sidebar (works even on pages that
+        {/* Desktop fallback to reopen the sidebar (works even on pages that
           don't render a PageHeader with its own toggle). */}
-      {collapsed && (
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label={t('nav.showSidebar', 'Show sidebar')}
-          title={t('nav.showSidebar', 'Show sidebar')}
-          className="fixed left-3 top-3 z-30 hidden size-9 items-center justify-center rounded-md border border-border bg-card text-foreground/70 shadow-sm transition hover:bg-secondary hover:text-foreground md:inline-flex"
-        >
-          <MenuIcon />
-        </button>
-      )}
+        {collapsed && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={t('nav.showSidebar', 'Show sidebar')}
+            title={t('nav.showSidebar', 'Show sidebar')}
+            className="fixed left-3 top-3 z-30 hidden size-9 items-center justify-center rounded-md border border-border bg-card text-foreground/70 shadow-sm transition hover:bg-secondary hover:text-foreground md:inline-flex"
+          >
+            <MenuIcon />
+          </button>
+        )}
 
-      {/* Content — drops the sidebar gutter when the sidebar is collapsed. */}
-      <div className={cn('transition-[padding]', collapsed ? 'md:pl-0' : 'md:pl-64')}>
-        <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 md:px-8 md:py-10">
-          {/* Route-level boundary: keyed by path so navigating away clears a
+        {/* Content — drops the sidebar gutter when the sidebar is collapsed. */}
+        <div
+          className={cn(
+            'transition-[padding]',
+            collapsed ? 'md:pl-0' : 'md:pl-64',
+          )}
+        >
+          <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 md:px-8 md:py-10">
+            {/* Route-level boundary: keyed by path so navigating away clears a
               page-local error automatically. */}
-          <ErrorBoundary level="route" key={location.pathname}>
-            <Outlet />
-          </ErrorBoundary>
-        </main>
+            <ErrorBoundary level="route" key={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
+          </main>
+        </div>
       </div>
-    </div>
     </LayoutContext.Provider>
   );
 }
@@ -250,62 +257,6 @@ function Sidebar({
             label={t('nav.vault', 'Vault')}
             icon={<VaultIcon />}
           />
-          {estateOn && (
-            <NavGroup
-              label={t('nav.estate', 'Wealth Vault')}
-              icon={<ChartIcon />}
-              storageKey="nav.group.estate"
-              childPaths={['/estate']}
-            >
-              <NavItem
-                to="/estate"
-                end
-                label={t('nav.estateOverview', 'Overview')}
-                icon={<ChartIcon />}
-              />
-              <NavItem
-                to="/estate/profiles"
-                label={t('nav.estateProfiles', 'Profiles')}
-                icon={<UsersIcon />}
-              />
-              <NavItem
-                to="/estate/assets"
-                end
-                label={t('nav.estateAssets', 'Assets')}
-                icon={<ListIcon />}
-              />
-              <NavItem
-                to="/estate/assets/new"
-                label={t('nav.estateAddAsset', 'Add asset')}
-                icon={<PlusIcon />}
-              />
-              <NavItem
-                to="/estate/import"
-                label={t('nav.estateImport', 'Import statement')}
-                icon={<UploadIcon />}
-              />
-              <NavItem
-                to="/estate/import-files"
-                label={t('nav.estateBulkImport', 'Bulk file import')}
-                icon={<LayersIcon />}
-              />
-              <NavItem
-                to="/estate/nominees"
-                label={t('nav.estateNominees', 'Nominees')}
-                icon={<ShieldIcon />}
-              />
-              <NavItem
-                to="/estate/release"
-                label={t('nav.estateRelease', 'Release plan')}
-                icon={<GearIcon />}
-              />
-              <NavItem
-                to="/estate/report"
-                label={t('nav.estateReport', 'Estate report')}
-                icon={<BookIcon />}
-              />
-            </NavGroup>
-          )}
 
           <NavGroup
             label={t('nav.documents', 'Documents')}
@@ -313,12 +264,12 @@ function Sidebar({
             storageKey="nav.group.documents"
             childPaths={['/documents', '/groups']}
           >
-            <NavItem
+            {/* <NavItem
               to="/documents/new"
               end
               label={t('nav.newDocument', 'New document')}
               icon={<PlusIcon />}
-            />
+            /> */}
             <NavItem
               to="/documents"
               end
@@ -346,11 +297,11 @@ function Sidebar({
               label={t('nav.analyze', 'Analyze')}
               icon={<ScanIcon />}
             />
-            <NavItem
+            {/* <NavItem
               to="/batches/new"
               label={t('nav.newBatch', 'New batch')}
               icon={<UploadIcon />}
-            />
+            /> */}
             <NavItem
               to="/batches"
               end
@@ -363,6 +314,63 @@ function Sidebar({
               icon={<InboxIcon />}
             />
           </NavGroup>
+
+          {estateOn && (
+            <NavGroup
+              label={t('nav.estate', 'Wealth Vault')}
+              icon={<ChartIcon />}
+              storageKey="nav.group.estate"
+              childPaths={['/estate']}
+            >
+              <NavItem
+                to="/estate"
+                end
+                label={t('nav.estateOverview', 'Overview')}
+                icon={<ChartIcon />}
+              />
+              {/* <NavItem
+                to="/estate/profiles"
+                label={t('nav.estateProfiles', 'Profiles')}
+                icon={<UsersIcon />}
+              /> */}
+              <NavItem
+                to="/estate/assets"
+                end
+                label={t('nav.estateAssets', 'Assets')}
+                icon={<ListIcon />}
+              />
+              {/* <NavItem
+                to="/estate/assets/new"
+                label={t('nav.estateAddAsset', 'Add asset')}
+                icon={<PlusIcon />}
+              /> */}
+              {/* <NavItem
+                to="/estate/import"
+                label={t('nav.estateImport', 'Import statement')}
+                icon={<UploadIcon />}
+              /> */}
+              <NavItem
+                to="/estate/import-files"
+                label={t('nav.estateBulkImport', 'Bulk file import')}
+                icon={<LayersIcon />}
+              />
+              <NavItem
+                to="/estate/nominees"
+                label={t('nav.estateNominees', 'Nominees')}
+                icon={<ShieldIcon />}
+              />
+              <NavItem
+                to="/estate/release"
+                label={t('nav.estateRelease', 'Release plan')}
+                icon={<GearIcon />}
+              />
+              <NavItem
+                to="/estate/report"
+                label={t('nav.estateReport', 'Estate report')}
+                icon={<BookIcon />}
+              />
+            </NavGroup>
+          )}
 
           {/* Configuration — catalogs + settings, all under /config/* */}
           <NavGroup

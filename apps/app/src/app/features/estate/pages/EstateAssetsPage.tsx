@@ -8,11 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  FilterBar,
 } from '@org/ui';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -212,32 +208,34 @@ export function EstateAssetsPage() {
         }
       />
 
-      <div className="flex items-center gap-2">
-        <Select
-          value={type}
-          onValueChange={(v) => {
-            setType(v);
-            setPage(0);
-          }}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder={t('estate.allTypes', 'All types')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">
-              {t('estate.allTypes', 'All types')}
-            </SelectItem>
-            {(types ?? []).map((tp) => (
-              <SelectItem key={tp.key} value={tp.key}>
-                {tp.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable
         tableId="estate.assets"
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: 'type',
+                value: type === 'all' ? '' : type,
+                onChange: (v) => {
+                  setType(v || 'all');
+                  setPage(0);
+                },
+                options: (types ?? []).map((tp) => ({
+                  value: tp.key,
+                  label: tp.label,
+                })),
+                allLabel: t('estate.allTypes', 'All types'),
+                widthClassName: 'w-48',
+              },
+            ]}
+            onClear={() => {
+              setType('all');
+              setQuery('');
+              setPage(0);
+            }}
+            clearLabel={t('common.clear', 'Clear')}
+          />
+        }
         data={items}
         columns={columns}
         rowKey={(r) => r.id}

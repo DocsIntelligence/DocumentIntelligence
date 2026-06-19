@@ -1,11 +1,7 @@
 import {
   Badge,
   Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  FilterBar,
   DataTable,
   type DataTableColumn,
   Spinner,
@@ -463,72 +459,42 @@ export function ReviewQueuePage() {
           </>
         )}
         toolbar={
-          (
-            <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-              {batchId && statuses.length > 1 && (
-                <Select
-                  value={statusFilter ?? '__any__'}
-                  onValueChange={(v) =>
-                    setStatusFilter(v === '__any__' ? null : v)
-                  }
-                >
-                  <SelectTrigger className="h-9 w-44 text-sm">
-                    <SelectValue
-                      placeholder={t(
-                        'intelligence.queue.filter.allStatuses',
-                        'All statuses',
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__any__">
-                      {t(
-                        'intelligence.queue.filter.allStatuses',
-                        'All statuses',
-                      )}
-                    </SelectItem>
-                    {statuses.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s.replace(/_/g, ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {types.length > 1 && (
-                <Select
-                  value={typeFilter ?? '__any__'}
-                  onValueChange={(v) =>
-                    setTypeFilter(v === '__any__' ? null : v)
-                  }
-                >
-                  <SelectTrigger className="h-9 w-48 text-sm">
-                    <SelectValue
-                      placeholder={t(
-                        'intelligence.queue.filter.allTypes',
-                        'All types',
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__any__">
-                      {t(
-                        'intelligence.queue.filter.allTypes',
-                        'All types',
-                      )}
-                    </SelectItem>
-                    {types.map((ty) => (
-                      <SelectItem key={ty} value={ty}>
-                        {ty}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              </div>
-            </div>
-          )
+          <FilterBar
+            selects={[
+              {
+                id: 'status',
+                value: statusFilter ?? '',
+                onChange: (v) => setStatusFilter(v || null),
+                options: statuses.map((s) => ({
+                  value: s,
+                  label: s.replace(/_/g, ' '),
+                })),
+                allLabel: t(
+                  'intelligence.queue.filter.allStatuses',
+                  'All statuses',
+                ),
+                widthClassName: 'w-44',
+                hidden: !batchId || statuses.length <= 1,
+              },
+              {
+                id: 'type',
+                value: typeFilter ?? '',
+                onChange: (v) => setTypeFilter(v || null),
+                options: types.map((ty) => ({ value: ty, label: ty })),
+                allLabel: t(
+                  'intelligence.queue.filter.allTypes',
+                  'All types',
+                ),
+                widthClassName: 'w-48',
+                hidden: types.length <= 1,
+              },
+            ]}
+            onClear={() => {
+              setStatusFilter(null);
+              setTypeFilter(null);
+            }}
+            clearLabel={t('common.clear', 'Clear')}
+          />
         }
       />
     </div>

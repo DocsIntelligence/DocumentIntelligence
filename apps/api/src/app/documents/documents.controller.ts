@@ -129,13 +129,16 @@ export class DocumentsController {
   }
 
   @Post(':id/exports')
-  @ApiOperation({ summary: 'Enqueue a PDF export job for this document' })
+  @ApiOperation({ summary: 'Enqueue a document export job (pdf or png)' })
   enqueueExport(
     @CurrentUser() user: User,
     @Param('id') id: string,
     @Body() body: CreateExportDto,
   ) {
-    return this.exports.enqueueExport(user.id, id, body.pageSize);
+    return this.exports.enqueueExport(user.id, id, {
+      format: body.format,
+      pageSize: body.pageSize,
+    });
   }
 
   @Get(':id/exports/:exportId')
