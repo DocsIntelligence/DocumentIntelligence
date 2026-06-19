@@ -24,7 +24,7 @@ buckets. The two surfaces differ only in **where** they measure:
 | Surface      | Runs in                                  | Measures inside          | Styled by                    |
 | ------------ | ---------------------------------------- | ------------------------ | ---------------------------- |
 | Live preview | the **app** (`:5200`)                    | `.document-preview-page` | `editor.css`                 |
-| Exported PDF | the **artboard** via Puppeteer (`:4210`) | `.doc-page`              | `Page.tsx` `PagePrintStyles` |
+| Exported PDF | the **artboard** via Puppeteer (`:5210`) | `.doc-page`              | `Page.tsx` `PagePrintStyles` |
 
 For the breaks to match, three things must hold in both contexts:
 
@@ -58,7 +58,7 @@ Logged to the browser console. Turn it on with **either**:
 
 Open the editor, look at the console for the `[PREVIEW/APP] …` block.
 
-### Exported PDF (artboard, `:4210`)
+### Exported PDF (artboard, `:5210`)
 
 Printed as a yellow box at the top of **page 1 of the PDF itself** (so you can
 read it from the exported file). Turn it on by setting an env var on the **API**

@@ -14,12 +14,12 @@
     },
     "dev": {
       "options": {
-        "port": 4300
+        "port": 5220
       }
     },
     "start": {
       "options": {
-        "port": 4300
+        "port": 5220
       }
     }
   }

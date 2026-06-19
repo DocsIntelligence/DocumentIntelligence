@@ -123,7 +123,7 @@ Database commands assume Postgres is reachable. If not, generate SQL only and sk
   - **AI integration**: clicking a field's AI button calls `POST /legal-ai/clause-rewrite` with the field value; result replaces the value in-place; toast on cached/error
   - **Header**: title input + autosave status badge ("Saving…"/"Saved"/"Save failed") + disabled Share / Export PDF buttons (wired to upcoming Phase 2 work)
   - **Navigation**: "Documents" link added to MainLayout profile dropdown
-  - **Env**: `VITE_ARTBOARD_URL` (default `http://localhost:4210`) consumed by `ArtboardIframe`
+  - **Env**: `VITE_ARTBOARD_URL` (default `http://localhost:5210`) consumed by `ArtboardIframe`
   - **Validation**: app builds clean (456 modules, 316 KB gzip), lints clean for all new files (0 errors, 0 warnings from new code)
 
 - [ ] 16. Documents API full CRUD + autosave

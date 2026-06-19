@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 const ARTBOARD_URL =
   (import.meta as unknown as { env: Record<string, string> }).env
-    .VITE_ARTBOARD_URL ?? 'http://localhost:4210';
+    .VITE_ARTBOARD_URL ?? 'http://localhost:5210';
 
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3;

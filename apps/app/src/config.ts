@@ -7,7 +7,7 @@ export const APP_ENV = {
   apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
   appUrl: import.meta.env.VITE_APP_URL ?? 'http://localhost:5200',
   /** Public marketing host where `/law/*` pages live (SSR'd by apps/web). */
-  webUrl: import.meta.env.VITE_WEB_URL ?? 'http://localhost:4300',
+  webUrl: import.meta.env.VITE_WEB_URL ?? 'http://localhost:5220',
   razorpayKeyId: import.meta.env.VITE_RAZORPAY_KEY_ID ?? '',
   appName: import.meta.env.VITE_APP_NAME ?? 'Document Builder - React',
 } as const;

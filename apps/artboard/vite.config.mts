@@ -6,7 +6,7 @@ export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/artboard',
   server: {
-    port: 4210,
+    port: 5210,
     host: true,
     // Vite 5+ guards against DNS-rebinding by rejecting Host headers it
     // doesn't recognise. The PDF render worker reaches us via Docker's
@@ -18,7 +18,7 @@ export default defineConfig(() => ({
     },
   },
   preview: {
-    port: 4210,
+    port: 5210,
     host: true,
     allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
   },
