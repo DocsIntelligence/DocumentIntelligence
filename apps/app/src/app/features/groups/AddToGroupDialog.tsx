@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDocumentsPage } from '../documents/queries';
+import { documentTypeLabel } from '../documents/document-label';
 import { useAddDocumentsToGroup, useGroupsPage } from './queries';
 
 export interface AddToGroupTarget {
@@ -410,8 +411,7 @@ export function AddDocsToCurrentGroupDialog({
                     {doc.title || t('common.untitled', 'Untitled')}
                   </span>
                   <span className="shrink-0 text-xs text-foreground/45">
-                    {(doc as { documentType?: { name: string } }).documentType
-                      ?.name ?? t('common.document', 'Document')}
+                    {documentTypeLabel(doc, t('common.document', 'Document'))}
                   </span>
                 </button>
               ))

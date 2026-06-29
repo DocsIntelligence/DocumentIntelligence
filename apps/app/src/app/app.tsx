@@ -55,7 +55,12 @@ import {
   SharedDocumentView,
   TemplatesPage,
 } from './features/documents';
-import { EditorDemo, DraftEditorPage } from './features/editor';
+import {
+  EditorDemo,
+  DraftEditorPage,
+  MarkdownEditorPage,
+  MarkdownDraftPage,
+} from './features/editor';
 import { GroupDetailPage } from './features/groups/GroupDetailPage';
 import { GroupsPage } from './features/groups/GroupsPage';
 import { GroupAddDocsPage } from './features/groups/GroupAddDocsPage';
@@ -293,6 +298,22 @@ export function App() {
         element={
           <ProtectedRoute>
             <EditorDemo />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/editor/markdown"
+        element={
+          <ProtectedRoute>
+            <MarkdownEditorPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/documents/:id/markdown"
+        element={
+          <ProtectedRoute>
+            <MarkdownDraftPage />
           </ProtectedRoute>
         }
       />

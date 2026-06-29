@@ -16,6 +16,8 @@ const CreateDocumentSchema = z.object({
   jurisdiction: z.string().min(2).max(16).optional(),
   data: z.record(z.string(), z.unknown()).default({}),
   ownerOrgId: z.string().cuid().optional(),
+  /** When set, the new document is filed into this group on creation. */
+  groupId: z.string().cuid().optional(),
 });
 
 export class CreateDocumentDto extends createZodDto(CreateDocumentSchema) {}

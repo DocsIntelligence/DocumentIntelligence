@@ -1,6 +1,6 @@
 import { Button, Card, Chip, Input } from '@org/ui';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
 import { useTranslation } from 'react-i18next';
 import { useCreateDocument, useDocumentCatalog } from './queries';
@@ -16,6 +16,8 @@ export function TemplatesPage() {
   const { t } = useTranslation();
   const create = useCreateDocument();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const groupId = params.get('groupId') ?? undefined;
   const [typeKey, setTypeKey] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function TemplatesPage() {
       templateKey,
       pageSize: selectedType.defaultPageSize,
       data: {},
+      groupId,
     });
     navigate(`/documents/${doc.id}/edit`);
   }

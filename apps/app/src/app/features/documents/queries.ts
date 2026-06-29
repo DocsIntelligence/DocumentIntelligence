@@ -81,7 +81,11 @@ export function useCreateDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateDocumentPayload) => svc.create(payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: documentsKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: documentsKeys.all });
+      // A doc created with `groupId` joins a group — refresh group views too.
+      qc.invalidateQueries({ queryKey: ['groups'] });
+    },
     onError: (err) => toast.error(extractMessage(err, 'Failed to create')),
   });
 }

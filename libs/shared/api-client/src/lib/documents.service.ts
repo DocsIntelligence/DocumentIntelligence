@@ -62,6 +62,9 @@ export interface DocumentSummary {
   // detail response via `getById`'s full template include; omitted by `list`).
   template?: { key: string; name: string; componentKey?: string };
   group?: { id: string; name: string; kind: string } | null;
+  // Minimal slice of `data` the list relies on — `format` distinguishes a
+  // markdown-authored freeform doc from a rich-text one, for the type label.
+  data?: { format?: string } | null;
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -81,6 +84,8 @@ export interface CreateDocumentPayload {
   jurisdiction?: string;
   data?: Record<string, unknown>;
   ownerOrgId?: string;
+  /** File the new document into this group on creation. */
+  groupId?: string;
 }
 
 export interface PatchDocumentPayload {

@@ -80,6 +80,8 @@ import { PageNavigator } from './components/PageNavigator';
 import { TEMPLATES, getTemplateById } from './templates/registry';
 import type { DocumentTemplate, PlaceholderDef } from './templates/types';
 import { downloadWordDoc } from './export-word';
+import { MarkdownSource } from './markdown/MarkdownSource';
+import { htmlToMarkdown, renderMarkdown } from './markdown/markdown';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
 import { PageSizeSelect } from '../../lib/page-sizes';
 import { DocumentFontSelect } from '../../lib/document-fonts';
@@ -88,6 +90,9 @@ import type { PageSizeKey } from '@org/document-templates';
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
 const DRAFT_KEY = 'legaldraft:editor:draft:v1';
 const PANEL_VISIBILITY_KEY = 'editor:panel-visibility:v1';
+
+/** Which authoring surface the center pane renders. */
+export type EditorKind = 'richtext' | 'markdown';
 
 /** Snapshot of editor state handed to persistence callbacks. */
 export type EditorDraftState = {
@@ -99,6 +104,8 @@ export type EditorDraftState = {
   fontFamily?: string;
   /** Typed field defs for the doc's tokens; persisted in `data.fields`. */
   fields?: PlaceholderDef[];
+  /** Markdown source (markdown mode only) — the canonical authored text. */
+  markdown?: string;
 };
 
 /**
@@ -119,6 +126,8 @@ export type EditorPersistence =
         fontFamily?: string;
         /** Typed field defs (e.g. from convert) → render typed inputs, not plain text. */
         fields?: PlaceholderDef[];
+        /** Markdown source (markdown mode) — the editor derives `html` from it. */
+        markdown?: string;
       };
       onSave: (s: EditorDraftState) => void;
       /** Called when the user changes the paper size (bound mode persists it). */
@@ -155,6 +164,8 @@ export interface TemplateEditorProps {
   documentId?: string;
   /** Extra rendered HTML appended in the preview (e.g. signatures + audit). */
   previewAppendHtml?: string;
+  /** Center pane surface — `richtext` (TipTap, default) or `markdown`. */
+  editorKind?: EditorKind;
 }
 
 function TemplateEditorInner({
@@ -169,6 +180,7 @@ function TemplateEditorInner({
   onSignatures,
   documentId,
   previewAppendHtml,
+  editorKind = 'richtext',
 }: {
   persistence: EditorPersistence;
   backHref?: string;
@@ -188,10 +200,12 @@ function TemplateEditorInner({
   onSignatures?: () => void;
   documentId?: string;
   previewAppendHtml?: string;
+  editorKind?: EditorKind;
 }) {
   const { t } = useTranslation();
   const { enabled, language } = useTransliteration();
   const bound = persistence.mode === 'bound';
+  const isMarkdown = editorKind === 'markdown';
   // Recover any in-progress local draft (local mode only).
   const restored = useMemo(() => (bound ? null : loadDraft()), [bound]);
   // Initial seed is computed once — useState ignores later changes to `init`.
@@ -199,21 +213,42 @@ function TemplateEditorInner({
     template: DocumentTemplate;
     values: Record<string, string>;
     html: string;
+    markdown: string;
     savedAt: number | null;
     pageSize: PageSizeKey;
     fontFamily?: string;
   }>(() => {
     if (persistence.mode === 'bound') {
+      const md = persistence.initial.markdown ?? '';
       const tpl =
         getTemplateById(persistence.initial.templateId ?? '') ??
         synthesizeTemplate(persistence.initial);
       return {
         template: tpl,
         values: persistence.initial.values,
-        html: persistence.initial.html,
+        html: editorKind === 'markdown' ? renderMarkdown(md) : persistence.initial.html,
+        markdown: md,
         savedAt: persistence.savedAt ?? null,
         pageSize: persistence.initial.pageSize ?? 'a4',
         fontFamily: persistence.initial.fontFamily,
+      };
+    }
+    // Local scratchpad. In markdown mode we never load a gallery template —
+    // the source of truth is the recovered Markdown text.
+    if (editorKind === 'markdown') {
+      const md = restored?.markdown ?? '';
+      return {
+        template: synthesizeTemplate({
+          templateId: 'freeform',
+          title: restored?.title ?? 'Untitled document',
+          html: renderMarkdown(md),
+        }),
+        values: restored?.values ?? {},
+        html: renderMarkdown(md),
+        markdown: md,
+        savedAt: restored?.savedAt ?? null,
+        pageSize: restored?.pageSize ?? 'a4',
+        fontFamily: restored?.fontFamily,
       };
     }
     const tpl =
@@ -223,6 +258,7 @@ function TemplateEditorInner({
       template: tpl,
       values: restored?.values ?? seedValues(tpl.placeholders),
       html: restored?.html ?? tpl.html,
+      markdown: '',
       savedAt: restored?.savedAt ?? null,
       pageSize: restored?.pageSize ?? 'a4',
       fontFamily: restored?.fontFamily,
@@ -231,11 +267,18 @@ function TemplateEditorInner({
   const [template, setTemplate] = useState<DocumentTemplate>(init.template);
   const [values, setValues] = useState<Record<string, string>>(init.values);
   const [html, setHtml] = useState<string>(init.html);
+  const [markdown, setMarkdown] = useState<string>(init.markdown);
   const [savedAt, setSavedAt] = useState<number | null>(init.savedAt);
   const [pageSize, setPageSize] = useState<PageSizeKey>(init.pageSize);
   const [fontFamily, setFontFamily] = useState<string | undefined>(
     init.fontFamily,
   );
+
+  // Markdown mode: the Markdown text is canonical; keep the derived `html`
+  // (used by the preview, export, AI revise, and persistence) in sync with it.
+  useEffect(() => {
+    if (isMarkdown) setHtml(renderMarkdown(markdown));
+  }, [isMarkdown, markdown]);
 
   const handlePageSizeChange = useCallback(
     (size: PageSizeKey) => {
@@ -254,9 +297,17 @@ function TemplateEditorInner({
     | 'comments'
     | 'history'
     | 'share';
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('fields');
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
+    // Markdown hides Fields/Pages; its first real panel (Legal & AI etc.)
+    // only exists for a saved doc — start there when bound.
+    isMarkdown && documentId ? 'legal-ai-citations' : 'fields',
+  );
   const [showPreview, setShowPreview] = useState(true);
-  const [showSidebar, setShowSidebar] = useState(true);
+  // Markdown's left rail only has panels once the doc is saved (documentId).
+  // In the unsaved scratchpad there are none, so don't show an empty sidebar.
+  const [showSidebar, setShowSidebar] = useState(
+    !(isMarkdown && !documentId),
+  );
   // Persisted per-panel visibility (which menu items the user has hidden).
   // Lives in localStorage so the preference survives reloads / new docs.
   const [hiddenPanels, setHiddenPanels] = useState<Set<string>>(() =>
@@ -442,15 +493,18 @@ function TemplateEditorInner({
           values,
           fontFamily,
           fields: template.placeholders,
+          markdown: isMarkdown ? markdown : undefined,
         });
       } else {
         const now = Date.now();
         saveDraft({
           templateId: template.id,
+          title: template.name,
           html,
           values,
           pageSize,
           fontFamily,
+          markdown: isMarkdown ? markdown : undefined,
           savedAt: now,
         });
         setSavedAt(now);
@@ -462,6 +516,8 @@ function TemplateEditorInner({
     template.name,
     template.placeholders,
     html,
+    markdown,
+    isMarkdown,
     values,
     pageSize,
     fontFamily,
@@ -482,8 +538,12 @@ function TemplateEditorInner({
       setTemplate(tpl);
       const seeded = seedValues(tpl.placeholders);
       setValues(seeded);
-      setHtml(tpl.html);
-      editor?.commands.setContent(tpl.html);
+      if (isMarkdown) {
+        setMarkdown(htmlToMarkdown(tpl.html));
+      } else {
+        setHtml(tpl.html);
+        editor?.commands.setContent(tpl.html);
+      }
       setActivePage(0);
       toast.success(
         t('editor.toast.templateLoaded', 'Loaded template: {{name}}', {
@@ -529,8 +589,13 @@ function TemplateEditorInner({
         generateBrief.trim(),
         generateLanguage,
       );
-      editor.commands.setContent(out);
-      setHtml(out);
+      if (isMarkdown) {
+        // The AI returns HTML; Markdown is canonical here, so convert it in.
+        setMarkdown(htmlToMarkdown(out));
+      } else {
+        editor.commands.setContent(out);
+        setHtml(out);
+      }
       setValues({});
       setActivePage(0);
       toast.success(
@@ -583,8 +648,15 @@ function TemplateEditorInner({
         html,
         reviseLanguage || undefined,
       );
-      // Don't apply yet — stage it and let the user review the diff.
-      setPendingRevision({ before: html, after: out });
+      if (isMarkdown) {
+        // No HTML block-diff in markdown mode — apply straight to the source.
+        setMarkdown(htmlToMarkdown(out));
+        setActivePage(0);
+        toast.success(t('editor.toast.revisionApplied', 'Revision applied'));
+      } else {
+        // Don't apply yet — stage it and let the user review the diff.
+        setPendingRevision({ before: html, after: out });
+      }
     } catch {
       toast.error(
         t(
@@ -835,28 +907,35 @@ function TemplateEditorInner({
   // parent owns). Items requiring a `documentId` (Legal & AI, Comments,
   // History) only render when one is provided — keeps the menu honest.
   const menuItems: RailItem[] = [
-    {
-      id: 'fields',
-      kind: 'panel',
-      group: t('editor.group.content', 'Content'),
-      label: t('editor.tabs.fields', 'Fields'),
-      icon: <FieldsIcon />,
-      active: sidebarTab === 'fields',
-      badge:
-        completionStats.total > 0
-          ? `${completionStats.filled}/${completionStats.total}`
-          : undefined,
-      onClick: () => setSidebarTab('fields'),
-    },
-    {
-      id: 'pages',
-      kind: 'panel',
-      group: t('editor.group.content', 'Content'),
-      label: t('editor.tabs.pages', 'Pages'),
-      icon: <PagesIcon />,
-      active: sidebarTab === 'pages',
-      onClick: () => setSidebarTab('pages'),
-    },
+    // Content-group panels are TipTap-specific: Fields drives the placeholder
+    // form, Pages drives page-break navigation. Neither applies to Markdown,
+    // so they're omitted entirely (also keeps them out of "Customize sidebar").
+    ...(!isMarkdown
+      ? [
+          {
+            id: 'fields',
+            kind: 'panel' as const,
+            group: t('editor.group.content', 'Content'),
+            label: t('editor.tabs.fields', 'Fields'),
+            icon: <FieldsIcon />,
+            active: sidebarTab === 'fields',
+            badge:
+              completionStats.total > 0
+                ? `${completionStats.filled}/${completionStats.total}`
+                : undefined,
+            onClick: () => setSidebarTab('fields'),
+          },
+          {
+            id: 'pages',
+            kind: 'panel' as const,
+            group: t('editor.group.content', 'Content'),
+            label: t('editor.tabs.pages', 'Pages'),
+            icon: <PagesIcon />,
+            active: sidebarTab === 'pages',
+            onClick: () => setSidebarTab('pages'),
+          },
+        ]
+      : []),
     ...(documentId
       ? [
           {
@@ -1072,7 +1151,49 @@ function TemplateEditorInner({
     </aside>
   );
 
-  const editorPane = (
+  // Shared status bar (counts + save state), placed under either center pane.
+  const statusText = isMarkdown ? markdown : (editor?.getText() ?? '');
+  const statusBar = (
+    <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
+      <span className="truncate">
+        {t(
+          'editor.status.counts',
+          '{{chars}} chars · {{words}} words · Page {{page}}',
+          {
+            chars: statusText.length,
+            words: statusText.split(/\s+/).filter(Boolean).length,
+            page: activePage + 1,
+          },
+        )}
+      </span>
+      <span className="flex flex-none items-center gap-1.5">
+        <span
+          className={cn(
+            'inline-block size-1.5 rounded-full',
+            savedAt ? 'bg-success' : 'bg-warning',
+          )}
+        />
+        {isSaving
+          ? t('editor.status.saving', 'Saving…')
+          : savedAt
+            ? `${bound ? t('editor.status.savedToCloud', 'Saved to cloud') : t('editor.status.saved', 'Saved')} ${formatTime(savedAt)}`
+            : bound
+              ? t('editor.status.saving', 'Saving…')
+              : t('editor.status.notSaved', 'Not saved yet')}
+      </span>
+    </div>
+  );
+
+  const editorPane = isMarkdown ? (
+    <section className="flex h-full flex-col overflow-hidden bg-background">
+      <MarkdownSource
+        value={markdown}
+        onChange={setMarkdown}
+        className="flex-1"
+      />
+      {statusBar}
+    </section>
+  ) : (
     <section className="flex h-full flex-col overflow-hidden bg-background">
       {editor && (
         <EditorToolbar
@@ -1098,36 +1219,7 @@ function TemplateEditorInner({
           />
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-border bg-background px-3 py-1 text-[11px] text-foreground/55">
-        <span className="truncate">
-          {t(
-            'editor.status.counts',
-            '{{chars}} chars · {{words}} words · Page {{page}}',
-            {
-              chars: editor?.getText().length ?? 0,
-              words: editor
-                ? editor.getText().split(/\s+/).filter(Boolean).length
-                : 0,
-              page: activePage + 1,
-            },
-          )}
-        </span>
-        <span className="flex flex-none items-center gap-1.5">
-          <span
-            className={cn(
-              'inline-block size-1.5 rounded-full',
-              savedAt ? 'bg-success' : 'bg-warning',
-            )}
-          />
-          {isSaving
-            ? t('editor.status.saving', 'Saving…')
-            : savedAt
-              ? `${bound ? t('editor.status.savedToCloud', 'Saved to cloud') : t('editor.status.saved', 'Saved')} ${formatTime(savedAt)}`
-              : bound
-                ? t('editor.status.saving', 'Saving…')
-                : t('editor.status.notSaved', 'Not saved yet')}
-        </span>
-      </div>
+      {statusBar}
     </section>
   );
 
@@ -1300,6 +1392,7 @@ function TemplateEditorInner({
                     title: template.name,
                     html,
                     values,
+                    markdown: isMarkdown ? markdown : undefined,
                   })
                 }
                 className="h-7 gap-1.5 px-2 text-xs"
@@ -1408,7 +1501,9 @@ function TemplateEditorInner({
                 )}
               >
                 {pane === 'fields'
-                  ? t('editor.tabs.fields', 'Fields')
+                  ? isMarkdown
+                    ? t('editor.mobile.panels', 'Panels')
+                    : t('editor.tabs.fields', 'Fields')
                   : pane === 'editor'
                     ? t('editor.mobile.editor', 'Editor')
                     : t('editor.mobile.preview', 'Preview')}
@@ -1770,6 +1865,7 @@ export function TemplateEditor({
   onSignatures,
   documentId,
   previewAppendHtml,
+  editorKind,
 }: TemplateEditorProps = {}) {
   return (
     <TransliterationProvider defaultLanguage="hi" defaultEnabled={false}>
@@ -1785,6 +1881,7 @@ export function TemplateEditor({
         onSignatures={onSignatures}
         documentId={documentId}
         previewAppendHtml={previewAppendHtml}
+        editorKind={editorKind}
       />
     </TransliterationProvider>
   );
@@ -1816,10 +1913,13 @@ function synthesizeTemplate(init: {
 
 type DraftData = {
   templateId: string;
+  title?: string;
   html: string;
   values: Record<string, string>;
   pageSize?: PageSizeKey;
   fontFamily?: string;
+  /** Markdown source for the markdown-mode scratchpad. */
+  markdown?: string;
   savedAt: number;
 };
 

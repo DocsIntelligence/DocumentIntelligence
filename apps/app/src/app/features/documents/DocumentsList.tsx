@@ -30,6 +30,7 @@ import {
 } from './queries';
 import { useDocumentsAnalysisStatus } from '../intelligence/queries';
 import { documentHref } from './document-href';
+import { documentTemplateLabel, documentTypeLabel } from './document-label';
 import { AnalysisQueueIndicator } from './AnalysisQueueIndicator';
 import { AnalyzeDocumentDialog } from './AnalyzeDocumentDialog';
 import { BulkAnalyzeDialog, type BulkAnalyzeTarget } from './BulkAnalyzeDialog';
@@ -173,7 +174,7 @@ export function DocumentsList({
               {d.title || t('common.untitled', 'Untitled')}
             </span>
             <span className="block truncate text-xs text-foreground/50">
-              {d.template?.name ?? '—'} · {d.pageSize.replace(/_/g, ' ')}
+              {documentTemplateLabel(d)} · {d.pageSize.replace(/_/g, ' ')}
             </span>
           </button>
         ) : (
@@ -182,7 +183,7 @@ export function DocumentsList({
               {d.title || t('common.untitled', 'Untitled')}
             </span>
             <span className="block truncate text-xs text-foreground/50">
-              {d.template?.name ?? '—'} · {d.pageSize.replace(/_/g, ' ')}
+              {documentTemplateLabel(d)} · {d.pageSize.replace(/_/g, ' ')}
             </span>
           </Link>
         ),
@@ -190,10 +191,10 @@ export function DocumentsList({
     {
       key: 'type',
       header: t('documents.colType', 'Type'),
-      sortValue: (d) => d.documentType?.name ?? '',
+      sortValue: (d) => documentTypeLabel(d, ''),
       cell: (d) => (
         <span className="text-foreground/70">
-          {d.documentType?.name ?? t('common.document', 'Document')}
+          {documentTypeLabel(d, t('common.document', 'Document'))}
         </span>
       ),
     },
@@ -473,6 +474,12 @@ export function DocumentsList({
     );
   };
 
+  // Inside a group, creating a doc should file it into that group — carry the
+  // group context to the new-document picker (and on through each create flow).
+  const newDocHref = groupId
+    ? `/documents/new?groupId=${groupId}`
+    : '/documents/new';
+
   return (
     <div className="space-y-6">
       {!groupId && !selectable && (
@@ -487,7 +494,7 @@ export function DocumentsList({
             <>
               <AnalysisQueueIndicator />
               <Button asChild>
-                <Link to="/documents/new">
+                <Link to={newDocHref}>
                   {t('common.newDocument', 'New document')}
                 </Link>
               </Button>
@@ -530,7 +537,7 @@ export function DocumentsList({
             )}
           </p>
           <Button asChild className="mt-4">
-            <Link to="/documents/new">
+            <Link to={newDocHref}>
               {t('dashboard.createFirst', 'Create your first document')}
             </Link>
           </Button>

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { PageHeader } from '../../components/page-header';
 import { useDocumentList } from '../documents/queries';
 import { documentHref } from '../documents/document-href';
+import { documentTypeLabel } from '../documents/document-label';
 
 export function Dashboard() {
   const user = useAppSelector(selectUser);
@@ -163,7 +164,7 @@ export function Dashboard() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[11px] font-medium uppercase tracking-wide text-foreground/50">
-                    {d.documentType?.name ?? t('common.document', 'Document')}
+                    {documentTypeLabel(d, t('common.document', 'Document'))}
                   </span>
                   <StatusPill status={d.status} />
                 </div>

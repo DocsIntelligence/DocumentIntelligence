@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TemplateEditor, type EditorDraftState } from './TemplateEditor';
 import { useCreateDocument } from '../documents/queries';
@@ -15,6 +15,9 @@ export function EditorDemo() {
   const create = useCreateDocument();
   const navigate = useNavigate();
   const legalAi = useLegalAiService();
+  const [params] = useSearchParams();
+  // Filed into a group when the editor was opened from one (?groupId=…).
+  const groupId = params.get('groupId') ?? undefined;
 
   const handleAiGenerate = useCallback(
     async (brief: string, language: string) => {
@@ -43,11 +46,12 @@ export function EditorDemo() {
         documentTypeKey: 'freeform',
         templateKey: 'freeform',
         data: { html: s.html, values: s.values, templateId: s.templateId },
+        groupId,
       });
       toast.success('Saved to your documents');
       navigate(`/documents/${doc.id}/draft`);
     },
-    [create, navigate],
+    [create, navigate, groupId],
   );
 
   return (

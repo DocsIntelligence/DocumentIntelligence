@@ -3613,3 +3613,103 @@ own AI and upload them as JSON. (3) User wanted bulk actions on the catalog (del
   freshly-imported sections and Make public in one go.
 - Verified: `@org/api` build ✓, `@org/app` typecheck ✓, app/api lint 0 errors (warnings pre-existing). NOT
   runtime-verified.
+
+## 2026-06-27 — Markdown editor surface (write Markdown → save as a document)
+
+Added a Markdown authoring surface alongside the existing TipTap freeform editor and structured builder.
+A toolbar-driven split editor (Editor / Split / Preview) with a live, dependency-free preview, that
+promotes its draft to a backend `freeform` Document so it round-trips through the existing draft / PDF /
+share pipeline.
+
+- **`apps/app/.../features/editor/markdown/markdown.ts`** — a small, dependency-free Markdown→HTML renderer
+  (no parser dep added): headings, bold/italic/strike, inline + fenced code, blockquotes, ordered/unordered
+  lists, links, images, hr, paragraphs. Escapes all raw HTML (XSS-safe preview — verified `<script>` is
+  neutralised). Inline-code spans are stashed behind PUA sentinels (U+E000/U+E001) during the inline passes
+  so placeholders can't collide with real digits in text. Also exports `markdownToPlainTitle` (derives a doc
+  title from the first line) and pure toolbar transforms (`wrapSelection`, `prefixLines`, `insertLink`)
+  operating on `{value,start,end}`.
+- **`MarkdownEditor.tsx`** — controlled presentational editor: header (back, editable `<title>.md`, save
+  status, Editor/Split/Preview toggle, reused `ThemeToggle`, Save), formatting toolbar, source `<textarea>`
+  (Ctrl/Cmd+B/I/K/S shortcuts) + live preview styled via Tailwind v4 arbitrary descendant variants (no
+  typography plugin). Full-bleed, mirrors `TemplateEditor`'s `h-screen` shell.
+- **`MarkdownEditorPage.tsx`** (`/editor/markdown`) — localStorage scratchpad; "Save to my documents"
+  creates a `freeform`/`freeform` Document with `data = { format:'markdown', markdown, html }` (html =
+  rendered, for pipeline compatibility), then navigates to the bound page.
+- **`MarkdownDraftPage.tsx`** (`/documents/:id/markdown`) — bound editor: hydrates from `data.markdown`,
+  debounced (1.2s) autosave via `usePatchDocument`, re-rendering html on each save.
+- **Routing/entry**: routes registered full-bleed in `app.tsx`; `document-href.ts` now routes freeform docs
+  with `data.format==='markdown'` to `/documents/:id/markdown` (falls back to the rich-text `/draft` when
+  `data` is absent, e.g. the list view — same persisted `data.html`); added a "Markdown document" card to
+  `NewDocumentPicker` (grid widened to 4).
+- Persistence reuses the seeded `freeform` doc type/template (no schema/migration). Verified: `@org/app`
+  typecheck ✓, eslint 0 errors on changed files, renderer functionally smoke-tested via tsx (lists,
+  blockquote, fenced code escaping, XSS escaping, numeric-text non-corruption, title extraction). NOT
+  runtime-verified in the browser (needs the running app + API).
+- Sidebar: added a top-level **"Markdown editor"** `NavItem` (→ `/editor/markdown`, new `MarkdownIcon`) under
+  "Quick editor"; made the `/editor` item `end`-exact so it and the markdown route don't both highlight.
+- Renderer: added GFM **table** support (`| h | h |` + `|---|` delimiter row), including `:` column
+  alignment, empty cells, and ragged rows; styled in the preview via `[&_table]/[&_th]/[&_td]` variants.
+- Renderer additions: combined `***bold italic***`/`___`, backslash escapes (`\*` → literal),
+  bare-URL autolinks, and GFM **task lists** (`- [ ]`/`- [x]` → disabled checkboxes, `data-task` li).
+- Toolbar: added **Task list**, **Image**, **Insert table** (3-col `STARTER_TABLE`), and **Divider**
+  buttons (new `insertImage`/`insertBlock` transforms). Task-list `<li>` styled bullet-less in the preview.
+  Known gaps (documented, not handled): nested/indented lists, setext headings, footnotes, raw-HTML
+  passthrough (intentionally escaped for XSS safety).
+- Fix: toolbar inserts (table/divider/etc.) jumped the caret to position 0 — `setSelectionRange` in rAF
+  raced the controlled-value commit and the browser clamped the caret. Now the target selection is stashed
+  in a ref and applied in a `useLayoutEffect` keyed on `value`, after the new text is painted.
+
+## 2026-06-29 — Markdown editor reuses the full freeform shell (one editor, two surfaces)
+
+Per request, the Markdown editor now gets the *entire* freeform feature set and layout by reusing the
+existing shell instead of a bespoke component — only the center editor/preview swaps on a mode flag.
+
+- **`TemplateEditor` is now dual-surface** via a new `editorKind?: 'richtext' | 'markdown'` prop (default
+  `richtext`, so the existing freeform editor is unchanged). HTML stays canonical: in markdown mode the
+  Markdown text is the source of truth and the derived `html` is kept in sync (`renderMarkdown`) so the
+  preview / PDF / Word / share / signature pipelines work untouched. Branches are all guarded by
+  `isMarkdown`: center pane (`<MarkdownSource>` vs TipTap), AI generate/revise (convert returned HTML →
+  Markdown via `htmlToMarkdown`; markdown skips the HTML block-diff and applies directly), gallery load,
+  autosave payload, status-bar counts, and the TipTap-only "Pages" rail item is hidden.
+- **Shared pieces** (so common stays common): `MarkdownSource` (toolbar + textarea + caret fix) is reused by
+  the shell; `markdown.ts` gained `htmlToMarkdown` (DOM-based inverse of `renderMarkdown`, for the AI/gallery
+  HTML→Markdown round-trip).
+- **Type-driven, schema in a lib**: new `@org/dto` `freeformDocumentDataSchema` (+ `documentFormatSchema`,
+  `placeholderDefSchema`, `isMarkdownDocumentData`) — the single source of truth for a freeform/markdown
+  Document's `data` blob (`format`, `html`, `markdown`, `values`, `templateId`, `fontFamily`, `fields`),
+  shared by the editor and API. Pages build/parse `data` through it (`satisfies FreeformDocumentData` on
+  write, `safeParse` on read); `document-href` routes via `isMarkdownDocumentData`.
+- **Pages** `/editor/markdown` (scratchpad) and `/documents/:id/markdown` (bound) now render
+  `<TemplateEditor editorKind="markdown">` with the same AI / export / signatures / history-comments-share
+  wiring as the freeform pages. Deleted the now-redundant standalone `MarkdownEditor.tsx`.
+- Verified: `@org/app` typecheck ✓, API typecheck ✓, `@org/app` build ✓, eslint 0 errors on all changed
+  files. AI HTML↔Markdown round-trip and signatures/PDF need the running app + API (not runtime-verified
+  here). `htmlToMarkdown` is browser-only (DOMParser) with an SSR guard.
+- Markdown rail: removed the TipTap-only **Fields** and **Pages** panels from `editorKind="markdown"`
+  (omitted from `menuItems` so they're gone from "Customize sidebar" too). The Legal & AI / Comments /
+  History / Share / Signatures items are documentId-gated (same as the freeform `/editor` scratchpad) — they
+  appear in the bound editor `/documents/:id/markdown`. Markdown defaults: sidebar hidden in the unsaved
+  scratchpad (no panels), and the bound doc opens on the Legal & AI panel instead of the removed Fields tab.
+- Naming: markdown-authored freeform docs now read as **"Markdown"** (not "Freeform") in user-facing type
+  labels — new `documentTypeLabel()` helper (uses `isMarkdownDocumentData`) applied in the documents list,
+  dashboard recents, and the public share meta line. Rich-text / AI freeform docs are unchanged. To support
+  this without shipping each row's full `data`, the API list now trims `data` to just `{ format }`
+  (`DocumentSummary.data?: { format? }`). Internal `freeform` type key / renderer / schema names unchanged.
+- Markdown is now persisted from creation: `/editor/markdown` creates an empty `freeform` doc
+  (`format:'markdown'`) and redirects to the bound `/documents/:id/markdown` (create-once ref guard,
+  `replace` nav). This guarantees a documentId, so the full rail (Legal & AI / Comments / History / Share /
+  Signatures) is always available and the TipTap-only **Fields**/**Pages** panels never appear. Also relabel
+  the mobile pane switcher's "Fields" tab to "Panels" in markdown mode. (Trade-off: the markdown scratchpad
+  is gone — each "New markdown" creates a doc, like Google Docs; the freeform `/editor` scratchpad is kept.)
+- Naming: applied the `documentTypeLabel()` "Markdown" relabel to the group "Add documents" dialog too
+  (was a raw `documentType.name`). (SearchPage hit type comes from the backend search index — left as-is.)
+- Groups: creating a document from inside a group now files it into that group. Create path gained an
+  optional `groupId` end-to-end — `CreateDocumentDto`/`CreateDocumentPayload` + `DocumentsService.create`
+  (validates group ownership, sets `Document.groupId`). The group's "New document" / "Create your first
+  document" links carry `?groupId=`, `NewDocumentPicker` forwards it to every create flow (AI draft,
+  templates, blank rich-text, markdown), and each passes `groupId` into the create call. `useCreateDocument`
+  now also invalidates `['groups']` so the group view refreshes.
+- Fix: the docs table showed "Freeform" on the title *subtitle* line (`template.name`), not just the type
+  column. Added `documentTemplateLabel()` (markdown → "Markdown", else template name) and applied it to both
+  the picker and link title cells. Verified against the DB: markdown docs store `data.format='markdown'`
+  (rich-text/AI freeform docs have none, so they correctly stay "Freeform").

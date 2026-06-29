@@ -1,14 +1,21 @@
 import { Card } from '@org/ui';
 import { cn } from '@org/utils';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 /**
  * New-document hub: three clear ways to start, each its own page. Structured
  * templates are now top-level (/documents/templates) rather than buried.
+ *
+ * When opened from inside a group (`?groupId=…`), the context is forwarded to
+ * each create flow so the resulting document is filed into that group.
  */
 export function NewDocumentPicker() {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
+  const groupId = params.get('groupId');
+  const withGroup = (to: string) =>
+    groupId ? `${to}${to.includes('?') ? '&' : '?'}groupId=${groupId}` : to;
 
   return (
     <div className="space-y-6">
@@ -24,9 +31,9 @@ export function NewDocumentPicker() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <ChoiceCard
-          to="/documents/draft-ai"
+          to={withGroup("/documents/draft-ai")}
           accent
           badge="AI"
           title={t('dashboard.draftAiTitle', 'Draft with AI')}
@@ -36,7 +43,7 @@ export function NewDocumentPicker() {
           )}
         />
         <ChoiceCard
-          to="/documents/templates"
+          to={withGroup("/documents/templates")}
           badge={t('newDoc.structuredBadge', 'Structured')}
           title={t('templates.title', 'Templates')}
           desc={t(
@@ -45,12 +52,21 @@ export function NewDocumentPicker() {
           )}
         />
         <ChoiceCard
-          to="/editor"
+          to={withGroup("/editor")}
           badge={t('newDoc.freeformBadge', 'Freeform')}
           title={t('newDoc.blankTitle', 'Blank document')}
           desc={t(
             'newDoc.blankCardDesc',
             'Open the rich-text editor and write from scratch, with transliteration, placeholders and page breaks.',
+          )}
+        />
+        <ChoiceCard
+          to={withGroup("/editor/markdown")}
+          badge={t('newDoc.markdownBadge', 'Markdown')}
+          title={t('newDoc.markdownTitle', 'Markdown document')}
+          desc={t(
+            'newDoc.markdownCardDesc',
+            'Write in Markdown with a live split preview, then save it to your documents.',
           )}
         />
       </div>

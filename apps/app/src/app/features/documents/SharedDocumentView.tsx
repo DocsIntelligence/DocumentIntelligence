@@ -153,7 +153,13 @@ export function SharedDocumentView() {
   const data = (doc.data ?? {}) as {
     html?: string;
     values?: Record<string, string>;
+    format?: string;
   };
+  // Markdown-authored freeform docs read as "Markdown"; others keep their name.
+  const typeLabel =
+    isFreeform && data.format === 'markdown'
+      ? 'Markdown'
+      : doc.documentType.name;
 
   return (
     <div className="flex h-screen flex-col bg-secondary/50">
@@ -162,7 +168,7 @@ export function SharedDocumentView() {
           <div className="truncate text-sm font-semibold">{doc.title}</div>
           <div className="truncate text-[11px] text-foreground/55">
             {t('shared.metaLine', '{{type}} · shared ({{mode}}) · read-only', {
-              type: doc.documentType.name,
+              type: typeLabel,
               mode: shared.mode,
             })}
           </div>

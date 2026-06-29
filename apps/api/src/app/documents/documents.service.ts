@@ -102,7 +102,21 @@ export class DocumentsService {
       this.db.document.count({ where }),
     ]);
 
-    return { items, total };
+    // Trim each row's `data` JSON down to `format` only — the list needs it to
+    // label markdown-authored freeform docs, but shipping the full HTML/markdown
+    // blob for every row would bloat the response. Full `data` stays on getById.
+    const slim = items.map(({ data, ...rest }) => {
+      const format =
+        data && typeof data === 'object' && !Array.isArray(data)
+          ? (data as Record<string, unknown>)['format']
+          : undefined;
+      return {
+        ...rest,
+        data: typeof format === 'string' ? { format } : null,
+      };
+    });
+
+    return { items: slim, total };
   }
 
   async getById(userId: string, id: string) {
@@ -163,6 +177,25 @@ export class DocumentsService {
       if (!member) throw new ForbiddenException('Not a member of this org');
     }
 
+    // Optionally file the new document into a group on creation (e.g. when the
+    // user hits "New document" from inside a group). Validate ownership so a
+    // caller can't drop a doc into someone else's group.
+    if (dto.groupId) {
+      const group = await this.db.documentGroup.findUnique({
+        where: { id: dto.groupId },
+        select: { id: true, ownerUserId: true, ownerOrgId: true },
+      });
+      if (!group) throw new BadRequestException('Unknown group');
+      const ownsGroup =
+        group.ownerUserId === userId ||
+        (!!group.ownerOrgId &&
+          !!(await this.db.orgMember.findFirst({
+            where: { orgId: group.ownerOrgId, userId },
+            select: { userId: true },
+          })));
+      if (!ownsGroup) throw new ForbiddenException('Not your group');
+    }
+
     const doc = await this.db.document.create({
       data: {
         title: dto.title,
@@ -171,6 +204,7 @@ export class DocumentsService {
         ownerType: dto.ownerOrgId ? 'organisation' : 'user',
         ownerUserId: dto.ownerOrgId ? null : userId,
         ownerOrgId: dto.ownerOrgId ?? null,
+        groupId: dto.groupId ?? null,
         pageSize: dto.pageSize ?? type.defaultPageSize,
         language: dto.language ?? template.language,
         jurisdiction: dto.jurisdiction ?? null,

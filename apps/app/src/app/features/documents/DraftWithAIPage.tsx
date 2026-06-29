@@ -4,7 +4,7 @@ import { Button, Card, Label, Textarea } from '@org/ui';
 import { cn } from '@org/utils';
 import { useState } from 'react';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { PageHeader } from '../../components/page-header';
@@ -39,6 +39,8 @@ export function DraftWithAIPage() {
   const navigate = useNavigate();
   const create = useCreateDocument();
   const legalAi = useLegalAiService();
+  const [params] = useSearchParams();
+  const groupId = params.get('groupId') ?? undefined;
   const [preset, setPreset] = useState<DocumentPreset | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -76,6 +78,7 @@ export function DraftWithAIPage() {
         documentTypeKey: 'freeform',
         templateKey: 'freeform',
         data: { html: gen.html, values: {}, templateId: 'freeform' },
+        groupId,
       });
       toast.success(t('newDoc.toastCreated', 'AI draft created'), {
         description: gen.disclaimer,
