@@ -2,6 +2,39 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+## 2026-06-30 — Markdown editor: inline + display math via KaTeX
+
+User: "give an option to inject latex/katex into existing freeform" rather than a separate LaTeX editor.
+Decided against a standalone LaTeX editor — for a legal-drafting product its only real overlap with the
+existing richtext/markdown surfaces is math (interest/penalty formulas, valuation schedules). So: math added
+to the **Markdown** freeform surface only, purely additive — no new `format`, no route, no DTO, no backend.
+
+- **`katex@0.16` + `@types/katex`** added at the workspace root.
+- **`features/editor/markdown/markdown.ts`**: new `renderMath(tex, displayMode)` (KaTeX `renderToString`,
+  `throwOnError:false`, `strict:'ignore'`, `output:'htmlAndMathml'`; on error falls back to the escaped raw
+  source — a typo can't blank the doc). `renderInline` now extracts `$…$` from the **raw** source *before*
+  HTML-escaping (so KaTeX gets literal TeX incl. `<`/`>`/`&`) and stashes the rendered HTML behind the same
+  sentinel mechanism as inline code. Currency-collision guards mirror GitHub's math extension: opening `$`
+  not followed by space, closing `$` not preceded by space and not followed by a digit — so `$5,000 or
+  $10,000` and `$500` stay literal. `\$` now renders a literal dollar. `renderMarkdown` gained a display-math
+  block branch (`$$ … $$`, single- or multi-line) and the paragraph collector stops at `$$`.
+- **Toolbar** (`MarkdownSource.tsx`): inline-math (`√x`) and math-block (`Σ`) buttons inserting `$…$` /
+  `$$…$$`.
+- **CSS**: `import 'katex/dist/katex.min.css'` in **both** `apps/app/src/main.tsx` (preview/share) **and**
+  `apps/artboard/src/main.tsx` (PDF/PNG render) — the artboard one is the easy-to-miss requirement; without
+  it the on-screen preview would show math but the exported PDF wouldn't.
+- Markdown stays canonical: `data.markdown` holds the `$…$` source, `data.html` is the regenerated KaTeX
+  HTML the preview/PDF/share pipeline already consumes. No backend change.
+- **Known limitation:** **Word (.docx) export degrades** — `html-to-docx` doesn't understand KaTeX's
+  CSS-positioned spans, so equations won't render as real math in `.docx`. Deferred; fix later by rendering
+  math to an inline PNG (or OMML) on the docx path if needed. Richtext (TipTap) editor still has no math —
+  that needs a dedicated TipTap node, also deferred.
+- **Verified:** `@org/app` + `@org/artboard` typecheck ✓, lint ✓ (changed files), production build of both
+  apps ✓ (KaTeX webfonts bundled into each `dist/assets`), and an 8-case `renderMarkdown` render smoke test ✓
+  (inline, display block, currency single + pair stay literal, escaped `$`, raw `<` in TeX, broken-TeX
+  fallback, bold-alongside-math). **NOT yet runtime-verified in the browser** (no live preview/PDF screenshot
+  this session).
+
 ## 2026-06-19 — Legal citations: file attachments (PDFs/docs) + on-demand enrich + builder sections-in-rail
 
 Three things this session.

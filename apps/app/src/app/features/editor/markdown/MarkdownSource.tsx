@@ -197,6 +197,23 @@ function Toolbar({
       >
         <CodeBlockIcon />
       </TBtn>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
+      <TBtn
+        tooltip="Inline math ($…$)"
+        onClick={() => applyTransform((s) => wrapSelection(s, '$', '$', 'x^2'))}
+      >
+        <MathIcon />
+      </TBtn>
+      <TBtn
+        tooltip="Math block ($$…$$)"
+        onClick={() =>
+          applyTransform((s) => insertBlock(s, '$$\n\\int_0^1 x^2\\,dx\n$$'))
+        }
+      >
+        <MathBlockIcon />
+      </TBtn>
       <TBtn tooltip="Link (Ctrl+K)" onClick={() => applyTransform(insertLink)}>
         <LinkIcon />
       </TBtn>
@@ -310,6 +327,13 @@ const CodeBlockIcon = () =>
       <path d="m9 10-2 2 2 2M15 10l2 2-2 2" />
     </>,
   );
+// Math glyphs read clearer as type than as stroked paths.
+const MathIcon = () => (
+  <span className="font-serif text-[14px] italic leading-none">√x</span>
+);
+const MathBlockIcon = () => (
+  <span className="font-serif text-[15px] leading-none">Σ</span>
+);
 const LinkIcon = () =>
   svg(
     <>

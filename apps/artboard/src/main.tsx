@@ -10,6 +10,9 @@ import '@fontsource/noto-sans-devanagari/400.css';
 import '@fontsource/noto-sans-devanagari/500.css';
 import '@fontsource/noto-sans-devanagari/600.css';
 import '@fontsource/noto-sans-devanagari/700.css';
+// KaTeX styles so math authored in the Markdown editor paints in the rendered
+// PDF/PNG. Mirror of the import in apps/app/src/main.tsx — keep both in sync.
+import 'katex/dist/katex.min.css';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';

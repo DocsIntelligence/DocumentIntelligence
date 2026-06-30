@@ -12,6 +12,10 @@ import '@fontsource/noto-sans-devanagari/400.css';
 import '@fontsource/noto-sans-devanagari/500.css';
 import '@fontsource/noto-sans-devanagari/600.css';
 import '@fontsource/noto-sans-devanagari/700.css';
+// KaTeX styles for math (`$…$` / `$$…$$`) authored in the Markdown editor.
+// Required wherever the rendered HTML is shown — here (preview/share) and in
+// apps/artboard (PDF/PNG). Keep both imports in sync.
+import 'katex/dist/katex.min.css';
 import {
   createAuthService,
   createDocumentGroupsService,

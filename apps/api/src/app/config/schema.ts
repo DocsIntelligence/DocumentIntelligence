@@ -116,6 +116,12 @@ export const envSchema = z.object({
   STORAGE_BUCKET: z.string().min(1).optional(),
   STORAGE_PUBLIC_URL: z.string().url().optional(), // Public URL prefix for files
   STORAGE_LOCAL_ROOT: z.string().min(1).optional(), // Dev-only: dir for local-fs fallback
+
+  // ── Billing / quota (optional) ────────────────────────────────────────
+  // Master switch for WalletUsage quota enforcement (AI attempts, document
+  // creation, premium extraction). Defaults to enforced; set 'false' to let
+  // every request through regardless of wallet/usage state.
+  BILLING_ENFORCED: z.enum(['true', 'false']).optional(),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

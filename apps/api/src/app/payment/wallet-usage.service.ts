@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Feature } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 
@@ -6,7 +7,15 @@ import { DatabaseService } from '../database/database.service';
 export class WalletUsageService {
   private readonly logger = new Logger(WalletUsageService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly config: ConfigService,
+  ) {}
+
+  /** Master switch — when false, all quota checks pass (no metering gate). */
+  private get billingEnforced(): boolean {
+    return this.config.get<string>('BILLING_ENFORCED') !== 'false';
+  }
 
   async trackUsage(userId: string, feature: Feature, quantity = 1) {
     const wallet = await this.db.userWallet.findUnique({ where: { userId } });
@@ -25,6 +34,8 @@ export class WalletUsageService {
   }
 
   async checkQuota(userId: string, feature: Feature): Promise<boolean> {
+    if (!this.billingEnforced) return true; // BILLING_ENFORCED=false → pass all
+
     const wallet = await this.db.userWallet.findUnique({
       where: { userId },
       include: { usage: true },

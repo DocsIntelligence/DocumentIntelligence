@@ -1,3 +1,5 @@
+import katex from 'katex';
+
 /**
  * A small, dependency-free Markdown to HTML renderer for the in-app Markdown
  * editor's live preview. We deliberately avoid pulling a parser dependency:
@@ -26,17 +28,54 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Render inline spans: code, bold, italic, strike, links, images. */
-function renderInline(raw: string): string {
-  let s = escapeHtml(raw);
+/**
+ * Render a TeX string to self-contained HTML (+ MathML for a11y/Word) via
+ * KaTeX. `displayMode` toggles block (`$$…$$`) vs inline (`$…$`). The styling
+ * lives in `katex.min.css`, which must be loaded wherever the resulting HTML is
+ * shown — the app shell (preview/share) and the artboard (PDF/PNG render). On a
+ * parse error we fall back to the escaped raw source rather than throwing, so a
+ * typo can never blank the document. KaTeX's own output is trusted markup; the
+ * user's TeX is never emitted as raw HTML, so this opens no injection hole.
+ */
+function renderMath(tex: string, displayMode: boolean): string {
+  const src = tex.trim();
+  try {
+    return katex.renderToString(src, {
+      displayMode,
+      throwOnError: false,
+      strict: 'ignore',
+      output: 'htmlAndMathml',
+    });
+  } catch {
+    const d = displayMode ? '$$' : '$';
+    return `<code>${escapeHtml(`${d}${src}${d}`)}</code>`;
+  }
+}
 
-  // Spans we stash behind sentinels so later formatting passes leave them
-  // alone (inline code + backslash-escaped literals), restored at the very end.
+/** Render inline spans: math, code, bold, italic, strike, links, images. */
+function renderInline(raw: string): string {
+  // Spans we stash behind sentinels so later formatting (and HTML escaping)
+  // leave them alone — inline code, backslash-escaped literals, and rendered
+  // math — restored at the very end.
   const stash: string[] = [];
   const keep = (html: string) => `${CODE_OPEN}${stash.push(html) - 1}${CODE_CLOSE}`;
 
-  // Backslash escapes: \* \_ \` \# … render the literal char, not markup.
-  s = s.replace(/\\([\\`*_{}[\]()#+\-.!~>|])/g, (_m, ch: string) => keep(ch));
+  // Math is extracted from the *raw* source first, before HTML-escaping, so
+  // KaTeX receives literal TeX (with `<`, `>`, `&` intact). Inline only here;
+  // display `$$…$$` blocks are handled at the block level in renderMarkdown.
+  // Guards (mirroring GitHub's math extension) keep currency like "$5 or $10"
+  // from being mistaken for math: the opening `$` isn't followed by a space,
+  // the closing `$` isn't preceded by a space, and isn't followed by a digit.
+  let s = raw.replace(
+    /(^|[^\\$])\$(?=\S)((?:\\\$|[^$\n])+?)(?<![\s\\])\$(?!\d)/g,
+    (_m, pre: string, tex: string) =>
+      `${pre}${keep(renderMath(tex.replace(/\\\$/g, '$'), false))}`,
+  );
+
+  s = escapeHtml(s);
+
+  // Backslash escapes: \* \_ \` \# \$ … render the literal char, not markup.
+  s = s.replace(/\\([\\`*_{}[\]()#+\-.!~>|$])/g, (_m, ch: string) => keep(ch));
 
   // Inline code next — its contents must not be re-processed.
   s = s.replace(/`([^`]+)`/g, (_m, code: string) => keep(`<code>${code}</code>`));
@@ -139,6 +178,29 @@ export function renderMarkdown(src: string): string {
       i++; // consume closing fence
       const cls = lang ? ` class="language-${lang}"` : '';
       out.push(`<pre><code${cls}>${escapeHtml(body.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    // Display math block: $$ … $$ (may span multiple lines).
+    if (/^\s*\$\$/.test(line)) {
+      closeList();
+      const single = line.match(/^\s*\$\$(.+?)\$\$\s*$/);
+      if (single) {
+        out.push(renderMath(single[1], true));
+        i++;
+        continue;
+      }
+      const body: string[] = [line.replace(/^\s*\$\$/, '')];
+      i++;
+      while (i < lines.length && !/\$\$\s*$/.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) {
+        body.push(lines[i].replace(/\$\$\s*$/, ''));
+        i++; // consume closing fence
+      }
+      out.push(renderMath(body.join('\n'), true));
       continue;
     }
 
@@ -260,7 +322,7 @@ export function renderMarkdown(src: string): string {
     while (
       i < lines.length &&
       !/^\s*$/.test(lines[i]) &&
-      !/^\s*(?:#{1,6}\s|>|[-*+]\s|\d+\.\s|```)/.test(lines[i]) &&
+      !/^\s*(?:#{1,6}\s|>|[-*+]\s|\d+\.\s|```|\$\$)/.test(lines[i]) &&
       !/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])
     ) {
       para.push(lines[i]);
