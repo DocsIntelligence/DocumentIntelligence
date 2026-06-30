@@ -53,6 +53,12 @@ export interface DocumentsListProps {
   onSelectionConfirm?: (documentIds: string[]) => void;
   /** IDs to exclude from the list (already in group, etc). */
   excludeIds?: string[];
+  /**
+   * Group context only: open the "add existing documents" dialog. When set, the
+   * empty state offers it alongside "New document" instead of the library's
+   * "create your first document" copy (which makes no sense inside a group).
+   */
+  onAddExisting?: () => void;
 }
 
 export function DocumentsList({
@@ -60,6 +66,7 @@ export function DocumentsList({
   selectable,
   onSelectionConfirm,
   excludeIds,
+  onAddExisting,
 }: DocumentsListProps = {}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -525,7 +532,33 @@ export function DocumentsList({
         </Card>
       )}
 
-      {!isLoading && !error && total === 0 && !hasFilters && (
+      {!isLoading && !error && total === 0 && !hasFilters && groupId && (
+        <Card className="rounded-xl border-dashed p-10 text-center">
+          <p className="text-foreground/70">
+            {t('groups.emptyTitle', 'No documents in this group yet.')}
+          </p>
+          <p className="mt-1 text-sm text-foreground/50">
+            {t(
+              'groups.emptyDesc',
+              'Add documents you already have, or create a new one filed into this group.',
+            )}
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            {onAddExisting && (
+              <Button onClick={onAddExisting}>
+                {t('groups.addExisting', 'Add existing documents')}
+              </Button>
+            )}
+            <Button variant={onAddExisting ? 'outline' : 'primary'} asChild>
+              <Link to={newDocHref}>
+                {t('common.newDocument', 'New document')}
+              </Link>
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!isLoading && !error && total === 0 && !hasFilters && !groupId && (
         <Card className="rounded-xl border-dashed p-10 text-center">
           <p className="text-foreground/70">
             {t('dashboard.emptyTitle', 'No documents yet.')}

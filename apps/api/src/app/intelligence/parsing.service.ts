@@ -15,6 +15,27 @@ import { UnpdfParser } from './parsers/pdf-unpdf.parser';
 const MIN_USABLE_CHARS = 24;
 
 /**
+ * Strip NUL bytes (U+0000) from parsed text. PDF/Office extractors can emit
+ * them, but Postgres rejects them in both `text` and `jsonb` columns
+ * ("unsupported Unicode escape sequence: \\u0000 cannot be converted to
+ * text"), so any downstream store (`normalizedText`, the search index, chunk
+ * embeddings) would throw. We scrub once here at the parse boundary so every
+ * consumer sees clean text.
+ */
+function stripNulBytes(doc: NormalizedDocument): NormalizedDocument {
+  // eslint-disable-next-line no-control-regex
+  const clean = (s: string) => s.replace(/\u0000/g, '');
+  return {
+    ...doc,
+    pages: doc.pages.map((p) => ({
+      ...p,
+      text: clean(p.text),
+      blocks: p.blocks?.map((b) => ({ ...b, text: clean(b.text) })),
+    })),
+  };
+}
+
+/**
  * Raised when a PDF needs a password (or the supplied one is wrong). Surfaced
  * (not swallowed as "scanned") so callers can prompt for the password — a
  * protected file is a different failure than a missing text layer.
@@ -95,7 +116,9 @@ export class ParsingService {
 
     for (const parser of candidates) {
       try {
-        const doc = await parser.parse(input);
+        // Scrub NUL bytes immediately so every return path (and the chars
+        // tally below) works on Postgres-safe text.
+        const doc = stripNulBytes(await parser.parse(input));
         const chars = doc.pages.reduce((n, p) => n + p.text.length, 0);
         this.logger.debug(`${parser.name} → ${chars} chars`);
         if (chars >= MIN_USABLE_CHARS) return doc; // good enough, stop early

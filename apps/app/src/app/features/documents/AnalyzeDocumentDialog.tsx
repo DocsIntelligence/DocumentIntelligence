@@ -20,6 +20,16 @@ interface AnalyzeDocumentDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** Pull a human message out of an Axios/Error/unknown rejection. */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: unknown } } })?.response
+    ?.data?.message;
+  if (typeof data === 'string' && data.trim()) return data;
+  if (Array.isArray(data) && typeof data[0] === 'string') return data[0];
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
 function relativeDate(iso: string | null): string {
   if (!iso) return '';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -52,8 +62,22 @@ export function AnalyzeDocumentDialog({
   const analysis = analysisQuery.data?.analysis ?? null;
   const hasAnalysis = !!analysis;
 
+  // Persistent, in-dialog feedback for the last run (the toast is transient).
+  // The server returns descriptive messages — e.g. an empty document yields
+  // "Nothing to analyse — this document has no extractable text yet." — so we
+  // surface them verbatim rather than a generic "failed".
+  const runError = run.isError
+    ? extractErrorMessage(run.error, t('documents.analyze.failed', 'Analysis failed.'))
+    : null;
+
   const onAnalyze = async (force: boolean) => {
-    await run.mutateAsync({ force });
+    // The mutation's onError already surfaces a toast; swallow the rejection
+    // here so the click handler doesn't leave an unhandled promise rejection.
+    try {
+      await run.mutateAsync({ force });
+    } catch {
+      /* handled by useRunAnalysis onError */
+    }
   };
 
   return (
@@ -94,6 +118,18 @@ export function AnalyzeDocumentDialog({
                 'Not analyzed yet. Run analysis to see summary, parties, dates and risk flags.',
               )}
             </p>
+          )}
+
+          {runError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error"
+            >
+              <span aria-hidden className="mt-0.5 flex-none">
+                ⚠
+              </span>
+              <span>{runError}</span>
+            </div>
           )}
         </div>
 

@@ -31,7 +31,7 @@ export function NewDocumentPicker() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <ChoiceCard
           to={withGroup("/documents/draft-ai")}
           accent
@@ -67,6 +67,15 @@ export function NewDocumentPicker() {
           desc={t(
             'newDoc.markdownCardDesc',
             'Write in Markdown with a live split preview, then save it to your documents.',
+          )}
+        />
+        <ChoiceCard
+          to={withGroup('/analyze')}
+          badge={t('newDoc.analyzeBadge', 'Upload')}
+          title={t('newDoc.analyzeTitle', 'Analyze & create')}
+          desc={t(
+            'newDoc.analyzeCardDesc',
+            'Upload an existing file (PDF, Word, image). We extract and analyze it, then turn it into an editable document.',
           )}
         />
       </div>

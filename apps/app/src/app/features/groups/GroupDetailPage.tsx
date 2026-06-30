@@ -159,7 +159,10 @@ export function GroupDetailPage() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-4">
-          <DocumentsList groupId={group.id} />
+          <DocumentsList
+            groupId={group.id}
+            onAddExisting={() => setAddOpen(true)}
+          />
         </TabsContent>
 
         <TabsContent value="search" className="mt-4">
