@@ -6,6 +6,7 @@ import type {
   IntelligenceService,
   LegalAiService,
   LookupsService,
+  MasterAssistantService,
   SearchService,
   SharesService,
   VaultService,
@@ -27,6 +28,7 @@ interface Services {
   lookups: LookupsService;
   intelligence: IntelligenceService;
   intelligenceAdmin: IntelligenceAdminService;
+  masterAssistant: MasterAssistantService;
   search: SearchService;
   vault: VaultService;
   vaultAdmin: VaultAdminService;
@@ -47,6 +49,7 @@ export function ServicesProvider({
   lookups,
   intelligence,
   intelligenceAdmin,
+  masterAssistant,
   search,
   vault,
   vaultAdmin,
@@ -63,6 +66,7 @@ export function ServicesProvider({
         lookups,
         intelligence,
         intelligenceAdmin,
+        masterAssistant,
         search,
         vault,
         vaultAdmin,
@@ -110,6 +114,13 @@ export function useIntelligenceAdminService(): IntelligenceAdminService {
   if (!ctx)
     throw new Error('useIntelligenceAdminService outside <ServicesProvider>');
   return ctx.intelligenceAdmin;
+}
+
+export function useMasterAssistantService(): MasterAssistantService {
+  const ctx = useContext(ServicesContext);
+  if (!ctx)
+    throw new Error('useMasterAssistantService outside <ServicesProvider>');
+  return ctx.masterAssistant;
 }
 
 export function useSearchService(): SearchService {

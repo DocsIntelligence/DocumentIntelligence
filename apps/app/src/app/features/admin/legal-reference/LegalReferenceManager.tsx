@@ -13,6 +13,7 @@ import {
 } from '@org/ui';
 import { useConfirm } from '../../../components/confirm/ConfirmProvider';
 import { APP_ENV, lawUrl } from '../../../../config';
+import { AiMasterSetup } from '../master-assistant/AiMasterSetup';
 import { CitationPdfImportDialog } from './CitationPdfImportDialog';
 
 const API_BASE_URL = APP_ENV.apiUrl;
@@ -402,6 +403,12 @@ export function LegalReferenceManager() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImported={reload}
+      />
+
+      <AiMasterSetup
+        masterKey="legal-reference"
+        placeholder='e.g. "Add an entry for Section 138 of the Negotiable Instruments Act, 1881 — cheque dishonour. Draft a plain-language summary and drafting tips." (Provide the exact act + section — the AI never invents statute numbers.)'
+        onCommitted={reload}
       />
 
       <DataTable

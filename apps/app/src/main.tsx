@@ -26,6 +26,7 @@ import {
   createIntelligenceService,
   createIntelligenceAdminService,
   createLegalAiService,
+  createMasterAssistantService,
   createLookupsService,
   createSearchService,
   createSharesService,
@@ -90,6 +91,7 @@ const shares = createSharesService(http);
 const lookups = createLookupsService(http);
 const intelligence = createIntelligenceService(http);
 const intelligenceAdmin = createIntelligenceAdminService(http);
+const masterAssistant = createMasterAssistantService(http);
 const search = createSearchService(http);
 const vault = createVaultService(http);
 const vaultAdmin = createVaultAdminService(http);
@@ -126,6 +128,7 @@ root.render(
             lookups={lookups}
             intelligence={intelligence}
             intelligenceAdmin={intelligenceAdmin}
+            masterAssistant={masterAssistant}
             search={search}
             vault={vault}
             vaultAdmin={vaultAdmin}

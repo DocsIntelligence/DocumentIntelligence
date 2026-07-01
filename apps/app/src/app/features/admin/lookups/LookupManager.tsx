@@ -30,8 +30,11 @@ import {
   IconButton,
   TrashIcon,
 } from '../intelligence/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLookupsService } from '../../documents/services-context';
+import { AiMasterSetup } from '../master-assistant/AiMasterSetup';
 import {
+  lookupAdminKeys,
   useAddValue,
   useAdminGroup,
   useAdminLookups,
@@ -64,6 +67,7 @@ export function LookupManager() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const svc = useLookupsService();
+  const qc = useQueryClient();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState('');
@@ -196,6 +200,14 @@ export function LookupManager() {
         </Button>
       </div>
 
+      <AiMasterSetup
+        masterKey="lookup"
+        placeholder='e.g. "Create a lookup group of all Indian states and union territories" or "Add GST tax rates: 0, 5, 12, 18, 28%".'
+        onCommitted={() =>
+          qc.invalidateQueries({ queryKey: lookupAdminKeys.all })
+        }
+      />
+
       {isLoading ? (
         <div className="flex justify-center py-10">
           <Spinner />
@@ -315,6 +327,7 @@ export function GroupEditor({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const updateGroup = useUpdateGroup();
   const addValue = useAddValue();
   const [name, setName] = useState(group.name);
@@ -395,6 +408,20 @@ export function GroupEditor({
           </Button>
         </div>
       </Card>
+
+      <AiMasterSetup
+        masterKey="lookup"
+        heading={t('adminLookups.aiAddValues', 'Add values with AI')}
+        context={{ groupKey: group.key, groupName: group.name }}
+        placeholder={t(
+          'adminLookups.aiAddValuesHint',
+          'e.g. "all world currencies with ISO codes" or "all Indian states". New values are appended to this group.',
+        )}
+        onCommitted={() => {
+          qc.invalidateQueries({ queryKey: ['admin-lookups', 'group', group.id] });
+          qc.invalidateQueries({ queryKey: lookupAdminKeys.all });
+        }}
+      />
 
       {/* Values */}
       <div className="space-y-2">

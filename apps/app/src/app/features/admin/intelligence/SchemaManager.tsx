@@ -48,7 +48,10 @@ import {
   MapIcon,
   TrashIcon,
 } from './icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { AiMasterSetup } from '../master-assistant/AiMasterSetup';
 import {
+  adminIntelKeys,
   usePurgeSchema,
   useSaveSchema,
   useSchema,
@@ -156,6 +159,7 @@ export function SchemaManager() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const qc = useQueryClient();
   const [showDisabled, setShowDisabled] = useState(false);
   const { data: schemas, isLoading } = useSchemas(showDisabled);
   const purge = usePurgeSchema();
@@ -393,6 +397,14 @@ export function SchemaManager() {
           {t('adminIntel.schema.create', '+ New type')}
         </Button>
       </div>
+
+      <AiMasterSetup
+        masterKey="document-type"
+        placeholder='e.g. "Create a document type for a Gratuity Claim with fields for employee name, date of joining, last drawn salary, years of service and gratuity amount".'
+        onCommitted={() =>
+          qc.invalidateQueries({ queryKey: adminIntelKeys.schemas })
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-2">

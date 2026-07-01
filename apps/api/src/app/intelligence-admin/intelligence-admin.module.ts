@@ -11,5 +11,6 @@ import { IntelligenceAdminService } from './intelligence-admin.service';
 @Module({
   controllers: [IntelligenceAdminController],
   providers: [IntelligenceAdminService],
+  exports: [IntelligenceAdminService],
 })
 export class IntelligenceAdminModule {}
