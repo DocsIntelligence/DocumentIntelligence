@@ -68,7 +68,7 @@ export class StorageService {
         join(process.cwd(), '.storage-local'),
     );
     this.apiBaseUrl =
-      this.config.get<string>('PUBLIC_URL') ?? 'http://localhost:3000';
+      this.config.get<string>('PUBLIC_URL') ?? 'http://localhost:5230';
     this.apiPrefix = this.config.get<string>('GLOBAL_PREFIX') ?? 'api';
 
     if (this.s3Enabled) {

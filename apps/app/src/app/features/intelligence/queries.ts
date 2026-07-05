@@ -34,7 +34,9 @@ export const intelligenceKeys = {
 
 function extractMessage(err: unknown, fallback: string): string {
   if (err instanceof AxiosError) {
-    const data = err.response?.data as { message?: string | string[] } | undefined;
+    const data = err.response?.data as
+      | { message?: string | string[] }
+      | undefined;
     const m = data?.message;
     if (Array.isArray(m)) return m.join(', ');
     if (typeof m === 'string') return m;
@@ -57,7 +59,9 @@ export function useUploadDocument() {
 export function useIntelligenceJob(jobId: string | undefined) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: jobId ? intelligenceKeys.job(jobId) : ['intelligence', 'job', 'none'],
+    queryKey: jobId
+      ? intelligenceKeys.job(jobId)
+      : ['intelligence', 'job', 'none'],
     queryFn: () => svc.getJob(jobId as string),
     enabled: !!jobId,
     // Poll every 2s while the job is still running; stop once terminal.
@@ -88,10 +92,15 @@ const analysisKey = (scope: InsightScope, id: string) =>
 
 /** Latest analysis for a subject (null until analyzed). Works for both an
  *  uploaded source and a drafting document (docs/09 #6). */
-export function useAnalysis(id: string | undefined, scope: InsightScope = 'source') {
+export function useAnalysis(
+  id: string | undefined,
+  scope: InsightScope = 'source',
+) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: id ? analysisKey(scope, id) : ['intelligence', 'analysis', 'none'],
+    queryKey: id
+      ? analysisKey(scope, id)
+      : ['intelligence', 'analysis', 'none'],
     queryFn: () =>
       scope === 'document'
         ? svc.getDocumentAnalysis(id as string)
@@ -110,8 +119,7 @@ export function useRunAnalysis(id: string, scope: InsightScope = 'source') {
       scope === 'document'
         ? svc.analyzeDocument(id, vars)
         : svc.analyze(id, vars),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: analysisKey(scope, id) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: analysisKey(scope, id) }),
     onError: (err) => toast.error(extractMessage(err, 'Analysis failed')),
   });
 }
@@ -192,7 +200,9 @@ export function useAsk(id: string, scope: InsightScope = 'source') {
   const svc = useIntelligenceService();
   return useMutation({
     mutationFn: (question: string) =>
-      scope === 'document' ? svc.askDocument(id, question) : svc.ask(id, question),
+      scope === 'document'
+        ? svc.askDocument(id, question)
+        : svc.ask(id, question),
     onError: (err) => toast.error(extractMessage(err, 'Could not answer')),
   });
 }
@@ -205,7 +215,8 @@ export function useCreateBatch() {
   return useMutation({
     mutationFn: (vars: { files: File[]; name?: string; pipeline?: string }) =>
       svc.createBatch(vars.files, { name: vars.name, pipeline: vars.pipeline }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: intelligenceKeys.batches }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: intelligenceKeys.batches }),
     onError: (err) => toast.error(extractMessage(err, 'Batch upload failed')),
   });
 }
@@ -232,12 +243,14 @@ export function useBatches(params: ListBatchesQuery = {}) {
 export function useBatch(batchId: string | undefined) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: batchId ? intelligenceKeys.batch(batchId) : ['intelligence', 'batch', 'none'],
+    queryKey: batchId
+      ? intelligenceKeys.batch(batchId)
+      : ['intelligence', 'batch', 'none'],
     queryFn: () => svc.getBatch(batchId as string),
     enabled: !!batchId,
     refetchInterval: (q) => {
       const data = q.state.data as { status?: string } | undefined;
-      return data?.status === 'running' ? 3000 : false;
+      return data?.status === 'running' ? 5230 : false;
     },
   });
 }
@@ -246,14 +259,22 @@ export function useBatch(batchId: string | undefined) {
 export function useReviewQueue(batchId?: string, page = 0, pageSize = 50) {
   const svc = useIntelligenceService();
   return useQuery({
-    queryKey: [...intelligenceKeys.reviewQueue, batchId ?? 'all', page, pageSize],
+    queryKey: [
+      ...intelligenceKeys.reviewQueue,
+      batchId ?? 'all',
+      page,
+      pageSize,
+    ],
     queryFn: () => svc.getReviewQueue(batchId, page, pageSize),
     placeholderData: keepPreviousData,
   });
 }
 
 /** A page of a batch's runs (server-side; docs/09 #9). */
-export function useBatchRuns(batchId: string | undefined, query: ListRunsQuery = {}) {
+export function useBatchRuns(
+  batchId: string | undefined,
+  query: ListRunsQuery = {},
+) {
   const svc = useIntelligenceService();
   return useQuery({
     queryKey: batchId
@@ -307,11 +328,15 @@ export function useArchiveType(batchId?: string) {
     mutationFn: (vars: { documentTypeKey: string; reason?: string }) =>
       svc.archiveType(batchId as string, vars.documentTypeKey, vars.reason),
     onSuccess: () => {
-      if (batchId) qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
-      qc.invalidateQueries({ queryKey: ['intelligence', 'batch', batchId, 'runs'] });
+      if (batchId)
+        qc.invalidateQueries({ queryKey: intelligenceKeys.batch(batchId) });
+      qc.invalidateQueries({
+        queryKey: ['intelligence', 'batch', batchId, 'runs'],
+      });
       qc.invalidateQueries({ queryKey: intelligenceKeys.reviewQueue });
     },
-    onError: (err) => toast.error(extractMessage(err, 'Could not skip documents')),
+    onError: (err) =>
+      toast.error(extractMessage(err, 'Could not skip documents')),
   });
 }
 

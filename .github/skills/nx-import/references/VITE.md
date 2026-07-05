@@ -282,7 +282,7 @@ Remove `build`, `dev`, `preview`, and `test` scripts, but move any hardcoded `--
 ```ts
 // vite.config.ts
 export default defineConfig({
-  server: { port: 3000 },  // replaces `vite dev --port 3000`
+  server: { port: 5230 },  // replaces `vite dev --port 5230`
   ...
 })
 ```

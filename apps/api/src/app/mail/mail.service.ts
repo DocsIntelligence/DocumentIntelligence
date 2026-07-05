@@ -73,7 +73,7 @@ export class MailService {
 
   /** Convenience: send verification email */
   async sendVerificationEmail(email: string, token: string): Promise<string> {
-    const publicUrl = process.env['PUBLIC_URL'] ?? 'http://localhost:3000';
+    const publicUrl = process.env['PUBLIC_URL'] ?? 'http://localhost:5230';
     return this.enqueue({
       to: email,
       subject: 'Verify your email',
@@ -87,7 +87,7 @@ export class MailService {
 
   /** Convenience: send password reset email */
   async sendPasswordResetEmail(email: string, token: string): Promise<string> {
-    const publicUrl = process.env['PUBLIC_URL'] ?? 'http://localhost:3000';
+    const publicUrl = process.env['PUBLIC_URL'] ?? 'http://localhost:5230';
     return this.enqueue({
       to: email,
       subject: 'Reset your password',

@@ -94,7 +94,7 @@ export function RenderRoute() {
 
         const apiBase =
           (import.meta as unknown as { env: Record<string, string> }).env
-            .VITE_API_URL ?? 'http://localhost:3000/api';
+            .VITE_API_URL ?? 'http://localhost:5230/api';
         const res = await fetch(
           `${apiBase}/documents/${encodeURIComponent(docId)}/render-payload`,
           {

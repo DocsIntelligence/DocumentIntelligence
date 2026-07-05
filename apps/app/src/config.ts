@@ -4,7 +4,7 @@
  */
 
 export const APP_ENV = {
-  apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
+  apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:5230/api',
   appUrl: import.meta.env.VITE_APP_URL ?? 'http://localhost:5200',
   /** Public marketing host where `/law/*` pages live (SSR'd by apps/web). */
   webUrl: import.meta.env.VITE_WEB_URL ?? 'http://localhost:5220',

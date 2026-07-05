@@ -29,7 +29,7 @@ export class PasskeyService {
   ) {
     const publicUrl = this.config.get<string>(
       'PUBLIC_URL',
-      'http://localhost:3000',
+      'http://localhost:5230',
     );
     const url = new URL(publicUrl);
     this.rpId = url.hostname;
