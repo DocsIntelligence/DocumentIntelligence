@@ -15,7 +15,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { VaultConfigService } from './vault-config.service';
 import {
   VaultDocKindConfigDto,
@@ -27,13 +28,12 @@ import {
 /**
  * Admin config for the vault catalog (docs/10): entity kinds, the global
  * field pool, the entity-kind → field links, and document kinds. `?orgId=`
- * targets an org's overrides; omit for the system defaults. Open to any
- * authenticated user for now (mirrors the other admin surfaces; re-add a
- * RolesGuard to lock it).
+ * targets an org's overrides; omit for the system defaults.
  */
 @ApiTags('vault-admin')
 @Controller('admin/vault')
-@UseGuards(JwtAuthGuard)
+@UseGuards(RolesGuard)
+@Roles('admin')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class VaultAdminController {

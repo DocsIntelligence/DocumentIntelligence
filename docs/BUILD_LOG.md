@@ -2,6 +2,70 @@
 
 > **Purpose:** so anyone (you or a fresh Claude session) can pick up exactly where we left off.
 
+## 2026-07-23 — Marketing site rebuild, auth moved fully to apps/app, admin gating closed, deployment config, Organizations plan
+
+Large session, several independent units:
+
+1. **apps/web (Next.js) rebuilt as a real marketing site** — brand renamed to "Vidhi"
+   (`APP_CONFIG` in `libs/shared/utils`), design tokens synced with `apps/app`'s theme (card/
+   muted/popover/accent/input added to `global.css`), Inter+Fraunces fonts. New pages: home
+   landing (hero, document-type grid, how-it-works, features, pricing teaser, FAQ), `/pricing`
+   (rebuilt with a static fallback), `/privacy`, `/terms`, `/features/{ai-drafting,templates,
+   wealth-vault}`, `/solutions/{individuals,business}`, `/enterprise` (self-hosted pitch + a
+   working contact form → `POST /leads/enterprise`, new `LeadsModule` in `apps/api`, emails
+   `APP_CONFIG.support.email` via the existing `MailService`).
+2. **Auth/dashboard/settings removed from apps/web entirely** — they duplicated what `apps/app`
+   already has, fully built. Deleted `/login`, `/register`, `/forgot-password`,
+   `/reset-password`, `/dashboard`, `/settings`, `/auth/callback`, `authenticated-home.tsx`,
+   `providers.tsx` (Redux wrapper), `proxy.ts`/`auth-routes.ts` (dead, unwired middleware).
+   Added `apps/web/src/lib/app-href.ts` (`NEXT_PUBLIC_APP_URL`) — every "Sign in"/"Start
+   drafting free"/"Go to dashboard" CTA now deep-links to `apps/app`. Matches how
+   `Matrimonial`/`MyLiveCV`'s marketing sites work.
+3. **Admin-role gating closed** — audited first: `RolesGuard`/`@Roles('admin')` was fully built
+   but switched off (with "re-add RolesGuard" comments) on 7 controllers: `settings`,
+   `estate-admin`, `intelligence-admin`, `lookup` (management endpoints only — public GETs
+   untouched), `vault-admin`, `search` (`SearchAdminController`), and 16 `admin/citations/*`
+   routes in `legal-ai.controller.ts`. Re-enabled all of them. On the frontend, `/config/*` had
+   **zero** role check (any signed-up user could reach every admin screen) — added
+   `AdminRoute` (`apps/app/src/app/components/protected-route/AdminRoute.tsx`), wraps the whole
+   `/config/*` + legacy `/admin/*` route group in `app.tsx`; hid the "Configuration" nav group
+   in `MainLayout.tsx` for non-admins.
+4. **Passkey RP-ID bug fixed** — `passkey.service.ts` derived the WebAuthn RP ID/origin from
+   `PUBLIC_URL` (the API's own host) instead of `FRONTEND_URL` (where the browser actually is).
+   Dev "worked" only because both default to localhost; in production with real subdomains
+   (`api.doclio.in` vs `app.doclio.in`) this would silently break passkey login. Now derives
+   from `FRONTEND_URL`, with optional `WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME`/`WEBAUTHN_ORIGIN`
+   overrides (added to `config/schema.ts`).
+5. **First-admin bootstrap added** — `tools/prisma/seed.ts` gained `seedAdminUser()`
+   (`ADMIN_EMAIL`/`ADMIN_PASSWORD`/`ADMIN_NAME`/`ADMIN_USERNAME`, idempotent upsert). Without
+   it a fresh deploy had no path to `role: admin` except a manual DB edit — a real gap once
+   `/config/*` actually started requiring the role.
+6. **Production deployment configuration added (domain: `doclio.in`, fully configurable via one
+   `DOMAIN` env var)** — new `docker/Dockerfile` (multi-stage: `api`/`web`/`app`/`artboard`/
+   `caddy`), `docker/Caddyfile` (apex→web, `app.`→app, `api.`→api, `art.`→artboard,
+   `storage.`→minio, Cloudflare DNS-01 TLS), `docker/nginx-spa.conf`, `docker-compose.yml`
+   (caddy/web/app/api/artboard/postgres/redis/minio/minio-init/chrome), `.env.production.example`,
+   `.dockerignore`, `docs/DEPLOYMENT.md` — all adapted from `Matrimonial`'s proven single-VPS
+   Docker+Caddy setup (no DI equivalent existed before this). Validated with
+   `docker compose config`.
+7. **`docs/16-organizations-multitenancy-PLAN.md`** — full audit + phased plan for turning
+   `Organisation`/`OrgMember`/`OrgRole` (schema-only today, zero business logic) into a real
+   feature: `OrgRolesGuard` + `OrganizationsModule` (CRUD/invites/members), a
+   `PlatformOrOrgAdminGuard` so org owners/admins can self-serve the existing `?orgId=` config
+   endpoints without needing platform-admin, `OrgWallet`/`OrgWalletUsage` for seat billing
+   (parallel to `UserWallet`, not a refactor of it), advocate verification
+   (`BrandingProfile.verificationStatus`). Phased 0–5, each independently shippable — **not
+   implemented yet**, plan only.
+8. **Small fixes along the way**: `/documents/draft-ai` preset-template click filled the brief
+   textarea off-screen with no scroll cue — now scrolls the brief card into view on selection.
+   Default light theme backgrounds (`apps/app` + `apps/web`) brightened from a soft blue-tinted
+   canvas to a near-white background with a stronger, more deliberate blue primary.
+- **Verified:** typecheck + eslint clean across `apps/api`/`apps/app`/`apps/web` after every
+  step; dev-server smoke tests confirmed old `apps/web` auth routes now 404 and the same paths
+  200 on `apps/app`; `docker compose config` validated the full compose file against a sample
+  `doclio.in` env. Not runtime-tested against a live production deploy (no VPS/DNS available
+  here) — first real deploy should follow `docs/DEPLOYMENT.md` step by step.
+
 ## 2026-06-30 — AI Master Setup: duplicate-proofing (normalized dedup + context + review gate)
 
 User: don't add duplicates, avoid different-formatting dupes ("USD" vs "usd"), feed existing as context, and

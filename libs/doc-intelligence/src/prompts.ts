@@ -14,7 +14,8 @@ const EXTRACT_SYSTEM = [
   'You are a meticulous legal-document extraction engine for Indian documents.',
   'Read the supplied document (which may be scanned, in Hindi/Devanagari, or handwritten) and record ONLY values that are actually present.',
   'Rules:',
-  '- Never invent, infer, or "tidy up" values. If a field is absent or illegible, omit it.',
+  '- Never invent, infer, or "tidy up" values. If a field is absent or illegible, OMIT the field from your output entirely.',
+  '- Never write a placeholder or explanatory phrase (e.g. "not stated", "not mentioned", "not specified", "N/A", "unable to determine", "not present in the document") as if it were the field\'s value — that text is not data, and inserting it corrupts the extracted record. Omitting the field is always correct; writing filler text is always wrong.',
   '- Preserve the source script and the source date format verbatim.',
   '- Do not assert statute/section numbers — extract only what the document states.',
   '- Return data strictly via the provided tool/schema.',
@@ -59,7 +60,7 @@ const CRITIC_SYSTEM = [
   'You are given fields a first pass was UNSURE about. Re-read the document carefully and extract ONLY these fields, correcting mistakes.',
   'Rules:',
   '- Look again at the exact location in the document; do not copy the first pass blindly.',
-  '- If a field is genuinely absent or illegible, omit it (do not guess).',
+  '- If a field is genuinely absent or illegible, OMIT it from your output entirely — never write a placeholder phrase ("not stated", "not mentioned", "N/A", etc.) as the value.',
   '- Preserve the source script and date format verbatim.',
   '- Return data strictly via the provided tool/schema.',
 ].join('\n');
@@ -98,5 +99,29 @@ export function buildClassifyPrompt(candidateKeys: string[]): {
       '',
       'Return the single best-matching key (or null) and your confidence 0..1.',
     ].join('\n'),
+  };
+}
+
+const REFORMAT_SYSTEM = [
+  'You reformat raw, messily-extracted text from a scanned or parsed legal document into clean, semantic HTML. You are a formatter, not an author — you do not draft, summarize, translate, or add content.',
+  'Rules:',
+  '- Preserve every word, in the original order. Never paraphrase, summarize, or omit a sentence — the output must contain the same substantive content as the input, just laid out cleanly.',
+  '- Reconstruct the structure the raw text implies: headings become <h2>/<h3>, ordinary paragraphs become <p>, numbered or lettered clauses become <ol>/<li>, and rows of tabular data become a <table>. Signature/witness blocks stay their own paragraphs.',
+  '- Fix ONLY obvious OCR/parsing artifacts — a stray page-number line, a repeated header/footer, a word hyphenated by a line-wrap. Never "fix", complete, or modernize the actual legal wording, even if it looks like an error.',
+  '- Preserve the source script (e.g. Hindi/Devanagari) and date formats verbatim.',
+  '- Output ONLY the HTML body content — no <html>/<head>/<body> wrapper, no markdown code fences, no commentary before or after.',
+].join('\n');
+
+/** Reformat one page's raw extracted text into clean HTML that preserves the
+ *  original document's structure — used as the "keep the same format,
+ *  not key:value" conversion path (docs/05 §11.3) when raw text/OCR output
+ *  is available but has no real layout of its own (e.g. a flat OCR dump). */
+export function buildReformatPrompt(pageText: string): {
+  system: string;
+  instruction: string;
+} {
+  return {
+    system: REFORMAT_SYSTEM,
+    instruction: `Reformat this raw page text into clean HTML, following the rules exactly:\n\n${pageText}`,
   };
 }

@@ -1,0 +1,64 @@
+# Caddy reverse proxy with automatic HTTPS (Let's Encrypt) for the Vidhi
+# subdomains. Certs are issued/renewed via a Cloudflare DNS-01 challenge
+# (acme_dns below) instead of HTTP-01/TLS-ALPN-01 — DNS-01 proves ownership by
+# creating a TXT record via the Cloudflare API, so it works identically whether
+# a domain is Proxied (orange cloud) or DNS-only in Cloudflare. This is what
+# lets every subdomain stay Proxied (CDN/DDoS/caching) without cert breakage.
+#
+# {$DOMAIN} / {$ACME_EMAIL} / {$CLOUDFLARE_API_TOKEN} come from the environment
+# (see docker-compose.yml). The token needs Zone:DNS:Edit scoped to this zone.
+# Not using Cloudflare? Delete the `acme_dns` line and the two ARGs — Caddy
+# falls back to HTTP-01, which works fine as long as the subdomain is
+# DNS-only (grey cloud) during issuance.
+
+{
+	email {$ACME_EMAIL}
+	acme_dns cloudflare {$CLOUDFLARE_API_TOKEN}
+}
+
+# Canonical apex → marketing site (Next.js).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:5220
+}
+
+# www → apex (single canonical host for SEO).
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+# Authenticated platform (React SPA, served by nginx). Every sign-in,
+# sign-up, dashboard and settings page lives here — the apex site only
+# deep-links to it (apps/web/src/lib/app-href.ts).
+app.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:80
+}
+
+# REST API (NestJS). Sets the shared `.{$DOMAIN}` auth cookie.
+api.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:5230
+}
+
+# Artboard — the stamp-paper-aware PDF render target. Server-side Puppeteer
+# (inside `api`) navigates here directly over the Docker network, but the
+# builder's live preview also loads it in an iframe from the browser, so it
+# needs a public host too.
+art.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy artboard:80
+}
+
+# Object storage (MinIO S3 API) — public read access for uploaded files and
+# rendered documents. The bucket is set public-read at init (see
+# docker-compose.yml's minio-init), so this is a plain reverse proxy — no
+# auth/signing happens at this layer.
+#
+# Every object key is a fresh, immutable name (StorageService never overwrites
+# in place — a changed file is a new key), so a long cache is safe.
+storage.{$DOMAIN} {
+	encode zstd gzip
+	header Cache-Control "public, max-age=31536000, immutable"
+	reverse_proxy minio:9000
+}

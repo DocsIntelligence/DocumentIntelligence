@@ -21,7 +21,9 @@ import {
 } from '@nestjs/swagger';
 import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { CitationAnalyzerService } from './citation-analyzer.service';
 import {
   CitationApplyService,
@@ -123,8 +125,10 @@ export class LegalAiController {
     return this.refs.get(id);
   }
 
-  // ── Admin CRUD (no role gate yet per the user's "open it up for now" rule) ──
+  // ── Admin CRUD ───────────────────────────────────────────────────────────
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('admin/citations')
   listAdmin(
     @Query('q') q?: string,
@@ -150,16 +154,22 @@ export class LegalAiController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('admin/citations/:id')
   getAdminCitation(@Param('id') id: string) {
     return this.refs.getAdmin(id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch('admin/citations/:id')
   upsertCitation(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.refs.createOrUpdate({ ...body, id });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch('admin/citations/:id/active')
   setActive(
     @Param('id') id: string,
@@ -168,6 +178,8 @@ export class LegalAiController {
     return this.refs.setActive(id, body.isActive).then(() => ({ ok: true }));
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch('admin/citations/:id/public')
   setPublic(
     @Param('id') id: string,
@@ -176,11 +188,15 @@ export class LegalAiController {
     return this.refs.setPublic(id, body.isPublic).then(() => ({ ok: true }));
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Delete('admin/citations/:id')
   removeCitation(@Param('id') id: string) {
     return this.refs.remove(id).then(() => ({ ok: true }));
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/bulk')
   @ApiOperation({
     summary:
@@ -190,6 +206,8 @@ export class LegalAiController {
     return this.refs.bulkAction(body.ids, body.action);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/:id/sync')
   @ApiOperation({
     summary: 'Pull section text from the official source (indiacode.nic.in for IN) and AI-summarise',
@@ -198,6 +216,8 @@ export class LegalAiController {
     return this.sync.syncFromSource(id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/:id/enrich')
   @ApiOperation({
     summary:
@@ -209,12 +229,16 @@ export class LegalAiController {
 
   // ── Citation file attachments (bare-act PDFs, commentary, judgments) ─────
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('admin/citations/:id/attachments')
   @ApiOperation({ summary: 'List files attached to a citation (admin)' })
   listAttachments(@Param('id') id: string) {
     return this.attachments.list(id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/:id/attachments')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
@@ -236,6 +260,8 @@ export class LegalAiController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch('admin/citations/:id/attachments/:attId/public')
   @ApiOperation({ summary: 'Toggle whether an attachment shows on the public /law page' })
   setAttachmentPublic(
@@ -246,6 +272,8 @@ export class LegalAiController {
     return this.attachments.setPublic(id, attId, Boolean(body.isPublic));
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Delete('admin/citations/:id/attachments/:attId')
   @ApiOperation({ summary: 'Remove a citation attachment (deletes the stored file)' })
   removeAttachment(@Param('id') id: string, @Param('attId') attId: string) {
@@ -254,6 +282,8 @@ export class LegalAiController {
 
   // ── Bulk statute-PDF import (e.g. the whole BNS) ─────────────────────────
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/import/parse')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
@@ -277,6 +307,8 @@ export class LegalAiController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/import/json')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
@@ -304,6 +336,8 @@ export class LegalAiController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post('admin/citations/import/commit')
   @ApiOperation({
     summary:

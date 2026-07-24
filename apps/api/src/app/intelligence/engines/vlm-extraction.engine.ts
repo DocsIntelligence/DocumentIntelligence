@@ -6,6 +6,7 @@ import {
   computeOverallConfidence,
   lowConfidenceFields,
   mergeCritic,
+  stripFillerFields,
   subSchema,
   type ConfidenceMap,
   type ExtractionRequest,
@@ -92,7 +93,10 @@ export class VlmExtractionEngine implements IExtractionEngine {
       },
     );
 
-    const fields: FieldValues = data.fields ?? {};
+    // The model is instructed to omit absent fields, but LLMs don't always
+    // comply — this drops any filler non-answer ("not stated", "N/A", etc.)
+    // it wrote in as a value instead, so it never reaches the stored record.
+    const fields: FieldValues = stripFillerFields(data.fields ?? {});
     const confidence: ConfidenceMap = {};
     for (const key of Object.keys(fields)) {
       const score = data.field_confidence?.[key];

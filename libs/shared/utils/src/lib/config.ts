@@ -7,14 +7,15 @@
  */
 
 export const APP_CONFIG = {
-  name: 'Starter',
-  tagline: 'Build faster, ship sooner',
-  description: 'Full-stack monorepo starter with auth, payments, and more',
+  name: 'Vidhi',
+  tagline: 'Legal documents, drafted right.',
+  description:
+    'India-first legal-document drafting platform: guided forms, an AI copilot, and statute-accurate citations — with a live, stamp-paper-aware preview and PDF/DOCX export.',
   logo: '/logo.svg',
   favicon: '/favicon.ico',
 
   support: {
-    email: 'support@example.com',
+    email: 'support@vidhi.app',
     docs: '/docs',
   },
 

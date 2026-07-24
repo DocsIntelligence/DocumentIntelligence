@@ -5,7 +5,10 @@ import {
   Currency,
   Feature,
   FeatureAction,
+  Role,
+  Provider,
 } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import { documentTypes } from './seed-data/document-types';
 import { extractionTypes } from './seed-data/extraction-types';
 import {
@@ -733,6 +736,51 @@ async function main() {
     });
   }
   console.log(`✅ Legal citations seeded (${CITATIONS.length})`);
+
+  await seedAdminUser();
+}
+
+/**
+ * One-time bootstrap for the first admin account. Without this there is no
+ * way to reach role === 'admin' in a fresh deployment except hand-editing the
+ * DB — every `/config/*` admin surface (both API RolesGuard checks and the
+ * React app's AdminRoute) requires it. Set ADMIN_EMAIL + ADMIN_PASSWORD in
+ * production; skipped (with a log line) if either is unset, so local/dev
+ * seeding stays a no-op unless you opt in.
+ */
+async function seedAdminUser() {
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) {
+    console.log(
+      'ℹ️  ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping admin bootstrap.',
+    );
+    return;
+  }
+  const name = process.env.ADMIN_NAME || 'Administrator';
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { role: Role.admin },
+    create: {
+      email,
+      username,
+      name,
+      role: Role.admin,
+      emailVerified: true,
+      provider: Provider.email,
+    },
+  });
+
+  await prisma.secrets.upsert({
+    where: { userId: user.id },
+    update: { password: hashedPassword },
+    create: { userId: user.id, password: hashedPassword },
+  });
+
+  console.log(`✅ Admin user ready: ${email}`);
 }
 
 main()

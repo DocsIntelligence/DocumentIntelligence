@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { draftAiFormSchema, type DraftAiFormValues } from '@org/dto';
 import { Button, Card, Label, Textarea } from '@org/ui';
 import { cn } from '@org/utils';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +43,7 @@ export function DraftWithAIPage() {
   const groupId = params.get('groupId') ?? undefined;
   const [preset, setPreset] = useState<DocumentPreset | null>(null);
   const [busy, setBusy] = useState(false);
+  const briefCardRef = useRef<HTMLDivElement>(null);
 
   const {
     control,
@@ -61,6 +62,10 @@ export function DraftWithAIPage() {
   function choosePreset(p: DocumentPreset) {
     setPreset(p);
     setValue('brief', p.sampleBrief ?? '', { shouldValidate: true });
+    // The brief textarea sits above the presets grid — on a long presets list
+    // the click can happen well below the fold, so without this the field
+    // fills silently off-screen and looks like nothing happened.
+    briefCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   const draft = handleSubmit(async (values) => {
@@ -106,7 +111,7 @@ export function DraftWithAIPage() {
         )}
       />
 
-      <Card className="rounded-xl">
+      <Card ref={briefCardRef} className="rounded-xl">
         <form onSubmit={draft} className="grid gap-2">
           <Label htmlFor="draft-ai-brief">
             {t('newDoc.briefLabel', 'Document description')}

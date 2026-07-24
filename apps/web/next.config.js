@@ -8,16 +8,11 @@ const { composePlugins, withNx } = require('@nx/next');
 const nextConfig = {
   nx: {},
 
-  // Transpile workspace libs so Next.js compiles them from source
-  transpilePackages: [
-    '@org/dto',
-    '@org/utils',
-    '@org/api-client',
-    '@org/ui',
-    '@org/hooks',
-    '@org/store',
-    '@org/transliteration',
-  ],
+  // Transpile workspace libs so Next.js compiles them from source. Auth,
+  // the dashboard and settings all live in apps/app (the React SPA) now —
+  // this marketing site only links out to them, so it no longer needs
+  // @org/store/@org/api-client/@org/hooks/@org/transliteration.
+  transpilePackages: ['@org/dto', '@org/utils', '@org/ui'],
 
   // Dev server port — avoids conflict with API (5230) and React app (5200)
   devIndicators: false,

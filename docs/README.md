@@ -22,6 +22,7 @@ copilot** that can generate and edit whole documents from natural language.
 | [`02-product-roadmap.md`](02-product-roadmap.md)             | Phased product roadmap, document-type rollout order, pricing, success metrics                                    | The "what ships when" answer                              |
 | [`03-technical-design.md`](03-technical-design.md)           | Architecture of the AI drafting engine, Claude integration, court-document support, multi-format export          | The "how we build it" answer                              |
 | [`04-progress-tracker.md`](04-progress-tracker.md)           | Living checklist of what is built / partial / not-started, by component                                          | The "where are we" answer — **update this as work lands** |
+| [`DEPLOYMENT.md`](DEPLOYMENT.md)                             | Single-VPS Docker + Caddy production deployment (subdomains, env, backups)                                       | The "how do we put this live" answer                      |
 
 ## The codebase in one paragraph
 

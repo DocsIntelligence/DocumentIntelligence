@@ -18,6 +18,7 @@ import { EstateVaultModule } from './estate-vault/estate-vault.module';
 import { HealthModule } from './health/health.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { IntelligenceAdminModule } from './intelligence-admin/intelligence-admin.module';
+import { LeadsModule } from './leads/leads.module';
 import { LegalAiModule } from './legal-ai/legal-ai.module';
 import { MasterAssistantModule } from './master-assistant/master-assistant.module';
 import { SearchModule } from './search/search.module';
@@ -62,6 +63,7 @@ import { UsersModule } from './users/users.module';
     SharesModule,
     CommentsModule,
     SignersModule,
+    LeadsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

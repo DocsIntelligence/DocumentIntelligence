@@ -1,0 +1,38 @@
+# Keep the build context small + force clean installs/builds inside the image.
+node_modules
+**/node_modules
+dist
+tmp
+.nx/cache
+.nx/workspace-data
+**/.next
+**/.vite
+coverage
+.storage-local
+
+# Local env / secrets — never bake into images.
+.env
+.env.*
+!.env.production.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS / editor / OS
+.git
+.gitignore
+.github
+.vscode
+.idea
+**/.DS_Store
+
+# Build/deploy meta not needed inside the image (the builder reads the Dockerfile
+# directly; excluding it here keeps Dockerfile edits from busting the COPY cache).
+docker/Dockerfile
+docker/Caddyfile
+docker-compose.yml
+
+# Docs & misc not needed for the build
+*.md
+!apps/*/README.md
+.claude

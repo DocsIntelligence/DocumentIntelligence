@@ -6,3 +6,4 @@ export * from './lib/documents/index';
 export * from './lib/search/index';
 export * from './lib/vault/index';
 export * from './lib/estate/index';
+export * from './lib/leads/index';

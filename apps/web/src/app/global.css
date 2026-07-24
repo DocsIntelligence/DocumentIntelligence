@@ -8,6 +8,7 @@
   --color-background: oklch(var(--background));
   --color-foreground: oklch(var(--foreground));
   --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
 
   --color-primary: oklch(var(--primary));
   --color-primary-accent: oklch(var(--primary-accent));
@@ -16,6 +17,17 @@
   --color-secondary: oklch(var(--secondary));
   --color-secondary-accent: oklch(var(--secondary-accent));
   --color-secondary-foreground: oklch(var(--secondary-foreground));
+
+  /* Aliased neutrals — kept so shadcn-style class names (bg-muted,
+     bg-card, bg-popover, bg-accent) resolve, matching apps/app's palette. */
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-card: oklch(var(--card));
+  --color-card-foreground: oklch(var(--card-foreground));
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
 
   --color-error: oklch(var(--error));
   --color-error-accent: oklch(var(--error-accent));
@@ -34,22 +46,37 @@
   --color-success-foreground: oklch(var(--success-foreground));
 
   --color-ring: oklch(var(--primary));
+
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
 }
 
 /* ─── Theme Variables (Light) ─── */
 @layer base {
   :root {
-    --background: 0.97 0.01 240;
-    --foreground: 0.14 0.02 260;
-    --border: 0.91 0.01 260;
+    /* A clean white canvas with a proper blue identity, not a soft
+       blue-tinted background — matches apps/app's default theme. */
+    --background: 0.99 0.004 250;
+    --foreground: 0.16 0.02 260;
+    --border: 0.9 0.012 255;
+    --input: 0.9 0.012 255;
 
-    --primary: 0.55 0.18 230;
-    --primary-accent: 0.42 0.15 235;
-    --primary-foreground: 0.97 0.01 230;
+    --primary: 0.5 0.2 258;
+    --primary-accent: 0.4 0.18 260;
+    --primary-foreground: 0.99 0.005 255;
 
-    --secondary: 0.92 0.04 250;
-    --secondary-accent: 0.95 0.02 250;
-    --secondary-foreground: 0.2 0.05 260;
+    --secondary: 0.93 0.025 250;
+    --secondary-accent: 0.96 0.015 250;
+    --secondary-foreground: 0.22 0.05 260;
+
+    --muted: 0.96 0.012 250;
+    --muted-foreground: 0.45 0.03 260;
+    --card: 0.998 0.002 250;
+    --card-foreground: 0.16 0.02 260;
+    --popover: 0.998 0.002 250;
+    --popover-foreground: 0.16 0.02 260;
+    --accent: 0.93 0.03 250;
+    --accent-foreground: 0.2 0.05 260;
 
     --error: 0.58 0.22 15;
     --error-accent: 0.7 0.19 15;
@@ -72,6 +99,7 @@
     --background: 0.14 0.02 260;
     --foreground: 0.95 0.01 260;
     --border: 0.27 0.02 260;
+    --input: 0.34 0.022 260;
 
     --primary: 0.92 0.01 260;
     --primary-accent: 0.85 0.02 260;
@@ -80,6 +108,15 @@
     --secondary: 0.27 0.02 260;
     --secondary-accent: 0.2 0.02 260;
     --secondary-foreground: 0.95 0.01 260;
+
+    --muted: 0.22 0.02 260;
+    --muted-foreground: 0.7 0.02 260;
+    --card: 0.215 0.022 260;
+    --card-foreground: 0.95 0.01 260;
+    --popover: 0.215 0.022 260;
+    --popover-foreground: 0.95 0.01 260;
+    --accent: 0.27 0.02 260;
+    --accent-foreground: 0.95 0.01 260;
 
     --error: 0.5 0.2 15;
     --error-accent: 0.4 0.18 15;
@@ -105,7 +142,29 @@
     @apply border-border/50;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground antialiased text-sm;
+    @apply bg-background text-foreground antialiased text-sm font-sans;
+  }
+}
+
+/* ─── Marketing-site keyframes (hero/section reveal) ─── */
+@layer utilities {
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }

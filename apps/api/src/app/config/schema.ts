@@ -21,6 +21,14 @@ export const envSchema = z.object({
   COOKIE_DOMAIN: z.string().min(1),
   COOKIE_SECURE: z.enum(['true', 'false']).transform((v) => v === 'true'),
 
+  // ── Passkeys / WebAuthn (optional — derived from FRONTEND_URL if unset) ──
+  // Override only if the RP ID/origin the browser runs on isn't exactly
+  // FRONTEND_URL's hostname (e.g. pinning to an apex domain so credentials
+  // work across every subdomain).
+  WEBAUTHN_RP_ID: z.string().min(1).optional(),
+  WEBAUTHN_RP_NAME: z.string().min(1).optional(),
+  WEBAUTHN_ORIGIN: z.string().url().optional(),
+
   // ── Auth / JWT (required) ─────────────────────────────────────────────
   ACCESS_TOKEN_SECRET: z.string().min(16),
   ACCESS_TOKEN_TTL: ttlString,

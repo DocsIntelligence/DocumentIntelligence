@@ -157,6 +157,7 @@ function Sidebar({
   onLogout,
 }: SidebarProps) {
   const { t } = useTranslation();
+  const user = useAppSelector(selectUser);
   const estate = useEstateCapability();
   const estateOn = estate.data?.enabled === true;
   return (
@@ -338,61 +339,66 @@ function Sidebar({
             </NavGroup>
           )}
 
-          {/* Configuration — catalogs + settings, all under /config/* */}
-          <NavGroup
-            label={t('nav.configuration', 'Configuration')}
-            icon={<GearIcon />}
-            storageKey="nav.group.config"
-            childPaths={['/config']}
-          >
-            <NavItem
-              to="/config/document-types"
-              label={t('nav.docTypes', 'Document types')}
-              icon={<DocsIcon />}
-            />
-            <NavItem
-              to="/config/pipelines"
-              label={t('nav.pipelines', 'Pipelines')}
-              icon={<FlowIcon />}
-            />
-            <NavItem
-              to="/config/lookups"
-              label={t('nav.lookups', 'Lookups')}
-              icon={<ListIcon />}
-            />
-            <NavItem
-              to="/config/search"
-              label={t('nav.searchSettings', 'Search settings')}
-              icon={<SearchIcon />}
-            />
-            <NavItem
-              to="/config/vault"
-              label={t('nav.vaultConfig', 'Vault fields')}
-              icon={<VaultIcon />}
-            />
-            {estateOn && (
+          {/* Configuration — catalogs + settings, all under /config/*.
+           *  Admin-only: the routes are gated by `AdminRoute` (app.tsx); hide
+           *  the nav entry too so non-admins never see a link that bounces
+           *  them back to the dashboard. */}
+          {user?.role === 'admin' && (
+            <NavGroup
+              label={t('nav.configuration', 'Configuration')}
+              icon={<GearIcon />}
+              storageKey="nav.group.config"
+              childPaths={['/config']}
+            >
               <NavItem
-                to="/config/estate-vault"
-                label={t('nav.estateConfig', 'Estate Vault')}
+                to="/config/document-types"
+                label={t('nav.docTypes', 'Document types')}
+                icon={<DocsIcon />}
+              />
+              <NavItem
+                to="/config/pipelines"
+                label={t('nav.pipelines', 'Pipelines')}
+                icon={<FlowIcon />}
+              />
+              <NavItem
+                to="/config/lookups"
+                label={t('nav.lookups', 'Lookups')}
+                icon={<ListIcon />}
+              />
+              <NavItem
+                to="/config/search"
+                label={t('nav.searchSettings', 'Search settings')}
+                icon={<SearchIcon />}
+              />
+              <NavItem
+                to="/config/vault"
+                label={t('nav.vaultConfig', 'Vault fields')}
+                icon={<VaultIcon />}
+              />
+              {estateOn && (
+                <NavItem
+                  to="/config/estate-vault"
+                  label={t('nav.estateConfig', 'Estate Vault')}
+                  icon={<ChartIcon />}
+                />
+              )}
+              <NavItem
+                to="/config/legal-reference"
+                label={t('nav.legalReference', 'Legal references')}
+                icon={<BookIcon />}
+              />
+              <NavItem
+                to="/config/ai-usage"
+                label={t('nav.aiUsage', 'AI usage')}
                 icon={<ChartIcon />}
               />
-            )}
-            <NavItem
-              to="/config/legal-reference"
-              label={t('nav.legalReference', 'Legal references')}
-              icon={<BookIcon />}
-            />
-            <NavItem
-              to="/config/ai-usage"
-              label={t('nav.aiUsage', 'AI usage')}
-              icon={<ChartIcon />}
-            />
-            <NavItem
-              to="/config/settings"
-              label={t('nav.platformSettings', 'Platform settings')}
-              icon={<GearIcon />}
-            />
-          </NavGroup>
+              <NavItem
+                to="/config/settings"
+                label={t('nav.platformSettings', 'Platform settings')}
+                icon={<GearIcon />}
+              />
+            </NavGroup>
+          )}
 
           <NavItem
             to="/settings"

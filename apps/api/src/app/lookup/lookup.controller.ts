@@ -16,16 +16,15 @@ import {
   ApiCookieAuth,
 } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { LookupService } from './lookup.service';
 
 /**
- * Lookups: public reads (GET / and GET :key) + management endpoints.
- *
- * The management endpoints are open to any AUTHENTICATED user for now, to match
- * the rest of the admin config UI (Document types / Pipelines — same policy).
- * The role system is intact — re-add `@UseGuards(RolesGuard) @Roles('admin')`
- * on the write/admin methods to lock it down.
+ * Lookups: public reads (GET / and GET :key) + admin management endpoints
+ * (`@Roles('admin')`, applied per-method since the class also serves the two
+ * public reads above).
  */
 @ApiTags('lookups')
 @ApiBearerAuth('bearer')
@@ -43,6 +42,8 @@ export class LookupController {
   }
 
   // Declared BEFORE `:key` so the literal segment wins over the param route.
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('admin')
   @ApiOperation({
     summary: 'Get lookup groups (paginated) incl. non-public + inactive values',
@@ -59,6 +60,8 @@ export class LookupController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('admin/:id')
   @ApiOperation({ summary: 'Get one lookup group WITH its values (admin)' })
   getOneAdmin(@Param('id') id: string) {
@@ -72,8 +75,10 @@ export class LookupController {
     return this.lookupService.getByKey(key);
   }
 
-  // ─── Management endpoints (authenticated) ─────────────────────────────────
+  // ─── Management endpoints (admin) ──────────────────────────────────────────
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post()
   @ApiOperation({ summary: 'Create a lookup group' })
   createGroup(
@@ -88,6 +93,8 @@ export class LookupController {
     return this.lookupService.createGroup(body);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch(':groupId')
   @ApiOperation({ summary: 'Update a lookup group' })
   updateGroup(
@@ -98,12 +105,16 @@ export class LookupController {
     return this.lookupService.updateGroup(groupId, body);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Delete(':groupId')
   @ApiOperation({ summary: 'Delete a lookup group and its values' })
   deleteGroup(@Param('groupId') groupId: string) {
     return this.lookupService.deleteGroup(groupId);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Post(':groupId/values')
   @ApiOperation({ summary: 'Add a value to a lookup group' })
   addValue(
@@ -113,6 +124,8 @@ export class LookupController {
     return this.lookupService.addValue(groupId, body);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Patch('values/:id')
   @ApiOperation({ summary: 'Update a lookup value' })
   updateValue(
@@ -128,6 +141,8 @@ export class LookupController {
     return this.lookupService.updateValue(id, body);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Delete('values/:id')
   @ApiOperation({ summary: 'Delete a lookup value' })
   deleteValue(@Param('id') id: string) {

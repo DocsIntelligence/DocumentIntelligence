@@ -7,5 +7,8 @@
 export const WEB_ENV = {
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5230/api',
   webUrl: process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:5220',
+  /** The React SPA (apps/app) — every sign-in, sign-up and authenticated
+   *  route lives there. This marketing site never hosts its own auth. */
+  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5200',
   razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? '',
 } as const;

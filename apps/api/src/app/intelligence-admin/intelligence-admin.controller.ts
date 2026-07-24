@@ -15,7 +15,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   UpdateExtractionSchemaDto,
   UpdatePipelineDto,
@@ -32,9 +33,8 @@ import { IntelligenceAdminService } from './intelligence-admin.service';
  */
 @ApiTags('intelligence-admin')
 @Controller('admin/intelligence')
-// NOTE: temporarily open to any authenticated user (no admin gate). The role
-// system is intact — re-add `@UseGuards(RolesGuard) @Roles('admin')` to lock it.
-@UseGuards(JwtAuthGuard)
+@UseGuards(RolesGuard)
+@Roles('admin')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class IntelligenceAdminController {

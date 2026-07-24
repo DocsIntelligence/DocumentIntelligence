@@ -13,6 +13,7 @@ import * as mammoth from 'mammoth';
 import { randomUUID } from 'node:crypto';
 import {
   applyFieldMap,
+  buildReformatPrompt,
   decideReview,
   type ConfidenceMap,
   type ExtractionField,
@@ -21,6 +22,7 @@ import {
   type FieldEdit,
   type FieldValues,
 } from '@org/doc-intelligence';
+import { AiService } from '../ai/ai.service';
 import { DatabaseService } from '../database/database.service';
 import { SearchIndexService } from '../search/search-index.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -80,6 +82,7 @@ export class IntelligenceService {
     private readonly documents: DocumentsService,
     private readonly resolver: SchemaResolverService,
     private readonly searchIndex: SearchIndexService,
+    private readonly ai: AiService,
   ) {}
 
   // ─── Ingest ────────────────────────────────────────────────────────────
@@ -469,8 +472,12 @@ export class IntelligenceService {
   /**
    * Reproduce the uploaded document's formatting for the freeform editor:
    *   DOCX  → mammoth rich HTML (headings/bold/lists/tables preserved).
-   *   else  → paragraphs from the stored per-page text, with page breaks
-   *           (PDFs carry no rich layout, so this is text structure only).
+   *   else  → the stored per-page text, reflowed into clean HTML by AI
+   *           (headings/paragraphs/clause lists/tables reconstructed from
+   *           the raw OCR/parsed text — NOT a mechanical blank-line split,
+   *           and never reorganized around extracted field labels), with
+   *           page breaks. Falls back to a mechanical paragraph join per
+   *           page if the AI call fails or no provider is configured.
    * Returns null when nothing usable is recoverable (caller → field summary).
    */
   private async buildSourceHtml(src: {
@@ -498,13 +505,53 @@ export class IntelligenceService {
 
     const pages = src.normalizedText as { page: number; text: string }[] | null;
     if (Array.isArray(pages) && pages.length) {
-      const html = pages
-        .map((p) => this.textToParagraphs(p.text ?? ''))
+      const rendered = await Promise.all(
+        pages.map(async (p) => {
+          const text = p.text ?? '';
+          return (
+            (await this.reformatPageWithAi(text)) ?? this.textToParagraphs(text)
+          );
+        }),
+      );
+      const html = rendered
         .filter((h) => h.trim())
         .join('\n<div data-page-break></div>\n');
       if (html.trim()) return html;
     }
     return null;
+  }
+
+  /**
+   * AI reflow of one page's raw extracted text into clean, structure-preserving
+   * HTML (buildReformatPrompt, docs/05 §11.3) — the model reformats, it does
+   * not draft or summarize. Returns `null` (caller falls back to the
+   * mechanical `textToParagraphs`) when the page is too short to bother, no
+   * AI provider is configured, or the call fails for any reason — this must
+   * never block conversion.
+   */
+  private async reformatPageWithAi(text: string): Promise<string | null> {
+    const trimmed = text.trim();
+    if (trimmed.length < 40) return null;
+    try {
+      const { system, instruction } = buildReformatPrompt(trimmed);
+      const res = await this.ai.generate(instruction, {
+        systemPrompt: system,
+        temperature: 0,
+        maxTokens: 4000,
+      });
+      const html = this.sanitizeHtml(
+        res.text
+          .trim()
+          .replace(/^```(?:html)?\s*/i, '')
+          .replace(/```\s*$/i, ''),
+      );
+      return html.trim() || null;
+    } catch (e) {
+      this.logger.warn(
+        `AI reformat failed for a page, falling back to mechanical layout: ${errorMessage(e)}`,
+      );
+      return null;
+    }
   }
 
   /** Plain text → escaped <p> paragraphs (blank line = new para, \n = <br>). */

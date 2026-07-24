@@ -27,14 +27,22 @@ export class PasskeyService {
     private readonly config: ConfigService,
     private readonly users: UsersService,
   ) {
-    const publicUrl = this.config.get<string>(
-      'PUBLIC_URL',
-      'http://localhost:5230',
+    // The RP ID must be the domain the browser's top-level page runs on (or a
+    // registrable parent of it) — passkeys are registered/verified from
+    // wherever the user is signed in (apps/app), not from the API host. Using
+    // PUBLIC_URL (the API's own origin) here would silently break passkeys
+    // the moment API and app live on different subdomains in production
+    // (api.doclio.in vs app.doclio.in) — dev only "worked" because both
+    // default to localhost. WEBAUTHN_RP_ID overrides the derived hostname,
+    // e.g. to the apex domain so credentials work across every subdomain.
+    const frontendUrl = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:5200',
     );
-    const url = new URL(publicUrl);
-    this.rpId = url.hostname;
-    this.rpName = '@org';
-    this.origin = url.origin;
+    const url = new URL(frontendUrl);
+    this.rpId = this.config.get<string>('WEBAUTHN_RP_ID') ?? url.hostname;
+    this.rpName = this.config.get<string>('WEBAUTHN_RP_NAME') ?? '@org';
+    this.origin = this.config.get<string>('WEBAUTHN_ORIGIN') ?? url.origin;
   }
 
   // ─── Challenge helpers ────────────────────────────────────────

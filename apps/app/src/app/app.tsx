@@ -6,6 +6,7 @@ import {
   useAppDispatch,
   useAppSelector,
 } from '@org/store';
+import { AdminRoute } from './components/protected-route/AdminRoute';
 import { ProtectedRoute } from './components/protected-route/ProtectedRoute';
 import { AdminDashboard } from './features/admin/AdminDashboard';
 import { AiUsagePage } from './features/admin/ai-usage/AiUsagePage';
@@ -186,7 +187,9 @@ export function App() {
          * Config (app-wide configuration) — was split between /admin/* and
          * /admin/intelligence/*. Everything now lives under a flat /config/*
          * namespace. Legacy /admin/* paths redirect via the wildcard below.
+         * `AdminRoute` gates the whole group to role === 'admin'.
          */}
+        <Route element={<AdminRoute />}>
         <Route path="/config" element={<AdminDashboard />} />
         <Route path="/config/ai-usage" element={<AiUsagePage />} />
         <Route path="/config/settings" element={<AdminSettingsPage />} />
@@ -290,6 +293,7 @@ export function App() {
          *  equivalent. The "intelligence" middle segment is dropped, and the
          *  former "intelligence/types" becomes "document-types". */}
         <Route path="/admin/*" element={<AdminLegacyRedirect />} />
+        </Route>
       </Route>
 
       {/* Editors run full-bleed (no app shell) for max working area. */}

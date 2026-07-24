@@ -14,7 +14,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { EstateVaultConfigService } from '../services/estate-vault-config.service';
 import { ReleaseService } from '../services/release.service';
 import { UpdateEstateVaultConfigDto } from '../dto/estate.dto';
@@ -23,12 +24,12 @@ import { UpdateEstateVaultConfigDto } from '../dto/estate.dto';
  * Admin config for the estate-vault module (docs/13 §0.3): the asset-type
  * catalog, liveness cadence, proof requirements, and sub-surface toggles —
  * config-as-data, editable without a redeploy. `?orgId=` targets an org's
- * overrides; omit for the system defaults. Open to any authenticated user for
- * now (mirrors the other admin surfaces; re-add a RolesGuard to lock it).
+ * overrides; omit for the system defaults.
  */
 @ApiTags('estate-vault-admin')
 @Controller('admin/estate-vault')
-@UseGuards(JwtAuthGuard)
+@UseGuards(RolesGuard)
+@Roles('admin')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class EstateAdminController {

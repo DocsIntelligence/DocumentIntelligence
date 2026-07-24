@@ -15,7 +15,9 @@ import {
 } from '@nestjs/swagger';
 import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { SearchQueryDto, UpdateSearchConfigDto } from './search.dto';
 import { SearchService } from './search.service';
 import { SearchConfigService } from './search-config.service';
@@ -40,13 +42,12 @@ export class SearchController {
 }
 
 /**
- * Search configuration + index maintenance. Admin surface — currently open to
- * any authenticated user (mirrors IntelligenceAdminController; the role system
- * is intact, re-add `@UseGuards(RolesGuard) @Roles('admin')` to lock it).
+ * Search configuration + index maintenance. Admin surface.
  */
 @ApiTags('search-admin')
 @Controller('admin/search')
-@UseGuards(JwtAuthGuard)
+@UseGuards(RolesGuard)
+@Roles('admin')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('access_token')
 export class SearchAdminController {

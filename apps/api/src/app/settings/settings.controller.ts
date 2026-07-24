@@ -7,13 +7,14 @@ import {
   Param,
   Patch,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { findSetting, SettingsService, type SettingScope } from './settings.service';
 
 /**
- * Endpoints for the scoped settings registry. Admin-role gating is intentionally
- * off for now (user will reactivate the @Roles('admin') guard once every module
- * is in place).
+ * Endpoints for the scoped settings registry.
  *
  *  - `GET    /admin/settings?scope=system`        list every known key + effective value
  *  - `GET    /admin/settings/:key?scope=&scopeId=` read the resolved value for an actor
@@ -21,6 +22,8 @@ import { findSetting, SettingsService, type SettingScope } from './settings.serv
  *  - `DELETE /admin/settings/:key?scope=&scopeId=` remove an override
  */
 @Controller('admin/settings')
+@UseGuards(RolesGuard)
+@Roles('admin')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 

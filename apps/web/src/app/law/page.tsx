@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { WEB_ENV } from '../../config';
+import { appHref } from '../../lib/app-href';
 import { SITE_NAME } from '../../lib/site';
 import {
   citationSlug,
@@ -77,12 +78,12 @@ export default async function LawCatalogPage() {
               >
                 Home
               </Link>
-              <Link
-                href={`${WEB_ENV.webUrl.replace('//', '//app.').replace('://app.app.', '://app.')}/dashboard`}
+              <a
+                href={appHref('dashboard', true)}
                 className="text-foreground/70 hover:text-foreground"
               >
                 Draft documents
-              </Link>
+              </a>
             </nav>
           </div>
         </header>

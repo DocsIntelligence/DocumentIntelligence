@@ -1,0 +1,279 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Vidhi — single-VPS deployment.
+#
+#   caddy    →  TLS + reverse proxy for {DOMAIN} / app.* / api.* / art.* / storage.*
+#   web      →  Next.js marketing site (apex) — no auth of its own, see docs/DEPLOYMENT.md
+#   app      →  React SPA (app subdomain, static via nginx) — the whole authenticated product
+#   api      →  NestJS API (api subdomain)
+#   artboard →  Vite SPA (art subdomain) — stamp-paper-aware PDF render target
+#   minio    →  S3-compatible object storage for uploads/renders (storage subdomain,
+#               public-read bucket set up by the one-shot minio-init service)
+#   postgres / redis / chrome  →  internal services (no public ports)
+#
+# Usage:  cp .env.production.example .env  &&  edit  &&  docker compose up -d --build
+# Values come from .env in this directory. See docs/DEPLOYMENT.md.
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-build: &shared-build
+  context: .
+  dockerfile: docker/Dockerfile
+  # Frontend public env is inlined at build time — must be passed as build args.
+  args:
+    NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Vidhi}
+    NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL}
+    NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}
+    VITE_APP_NAME: ${VITE_APP_NAME:-Vidhi}
+    VITE_API_URL: ${VITE_API_URL}
+    VITE_APP_URL: ${VITE_APP_URL}
+    VITE_WEB_URL: ${VITE_WEB_URL}
+    VITE_ARTBOARD_URL: ${VITE_ARTBOARD_URL}
+    VITE_RAZORPAY_KEY_ID: ${VITE_RAZORPAY_KEY_ID:-}
+
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, app, api, artboard, minio]
+
+  web:
+    build:
+      <<: *shared-build
+      target: web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # Also provided at runtime so server components read the right values.
+      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Vidhi}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL}
+    expose: ['5220']
+
+  app:
+    build:
+      <<: *shared-build
+      target: app
+    restart: unless-stopped
+    expose: ['80']
+
+  # Stamp-paper-aware PDF render target (docs/ARCHITECTURE_PRINCIPLES.md).
+  # Embedded as a live iframe by the builder's preview, and navigated to
+  # directly by the server-side Puppeteer worker (inside `api`) for PDF export.
+  artboard:
+    build:
+      <<: *shared-build
+      target: artboard
+    restart: unless-stopped
+    expose: ['80']
+
+  api:
+    build:
+      <<: *shared-build
+      target: api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '5230'
+      GLOBAL_PREFIX: api
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_URL: ${PUBLIC_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-7d}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # Passkeys/WebAuthn — pin explicitly rather than deriving from
+      # FRONTEND_URL, since that's the one env var most likely to be
+      # copy-pasted wrong on a first deploy (see docs/DEPLOYMENT.md).
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
+      # PDF render worker: headless Chrome (browserless container) + the
+      # artboard render target reachable over the Docker network (internal
+      # service name — never a public round-trip).
+      CHROME_URL: ${CHROME_URL:-ws://chrome:3000}
+      INTERNAL_RENDER_TOKEN: ${INTERNAL_RENDER_TOKEN}
+      ARTBOARD_URL: ${ARTBOARD_URL:-http://artboard}
+      # Estate & Wealth Vault module (docs/13) — on by default; set to
+      # 'false' to mount no controllers/scheduler for this deployment.
+      ESTATE_VAULT_ENABLED: ${ESTATE_VAULT_ENABLED:-true}
+      # Billing enforcement — 'false' lets every request through regardless
+      # of wallet/usage state (useful while pricing tiers are still TBD).
+      BILLING_ENFORCED: ${BILLING_ENFORCED:-true}
+      # First admin (one-time bootstrap — see tools/prisma/seed.ts)
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrator}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      # OAuth (optional)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
+      LINKEDIN_CALLBACK_URL: ${LINKEDIN_CALLBACK_URL:-}
+      # Mail (optional)
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      # Payments (optional)
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      # AI providers (set at least one to enable /ai, /legal-ai, /intelligence)
+      AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-claude}
+      AI_MODEL_WHITELIST: ${AI_MODEL_WHITELIST:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-8}
+      ANTHROPIC_VISION_MODEL: ${ANTHROPIC_VISION_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-}
+      OPENAI_EMBED_MODEL: ${OPENAI_EMBED_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      # Premium agentic extraction (optional third-party parser)
+      EXTRACTION_AGENTIC_BASE_URL: ${EXTRACTION_AGENTIC_BASE_URL:-}
+      EXTRACTION_AGENTIC_API_KEY: ${EXTRACTION_AGENTIC_API_KEY:-}
+      EXTRACTION_AGENTIC_MODEL: ${EXTRACTION_AGENTIC_MODEL:-}
+      EXTRACTION_AGENTIC_RESPONSE_PATH: ${EXTRACTION_AGENTIC_RESPONSE_PATH:-}
+      EXTRACTION_AGENTIC_PROVIDER: ${EXTRACTION_AGENTIC_PROVIDER:-}
+      # Storage: S3-compatible — defaults to the self-hosted MinIO service
+      # below. STORAGE_ENDPOINT is the INTERNAL container address (fast, no
+      # public round-trip for server-side upload/delete calls);
+      # STORAGE_PUBLIC_URL is the public HTTPS host browsers fetch files from
+      # (routed through Caddy — see docker/Caddyfile's storage.{$DOMAIN}).
+      # Credentials reuse MinIO's own root user (single-tenant deployment —
+      # no need for a separate IAM user).
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER:-}}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-}}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-uploads}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
+    expose: ['5230']
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-vidhi}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '60', '1', '--appendonly', 'yes']
+    volumes:
+      - redisdata:/data
+
+  # Self-hosted S3-compatible object storage for uploads and rendered
+  # documents. Public reads are served through Caddy at storage.{$DOMAIN}
+  # (docker/Caddyfile); the S3 API itself (this port) stays internal-only —
+  # the api container talks to it directly over the Docker network via
+  # STORAGE_ENDPOINT=http://minio:9000.
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+    expose: ['9000', '9001']
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: create the uploads bucket and set it public-read (so URLs the
+  # API returns — STORAGE_PUBLIC_URL/bucket/key — resolve directly in a
+  # browser with no presigning). Exits after running; `mb --ignore-existing`
+  # + re-applying the policy makes it safe to restart the stack repeatedly.
+  minio-init:
+    image: minio/mc:RELEASE.2024-01-13T08-44-48Z
+    restart: 'no'
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-uploads}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${STORAGE_BUCKET} &&
+      mc anonymous set download local/$${STORAGE_BUCKET}
+      "
+
+  # Headless Chrome for PDF generation (stamp-paper-aware document export via
+  # the artboard render target). Default Docker /dev/shm (64MB) is too small
+  # for Chromium and is a classic cause of renderer crashes mid-PDF-render.
+  chrome:
+    image: ghcr.io/browserless/chromium:latest
+    restart: unless-stopped
+    shm_size: '1gb'
+    mem_limit: 1200m
+    environment:
+      CONCURRENT: '2' # 5 is too aggressive on a 2-4GB VPS shared with postgres/redis/minio/apps
+      TIMEOUT: '120000'
+      CONNECTION_TIMEOUT: '120000'
+      TOKEN: ''
+    expose: ['3000']
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
+  redisdata:
+  uploads:
+  miniodata:
