@@ -13,11 +13,14 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { WalletUsageService } from '../payment/wallet-usage.service';
 import { SearchIndexService } from '../search/search-index.service';
+import { StorageService } from '../storage/storage.service';
 import {
   CreateDocumentDto,
   ListDocumentsQueryDto,
   PatchDocumentDto,
 } from './documents.dto';
+
+const MAX_PAGE_IMAGE_BYTES = 15 * 1024 * 1024;
 
 /**
  * Documents service. All routes are scoped to the authenticated user.
@@ -44,6 +47,7 @@ export class DocumentsService {
     private readonly db: DatabaseService,
     private readonly walletUsage: WalletUsageService,
     private readonly searchIndex: SearchIndexService,
+    private readonly storage: StorageService,
   ) {}
 
   // ─── Read ──────────────────────────────────────────────────────────────
@@ -308,6 +312,42 @@ export class DocumentsService {
     // indexer skips re-embedding when the extracted text is unchanged.
     this.searchIndex.enqueueDocument(id);
     return updated;
+  }
+
+  // ─── Page images (insert a pre-defined page, e.g. an E-Stamp scan) ─────
+
+  async uploadPageImage(
+    userId: string,
+    id: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+  ): Promise<{ url: string }> {
+    const existing = await this.db.document.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Document not found');
+    await this.assertCanAccess(userId, existing);
+    if (existing.lockedAt) {
+      throw new ForbiddenException(
+        'Document is locked (signed). Create a new draft to amend.',
+      );
+    }
+    if (!file || file.size === 0) {
+      throw new BadRequestException('No file provided');
+    }
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files can be inserted as a page');
+    }
+    if (file.size > MAX_PAGE_IMAGE_BYTES) {
+      throw new BadRequestException(
+        `Image exceeds the ${MAX_PAGE_IMAGE_BYTES / (1024 * 1024)}MB limit`,
+      );
+    }
+
+    const stored = await this.storage.upload(file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype,
+      folder: `documents/${id}/pages`,
+      userId,
+    });
+    return { url: stored.url };
   }
 
   // ─── Snapshot ──────────────────────────────────────────────────────────

@@ -236,6 +236,13 @@ export const createDocumentsService = (http: HttpClient) => ({
       .then((r) => r.data),
   patch: (id: string, payload: PatchDocumentPayload) =>
     http.patch<DocumentDetail>(`/documents/${id}`, payload).then((r) => r.data),
+  uploadPageImage: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return http
+      .post<{ url: string }>(`/documents/${id}/page-images`, form)
+      .then((r) => r.data);
+  },
   snapshot: (id: string, label?: string) =>
     http
       .post<{ id: string }>(`/documents/${id}/snapshot`, { label })

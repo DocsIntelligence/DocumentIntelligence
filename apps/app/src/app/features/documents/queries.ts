@@ -102,6 +102,15 @@ export function usePatchDocument(id: string) {
   });
 }
 
+/** Upload an image to insert as a pre-defined page (e.g. an E-Stamp scan). */
+export function useUploadPageImage(id: string) {
+  const svc = useDocumentsService();
+  return useMutation({
+    mutationFn: (file: File) => svc.uploadPageImage(id, file),
+    onError: (err) => toast.error(extractMessage(err, 'Image upload failed')),
+  });
+}
+
 export function useDeleteDocument() {
   const svc = useDocumentsService();
   const qc = useQueryClient();

@@ -78,7 +78,13 @@ export class PdfRendererService {
 
     // Append captured signatures (+ audit page) for freeform/HTML docs, so the
     // exported PDF matches the render-payload path and the live preview.
-    const renderData = await this.withSignatures(documentId, doc.data);
+    const withSignatures = await this.withSignatures(documentId, doc.data);
+    // Same host rewrite as the artboard URL below, but applied to asset URLs
+    // *embedded in the document content* (e.g. an inserted page image served
+    // from local-fs storage at PUBLIC_URL) — from inside the Browserless
+    // container "localhost" is the container itself, not this host, so the
+    // image would otherwise fail to load and Chrome falls back to the alt text.
+    const renderData = this.rewriteAssetUrlsForRemoteBrowser(withSignatures);
 
     // When connecting to a remote browser (Browserless in Docker), the
     // browser sees a different "localhost" than the API process does.
@@ -368,6 +374,24 @@ export class PdfRendererService {
       );
     }
     return { browser, dispose: () => browser.close() };
+  }
+
+  /**
+   * Rewrite `http://localhost:PORT` / `http://127.0.0.1:PORT` references
+   * anywhere inside the document payload (e.g. an `<img src>` pointing at
+   * local-fs storage) to `host.docker.internal`, so the remote Browserless
+   * container can actually fetch them. No-op unless CHROME_URL is set, and a
+   * no-op in practice once storage is S3-backed (those URLs aren't localhost).
+   */
+  private rewriteAssetUrlsForRemoteBrowser(
+    data: Prisma.JsonValue | null,
+  ): Prisma.JsonValue | null {
+    if (!process.env.CHROME_URL || data == null) return data;
+    const json = JSON.stringify(data).replace(
+      /http:\/\/(?:localhost|127\.0\.0\.1):(\d+)/g,
+      'http://host.docker.internal:$1',
+    );
+    return JSON.parse(json) as Prisma.JsonValue;
   }
 
   private rewriteForRemoteBrowser(url: string): string {

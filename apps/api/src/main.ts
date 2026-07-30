@@ -27,7 +27,18 @@ async function bootstrap() {
     origin: corsOrigin.split(',').map((o) => o.trim()),
     credentials: true,
   });
-  app.use(helmet());
+  app.use(
+    helmet({
+      // Uploaded page images (and other storage assets) are embedded via
+      // <img src> from the app's origin (and fetched by the artboard's
+      // Puppeteer render for PDF export) — both cross-origin from the API in
+      // dev, and typically cross-subdomain in prod. Helmet's default
+      // `same-origin` CORP blocks exactly that (ERR_BLOCKED_BY_RESPONSE), so
+      // relax it; unauthenticated JSON endpoints aren't meaningfully
+      // embeddable anyway.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser());
   app.useGlobalPipes(new ZodValidationPipe());
   app.enableShutdownHooks();

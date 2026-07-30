@@ -11,6 +11,7 @@ export {
   type SuggestionPopoverProps,
 } from './suggestion-popover';
 export { PageBreakExtension } from './page-break-extension';
+export { PageImageExtension } from './page-image-extension';
 export {
   PlaceholderHighlightExtension,
   type PlaceholderHighlightOptions,

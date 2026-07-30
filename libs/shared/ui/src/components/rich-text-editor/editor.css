@@ -307,3 +307,19 @@
 .document-preview-page [data-page-break] {
   display: none;
 }
+
+/* --- Page image (editor view) --- */
+.editor-page-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem auto;
+  border-radius: 0.25rem;
+  cursor: default;
+}
+
+.editor-page-image.ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--primary) / 0.5);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}

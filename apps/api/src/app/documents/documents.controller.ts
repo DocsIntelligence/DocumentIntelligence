@@ -8,14 +8,20 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiCookieAuth,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type {} from 'multer';
 import type { User } from '@org/dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -94,6 +100,27 @@ export class DocumentsController {
     @Body() body: PatchDocumentDto,
   ) {
     return this.documents.patch(user.id, id, body);
+  }
+
+  @Post(':id/page-images')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary:
+      'Upload an image to insert as a pre-defined page (e.g. an E-Stamp scan)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  uploadPageImage(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.documents.uploadPageImage(user.id, id, file);
   }
 
   @Post(':id/snapshot')

@@ -7,12 +7,14 @@ export type EditorToolbarProps = {
   editor: Editor;
   onInsertPlaceholder?: () => void;
   onInsertPageBreak?: () => void;
+  onInsertPageImage?: () => void;
 };
 
 export function EditorToolbar({
   editor,
   onInsertPlaceholder,
   onInsertPageBreak,
+  onInsertPageImage,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   return (
@@ -170,6 +172,24 @@ export function EditorToolbar({
           >
             <PageBreakIcon />
             {t('editor.format.pageBreak', 'Page Break')}
+          </Button>
+        </Tooltip>
+      )}
+      {onInsertPageImage && (
+        <Tooltip
+          content={t(
+            'editor.format.insertPageImage',
+            'Insert page image (e.g. E-Stamp scan)',
+          )}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onInsertPageImage}
+            className="h-7 gap-1 px-1.5 text-[11px] font-medium"
+          >
+            <PageImageIcon />
+            {t('editor.format.pageImage', 'Page Image')}
           </Button>
         </Tooltip>
       )}
@@ -416,6 +436,21 @@ function PageBreakIcon() {
       <path d="M4 4h16v6H4z" />
       <path d="M4 14h16v6H4z" />
       <path d="M2 12h4M9 12h2M14 12h2M19 12h3" strokeDasharray="2 2" />
+    </svg>
+  );
+}
+function PageImageIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="1.5" />
+      <circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M3 17l5-5 4 4 3-3 6 6" />
     </svg>
   );
 }

@@ -26,6 +26,7 @@ import {
   Label,
   Textarea,
   PageBreakExtension,
+  PageImageExtension,
   PlaceholderHighlightExtension,
   PLACEHOLDER_HIGHLIGHT_META,
   extractPlaceholderKeys,
@@ -69,6 +70,7 @@ import { AiUsageSummary } from '../admin/ai-usage/AiUsageSummary';
 import { CommentsPanel } from '../documents/CommentsPanel';
 import { VersionHistoryPanel } from '../documents/VersionHistoryPanel';
 import { SharePanel } from '../documents/SharePanel';
+import { useUploadPageImage } from '../documents/queries';
 import { EditorToolbar } from './components/EditorToolbar';
 import {
   PlaceholderForm,
@@ -226,7 +228,10 @@ function TemplateEditorInner({
       return {
         template: tpl,
         values: persistence.initial.values,
-        html: editorKind === 'markdown' ? renderMarkdown(md) : persistence.initial.html,
+        html:
+          editorKind === 'markdown'
+            ? renderMarkdown(md)
+            : persistence.initial.html,
         markdown: md,
         savedAt: persistence.savedAt ?? null,
         pageSize: persistence.initial.pageSize ?? 'a4',
@@ -305,9 +310,7 @@ function TemplateEditorInner({
   const [showPreview, setShowPreview] = useState(true);
   // Markdown's left rail only has panels once the doc is saved (documentId).
   // In the unsaved scratchpad there are none, so don't show an empty sidebar.
-  const [showSidebar, setShowSidebar] = useState(
-    !(isMarkdown && !documentId),
-  );
+  const [showSidebar, setShowSidebar] = useState(!(isMarkdown && !documentId));
   // Persisted per-panel visibility (which menu items the user has hidden).
   // Lives in localStorage so the preference survives reloads / new docs.
   const [hiddenPanels, setHiddenPanels] = useState<Set<string>>(() =>
@@ -372,13 +375,14 @@ function TemplateEditorInner({
       Placeholder.configure({
         placeholder: 'Start writing or pick a template...',
       }),
-      Underline,
+      // Underline,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
         alignments: ['left', 'center', 'right', 'justify'],
       }),
       Highlight.configure({ multicolor: true }),
       PageBreakExtension,
+      PageImageExtension,
       PlaceholderHighlightExtension.configure({
         values: {},
         onTokenClick: handleTokenClick,
@@ -708,14 +712,7 @@ function TemplateEditorInner({
         ? t('editor.toast.revisionApplied', 'Revision applied')
         : t('editor.toast.revisionNoneApplied', 'No changes applied'),
     );
-  }, [
-    editor,
-    pendingRevision,
-    revisionHunks,
-    hunkDecisions,
-    acceptedCount,
-    t,
-  ]);
+  }, [editor, pendingRevision, revisionHunks, hunkDecisions, acceptedCount, t]);
 
   const rejectRevision = useCallback(() => {
     setPendingRevision(null);
@@ -779,6 +776,77 @@ function TemplateEditorInner({
       .insertContent('<p></p>')
       .run();
   }, [editor]);
+
+  // --- Insert a pre-defined page image (e.g. a scanned E-Stamp) ---
+  const pageImageInputRef = useRef<HTMLInputElement>(null);
+  // Captured at click time (before the OS file picker steals focus/selection)
+  // so the insert always lands where the user's cursor actually was —
+  // including position 0 (very start of doc), which relying on `.focus()`
+  // to re-resolve *after* the async upload completes does not handle.
+  const pageImageInsertPos = useRef<number | null>(null);
+  const uploadPageImage = useUploadPageImage(documentId ?? '');
+
+  const handleInsertPageImage = useCallback(() => {
+    pageImageInsertPos.current = editor?.state.selection.to ?? null;
+    pageImageInputRef.current?.click();
+  }, [editor]);
+
+  const handlePageImageFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !editor || !documentId) return;
+      if (!file.type.startsWith('image/')) {
+        toast.error(
+          t('editor.toast.notAnImage', 'Please choose an image file.'),
+        );
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error(
+          t('editor.toast.imageTooLarge', 'Image must be under 15MB.'),
+        );
+        return;
+      }
+      const pos = pageImageInsertPos.current ?? editor.state.selection.to;
+      uploadPageImage.mutate(file, {
+        onSuccess: ({ url }) => {
+          // One explicit insert at the captured position (as node JSON, not
+          // HTML) instead of three sequential `.focus()`-relative commands —
+          // avoids re-resolving "current selection" after the async upload,
+          // which is what broke inserting at the very start of the document.
+          let ok = false;
+          try {
+            ok = editor
+              .chain()
+              .focus()
+              .insertContentAt(pos, [
+                { type: 'pageBreak' },
+                {
+                  type: 'image',
+                  attrs: { src: url, alt: 'Uploaded page image' },
+                },
+                { type: 'pageBreak' },
+                { type: 'paragraph' },
+              ])
+              .run();
+          } catch (err) {
+            console.error('[page-image] insert threw', err);
+          }
+          if (!ok) {
+            console.error('[page-image] insert failed', { pos, url });
+            toast.error(
+              t(
+                'editor.toast.imageInsertFailed',
+                'Uploaded, but could not insert the image into the document.',
+              ),
+            );
+          }
+        },
+      });
+    },
+    [editor, documentId, uploadPageImage, t],
+  );
 
   const handleJumpToPage = useCallback(
     (pageIndex: number) => {
@@ -1200,8 +1268,16 @@ function TemplateEditorInner({
           editor={editor}
           onInsertPlaceholder={handleInsertPlaceholderOpen}
           onInsertPageBreak={handleInsertPageBreak}
+          onInsertPageImage={documentId ? handleInsertPageImage : undefined}
         />
       )}
+      <input
+        ref={pageImageInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handlePageImageFileChange}
+      />
       <div
         ref={editorScrollRef}
         className="relative flex-1 overflow-y-auto bg-background"
@@ -1760,7 +1836,10 @@ function TemplateEditorInner({
                               {seg.text}
                             </span>
                           ) : seg.op === 'added' ? (
-                            <span key={idx} className="rounded-sm bg-success/25">
+                            <span
+                              key={idx}
+                              className="rounded-sm bg-success/25"
+                            >
                               {seg.text}
                             </span>
                           ) : (

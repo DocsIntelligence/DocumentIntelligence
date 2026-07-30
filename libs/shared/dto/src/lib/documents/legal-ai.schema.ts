@@ -6,7 +6,7 @@ export const generateDocumentSchema = z.object({
     .string()
     .trim()
     .min(1, 'Describe the document you need')
-    .max(6000, 'Brief is too long (max 6000 characters)'),
+    .max(10000, 'Brief is too long (max 6000 characters)'),
   /** Optional — grounds the draft in a known document type's sections. */
   documentTypeKey: z.string().min(1).optional(),
   title: z.string().max(200).optional(),
