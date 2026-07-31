@@ -17,6 +17,8 @@ interface Props {
   pageSize: string;
   language?: string;
   jurisdiction?: string | null;
+  headerText?: string | null;
+  footerText?: string | null;
   /**
    * Fired when a user clicks an EditableField inside the rendered template.
    * The `iframeRect` is supplied so the parent can position a popover at
@@ -46,6 +48,8 @@ export function ArtboardIframe({
   pageSize,
   language,
   jurisdiction,
+  headerText,
+  footerText,
   onFieldClick,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -90,11 +94,28 @@ export function ArtboardIframe({
     iframe.contentWindow.postMessage(
       {
         type: 'doc:update',
-        payload: { componentKey, data, pageSize, language, jurisdiction },
+        payload: {
+          componentKey,
+          data,
+          pageSize,
+          language,
+          jurisdiction,
+          headerText,
+          footerText,
+        },
       },
       '*',
     );
-  }, [componentKey, data, pageSize, language, jurisdiction, ready]);
+  }, [
+    componentKey,
+    data,
+    pageSize,
+    language,
+    jurisdiction,
+    headerText,
+    footerText,
+    ready,
+  ]);
 
   // Push zoom changes (from the buttons here) into the iframe.
   useEffect(() => {

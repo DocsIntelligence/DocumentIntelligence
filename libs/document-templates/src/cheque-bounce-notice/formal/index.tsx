@@ -12,6 +12,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<ChequeBounceNoticeData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const DELIVERY_LABEL: Record<string, string> = {
@@ -29,7 +31,7 @@ const DELIVERY_LABEL: Record<string, string> = {
  * when the drawer is a company), §142 (complaint window). Editable values use
  * <EditableField/> (click-to-edit in preview, plain in the PDF).
  */
-export function ChequeBounceFormal({ data, pageSize }: Props) {
+export function ChequeBounceFormal({ data, pageSize, headerText, footerText }: Props) {
   const adv = data.advocate;
   const useAdvocate = data.throughAdvocate !== false && !!adv?.name;
   const payee = data.payee;
@@ -43,7 +45,7 @@ export function ChequeBounceFormal({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         {useAdvocate && (
           <section>
             <p style={{ textAlign: 'center' }}>

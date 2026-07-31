@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<RtiApplicationData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const FEE_MODE_LABEL: Record<string, string> = {
@@ -31,7 +33,7 @@ const FORMAT_LABEL: Record<string, string> = {
  * Editable values use <EditableField/> (click-to-edit in preview, plain text in
  * the PDF/Puppeteer path).
  */
-export function RtiDefault({ data, pageSize }: Props) {
+export function RtiDefault({ data, pageSize, headerText, footerText }: Props) {
   const app = data.applicant;
   const auth = data.authority;
   const pio = data.pio;
@@ -43,7 +45,7 @@ export function RtiDefault({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1>Application under the Right to Information Act, 2005</h1>
 
         <section>

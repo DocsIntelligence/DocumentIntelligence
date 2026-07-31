@@ -1,11 +1,18 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { pageProfiles, type PageSizeKey } from './page-sizes';
+import { resolvePageChromeText } from './page-chrome';
 
 interface PageProps {
   pageSize: PageSizeKey;
   pageNumber?: number;
   totalPages?: number;
   isFirst?: boolean;
+  /** Repeated on every page (top, centered) when set. Supports
+   *  `{{pageNumber}}` / `{{totalPages}}`. */
+  headerText?: string;
+  /** Repeated on every page (bottom-right) when set; falls back to the
+   *  default "Page N of M" when empty, so existing documents don't change. */
+  footerText?: string;
   children: ReactNode;
 }
 
@@ -22,10 +29,22 @@ export function Page({
   pageNumber,
   totalPages,
   isFirst = true,
+  headerText,
+  footerText,
   children,
 }: PageProps) {
   const p = pageProfiles[pageSize];
   const reservedTop = isFirst ? p.reservedTopMm : 0;
+  const resolvedHeader =
+    pageNumber != null && totalPages != null
+      ? resolvePageChromeText(headerText, pageNumber, totalPages)
+      : '';
+  const resolvedFooter =
+    pageNumber != null && totalPages != null
+      ? footerText
+        ? resolvePageChromeText(footerText, pageNumber, totalPages)
+        : `Page ${pageNumber} of ${totalPages}`
+      : '';
 
   const style: CSSProperties = {
     width: `${p.widthMm}mm`,
@@ -49,8 +68,24 @@ export function Page({
 
   return (
     <section className="doc-page" data-page-size={pageSize} style={style}>
+      {resolvedHeader && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: `${p.marginTopMm / 2}mm`,
+            left: `${p.marginLeftMm}mm`,
+            right: `${p.marginRightMm}mm`,
+            textAlign: 'center',
+            fontSize: '9pt',
+            color: '#666',
+          }}
+        >
+          {resolvedHeader}
+        </div>
+      )}
       {children}
-      {pageNumber != null && totalPages != null && (
+      {resolvedFooter && (
         <div
           aria-hidden
           style={{
@@ -61,7 +96,7 @@ export function Page({
             color: '#666',
           }}
         >
-          Page {pageNumber} of {totalPages}
+          {resolvedFooter}
         </div>
       )}
     </section>

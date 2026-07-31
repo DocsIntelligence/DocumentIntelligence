@@ -212,6 +212,8 @@ export class DocumentsService {
         pageSize: dto.pageSize ?? type.defaultPageSize,
         language: dto.language ?? template.language,
         jurisdiction: dto.jurisdiction ?? null,
+        headerText: dto.headerText ?? null,
+        footerText: dto.footerText ?? null,
         data: dto.data as Prisma.InputJsonValue,
       },
     });
@@ -296,6 +298,8 @@ export class DocumentsService {
         pageSize: dto.pageSize ?? undefined,
         language: dto.language ?? undefined,
         jurisdiction: dto.jurisdiction ?? undefined,
+        headerText: dto.headerText ?? undefined,
+        footerText: dto.footerText ?? undefined,
         templateId,
         status: dto.status ?? undefined,
       },
@@ -363,6 +367,8 @@ export class DocumentsService {
         data: doc.data as Prisma.InputJsonValue,
         templateId: doc.templateId,
         pageSize: doc.pageSize,
+        headerText: doc.headerText,
+        footerText: doc.footerText,
         label,
         createdById: userId,
       },
@@ -409,6 +415,8 @@ export class DocumentsService {
         data: doc.data as Prisma.InputJsonValue,
         templateId: doc.templateId,
         pageSize: doc.pageSize,
+        headerText: doc.headerText,
+        footerText: doc.footerText,
         label: 'Auto-snapshot before restore',
         createdById: userId,
       },
@@ -419,6 +427,8 @@ export class DocumentsService {
         data: version.data as Prisma.InputJsonValue,
         templateId: version.templateId,
         pageSize: version.pageSize,
+        headerText: version.headerText,
+        footerText: version.footerText,
       },
       include: {
         documentType: true,
@@ -515,6 +525,8 @@ export class DocumentsService {
       pageSize: doc.pageSize,
       language: doc.language,
       jurisdiction: doc.jurisdiction,
+      headerText: doc.headerText,
+      footerText: doc.footerText,
     };
   }
 

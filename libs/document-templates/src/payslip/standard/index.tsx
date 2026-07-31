@@ -12,6 +12,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<PayslipData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const cellH: React.CSSProperties = {
@@ -46,7 +48,7 @@ function Detail({ label, value }: { label: string; value?: string }) {
  * Earnings and deductions render side-by-side; net pay is shown in figures and
  * (for INR) in words. No statutory citations are authored.
  */
-export function PayslipStandard({ data, pageSize }: Props) {
+export function PayslipStandard({ data, pageSize, headerText, footerText }: Props) {
   const meta = data.payslip;
   const employer = data.employer;
   const employee = data.employee;
@@ -70,7 +72,7 @@ export function PayslipStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', marginBottom: '2pt' }}>
           {employer?.name || '[Employer name]'}
         </h1>

@@ -7,6 +7,7 @@ export {
   type PageSizeKey,
   type PageProfile,
 } from './_internals/page-sizes';
+export { resolvePageChromeText } from './_internals/page-chrome';
 export {
   splitHtmlOnPageBreaks,
   paginateChunks,

@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<InvoiceData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 interface ComputedLine {
@@ -121,7 +123,7 @@ function compute(data: Partial<InvoiceData>) {
  * GST summary (CGST/SGST or IGST), amount in words (INR), payment details, and
  * notes/terms. No statutory citations are authored.
  */
-export function InvoiceStandard({ data, pageSize }: Props) {
+export function InvoiceStandard({ data, pageSize, headerText, footerText }: Props) {
   const inv = data.invoice;
   const seller = data.seller;
   const buyer = data.buyer;
@@ -146,7 +148,7 @@ export function InvoiceStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           {title}
         </h1>

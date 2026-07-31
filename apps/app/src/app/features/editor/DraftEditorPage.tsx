@@ -173,9 +173,12 @@ export function DraftEditorPage() {
             pageSize: doc.pageSize,
             fontFamily: data.fontFamily,
             fields: data.fields,
+            headerText: doc.headerText,
+            footerText: doc.footerText,
           },
           onSave: handleSave,
           onPageSizeChange: (size) => patch.mutate({ pageSize: size }),
+          onHeaderFooterChange: (v) => patch.mutate(v),
           savedAt,
           saving: patch.isPending,
         }}

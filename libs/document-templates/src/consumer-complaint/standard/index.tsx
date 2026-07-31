@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<ConsumerComplaintData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /** Filing section + commission long-name by forum tier. */
@@ -47,7 +49,7 @@ const GRIEVANCE_LABEL: Record<string, string> = {
  * consideration paid; §69 limitation; §39 reliefs. Editable values use
  * <EditableField/> (click-to-edit in preview, plain in the PDF).
  */
-export function ConsumerComplaintStandard({ data, pageSize }: Props) {
+export function ConsumerComplaintStandard({ data, pageSize, headerText, footerText }: Props) {
   const forumKey = data.forum ?? 'district';
   const forum = FORUM[forumKey] ?? FORUM.district;
   const complainant = data.complainant;
@@ -61,7 +63,7 @@ export function ConsumerComplaintStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center' }}>
           BEFORE THE{' '}
           <EditableField

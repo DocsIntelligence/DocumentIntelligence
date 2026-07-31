@@ -12,6 +12,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<PromissoryNoteData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * demand / fixed-date payment term, plus a revenue-stamp affixation note.
  * Editable inline values use <EditableField/>.
  */
-export function PromissoryNoteStandard({ data, pageSize }: Props) {
+export function PromissoryNoteStandard({ data, pageSize, headerText, footerText }: Props) {
   const note = data.note;
   const maker = data.maker;
   const payee = data.payee;
@@ -76,7 +78,7 @@ export function PromissoryNoteStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Promissory Note
         </h1>

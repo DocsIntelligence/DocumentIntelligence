@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<PowerOfAttorneyData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * clause, duration, and an execution block with witnesses. Notes that a PoA
  * cannot be eSigned (IT Act Schedule 1). No statutory section numbers authored.
  */
-export function PowerOfAttorneyStandard({ data, pageSize }: Props) {
+export function PowerOfAttorneyStandard({ data, pageSize, headerText, footerText }: Props) {
   const poa = data.poa;
   const principal = data.principal;
   const attorney = data.attorney;
@@ -72,7 +74,7 @@ export function PowerOfAttorneyStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           {type} Power of Attorney
         </h1>

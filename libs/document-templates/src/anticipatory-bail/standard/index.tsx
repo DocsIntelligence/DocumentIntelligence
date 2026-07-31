@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<AnticipatoryBailData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const COURT: Record<string, { heading: string; fallback: string }> = {
@@ -22,7 +24,7 @@ const COURT: Record<string, { heading: string; fallback: string }> = {
  * conditions in the prayer. Editable values use <EditableField/> (click-to-edit
  * in preview, plain in the PDF).
  */
-export function AnticipatoryBailStandard({ data, pageSize }: Props) {
+export function AnticipatoryBailStandard({ data, pageSize, headerText, footerText }: Props) {
   const courtKey = data.court ?? 'sessions';
   const court = COURT[courtKey] ?? COURT.sessions;
   const applicant = data.applicant;
@@ -37,7 +39,7 @@ export function AnticipatoryBailStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center' }}>
           {court.heading}
           {data.courtName ? '' : data.state ? `, ${data.state.toUpperCase()}` : ''}

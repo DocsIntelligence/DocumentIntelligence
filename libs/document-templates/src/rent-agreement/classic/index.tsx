@@ -13,6 +13,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<RentAgreementData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * wrapped value becomes click-to-edit and posts an event up to the
  * builder shell. PDF/Puppeteer rendering uses editable=false → plain text.
  */
-export function RentAgreementClassic({ data, pageSize }: Props) {
+export function RentAgreementClassic({ data, pageSize, headerText, footerText }: Props) {
   const ll = data.parties?.landlord;
   const tn = data.parties?.tenant;
   const prop = data.property;
@@ -40,7 +42,7 @@ export function RentAgreementClassic({ data, pageSize }: Props) {
     <>
       <PagePrintStyles pageSize={pageSize} />
       <StampPaperFrame pageSize={pageSize}>
-        <Paginator pageSize={pageSize}>
+        <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
           <h1>Rent Agreement</h1>
 
           <p>

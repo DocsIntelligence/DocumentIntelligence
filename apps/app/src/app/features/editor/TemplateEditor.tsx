@@ -87,6 +87,7 @@ import { htmlToMarkdown, renderMarkdown } from './markdown/markdown';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../lib/languages';
 import { PageSizeSelect } from '../../lib/page-sizes';
 import { DocumentFontSelect } from '../../lib/document-fonts';
+import { HeaderFooterDialog } from '../../lib/header-footer-dialog';
 import type { PageSizeKey } from '@org/document-templates';
 
 const DEFAULT_TEMPLATE_ID = 'rent-agreement';
@@ -130,10 +131,18 @@ export type EditorPersistence =
         fields?: PlaceholderDef[];
         /** Markdown source (markdown mode) — the editor derives `html` from it. */
         markdown?: string;
+        /** Repeated on every printed page — see `HeaderFooterDialog`. */
+        headerText?: string | null;
+        footerText?: string | null;
       };
       onSave: (s: EditorDraftState) => void;
       /** Called when the user changes the paper size (bound mode persists it). */
       onPageSizeChange?: (size: PageSizeKey) => void;
+      /** Called when the user changes the header/footer text (bound mode persists it). */
+      onHeaderFooterChange?: (values: {
+        headerText: string;
+        footerText: string;
+      }) => void;
       savedAt?: number | null;
       saving?: boolean;
     };
@@ -219,6 +228,8 @@ function TemplateEditorInner({
     savedAt: number | null;
     pageSize: PageSizeKey;
     fontFamily?: string;
+    headerText?: string;
+    footerText?: string;
   }>(() => {
     if (persistence.mode === 'bound') {
       const md = persistence.initial.markdown ?? '';
@@ -236,6 +247,8 @@ function TemplateEditorInner({
         savedAt: persistence.savedAt ?? null,
         pageSize: persistence.initial.pageSize ?? 'a4',
         fontFamily: persistence.initial.fontFamily,
+        headerText: persistence.initial.headerText ?? undefined,
+        footerText: persistence.initial.footerText ?? undefined,
       };
     }
     // Local scratchpad. In markdown mode we never load a gallery template —
@@ -278,6 +291,12 @@ function TemplateEditorInner({
   const [fontFamily, setFontFamily] = useState<string | undefined>(
     init.fontFamily,
   );
+  const [headerText, setHeaderText] = useState<string | undefined>(
+    init.headerText,
+  );
+  const [footerText, setFooterText] = useState<string | undefined>(
+    init.footerText,
+  );
 
   // Markdown mode: the Markdown text is canonical; keep the derived `html`
   // (used by the preview, export, AI revise, and persistence) in sync with it.
@@ -289,6 +308,15 @@ function TemplateEditorInner({
     (size: PageSizeKey) => {
       setPageSize(size);
       if (persistence.mode === 'bound') persistence.onPageSizeChange?.(size);
+    },
+    [persistence],
+  );
+  const handleHeaderFooterChange = useCallback(
+    (v: { headerText: string; footerText: string }) => {
+      setHeaderText(v.headerText);
+      setFooterText(v.footerText);
+      if (persistence.mode === 'bound')
+        persistence.onHeaderFooterChange?.(v);
     },
     [persistence],
   );
@@ -1305,6 +1333,8 @@ function TemplateEditorInner({
       values={values}
       pageSize={pageSize}
       fontFamily={fontFamily}
+      headerText={headerText}
+      footerText={footerText}
       appendHtml={previewAppendHtml}
       activePage={activePage}
       onSelectPage={handleJumpToPage}
@@ -1487,6 +1517,13 @@ function TemplateEditorInner({
           <div className="ml-auto flex flex-none items-center gap-2 pl-2">
             <DocumentFontSelect value={fontFamily} onChange={setFontFamily} />
             <PageSizeSelect value={pageSize} onChange={handlePageSizeChange} />
+            {documentId && (
+              <HeaderFooterDialog
+                headerText={headerText}
+                footerText={footerText}
+                onSave={handleHeaderFooterChange}
+              />
+            )}
             <LayoutPresetGroup
               showSidebar={showSidebar}
               showPreview={showPreview}

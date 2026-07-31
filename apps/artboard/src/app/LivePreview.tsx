@@ -29,6 +29,8 @@ interface PreviewState {
   componentKey: string;
   data: unknown;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const DEFAULT_STATE: PreviewState = {
@@ -67,9 +69,10 @@ export function LivePreview() {
         return;
       }
       if (msg.type !== 'doc:update') return;
-      const { componentKey, data, pageSize } = msg.payload ?? {};
+      const { componentKey, data, pageSize, headerText, footerText } =
+        msg.payload ?? {};
       if (!componentKey || !pageSize) return;
-      setState({ componentKey, data, pageSize });
+      setState({ componentKey, data, pageSize, headerText, footerText });
     }
     window.addEventListener('message', onMessage);
     window.parent?.postMessage({ type: 'artboard:ready' }, '*');
@@ -122,6 +125,8 @@ export function LivePreview() {
         componentKey={state.componentKey}
         data={state.data}
         pageSize={state.pageSize}
+        headerText={state.headerText}
+        footerText={state.footerText}
         editable
         onFieldClick={onFieldClick}
       />

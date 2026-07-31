@@ -14,6 +14,8 @@ const CreateDocumentSchema = z.object({
   pageSize: PageSizeEnum.optional(),
   language: z.string().min(2).max(8).optional(),
   jurisdiction: z.string().min(2).max(16).optional(),
+  headerText: z.string().max(300).optional(),
+  footerText: z.string().max(300).optional(),
   data: z.record(z.string(), z.unknown()).default({}),
   ownerOrgId: z.string().cuid().optional(),
   /** When set, the new document is filed into this group on creation. */
@@ -30,6 +32,8 @@ const PatchDocumentSchema = z.object({
   pageSize: PageSizeEnum.optional(),
   language: z.string().min(2).max(8).optional(),
   jurisdiction: z.string().min(2).max(16).optional(),
+  headerText: z.string().max(300).optional(),
+  footerText: z.string().max(300).optional(),
   templateKey: z.string().min(1).optional(),
   status: DocumentStatusEnum.optional(),
 });

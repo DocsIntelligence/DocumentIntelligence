@@ -3975,3 +3975,64 @@ existing shell instead of a bespoke component — only the center editor/preview
   column. Added `documentTemplateLabel()` (markdown → "Markdown", else template name) and applied it to both
   the picker and link title cells. Verified against the DB: markdown docs store `data.format='markdown'`
   (rich-text/AI freeform docs have none, so they correctly stay "Freeform").
+
+## 2026-07-30 — Insert a page image (e.g. E-Stamp scan) in the freeform editor; repeating header/footer on every printed page
+
+Two independent units.
+
+**1. Insert a full-page image in the freeform editor** (e.g. a scanned E-Stamp certificate, ID proof —
+anything that should occupy its own printed page). No image support existed at all before this (no
+`@tiptap/extension-image`, no upload flow).
+
+- Backend: `DocumentsService.uploadPageImage(userId, id, file)` (validates ownership/lock/mimetype/15MB
+  cap, then `StorageService.upload()` under `documents/{id}/pages/`) + `POST /documents/:id/page-images`
+  (multipart, mirrors `StorageController.upload()`'s shape). No new Prisma model — the image is just an
+  `<img>` inside `Document.data.html`, saved via the existing PATCH autosave.
+- Frontend: new `PageImageExtension` (`libs/shared/ui/.../rich-text-editor/page-image-extension.ts`, wraps
+  `@tiptap/extension-image`) registered in `TemplateEditor`'s `useEditor`; a toolbar "Page Image" button
+  uploads via a hidden file input, then inserts `pageBreak + image + pageBreak + paragraph` as **one**
+  `insertContentAt(pos, [...])` call at a position captured at click time (not `.focus()`-relative) — the
+  three-separate-chained-commands version silently failed to insert at document position 0 (ProseMirror
+  re-resolves "current selection" oddly there after the async upload gap).
+- Two production bugs found via live debugging (not caught by typecheck/build):
+  - Helmet's default `Cross-Origin-Resource-Policy: same-origin` on every API response blocked the
+    cross-origin `<img>` load from the app (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`) — relaxed to
+    `cross-origin` in `apps/api/src/main.ts` (images/PDFs are meant to be embedded from a different origin;
+    unauthenticated JSON responses aren't meaningfully embeddable anyway).
+  - The image still didn't render in exported PDFs even after that: `CHROME_URL` is set (Browserless runs
+    in Docker, confirmed via `docker-compose.yml`), and `pdf-renderer.service.ts` already rewrote the
+    *artboard* URL's `localhost` → `host.docker.internal` for exactly this reason, but never rewrote asset
+    URLs *embedded in the document content*. New `rewriteAssetUrlsForRemoteBrowser()` applies the same
+    rewrite to the whole render payload before injecting it into the Puppeteer page.
+
+**2. Repeating header/footer text on every printed page** (plain text + `{{pageNumber}}`/`{{totalPages}}`
+placeholders), across **all** document types — freeform and every structured `DocumentTypeBundle` template.
+
+- Follows the exact `pageSize`/`language`/`jurisdiction` precedent: new top-level `Document.headerText` /
+  `Document.footerText` columns (also on `DocumentVersion`, so snapshot/restore stay consistent) —
+  **not** inside `data`, since `data`'s shape is per-document-type and there's no shared schema across the
+  freeform schema and the ~17 structured `DocumentTypeBundle` schemas. Migration:
+  `20260730082032_document_header_footer`. Threaded through `PatchDocumentDto`/`CreateDocumentDto` →
+  `DocumentsService` (create/patch/snapshot/restoreVersion/renderPayload) → `TemplateProps` (new sibling
+  fields to `pageSize`) → `TemplateRenderer` → `Paginator`/`freeform/index.tsx` (the only two places that
+  construct `<Page>`) → all 17 structured template `index.tsx` files (one mechanical line each: forward to
+  `<Paginator>`, same as they already forward `pageSize`).
+- `Page.tsx` (`libs/document-templates/_internals`): new top-center header div (only rendered when
+  `headerText` is set); the existing bottom-right footer div now resolves `footerText` (via new
+  `resolvePageChromeText()` helper) but **falls back to the original hardcoded "Page N of M"** when unset —
+  zero behavior change for documents that don't opt in.
+- Artboard: PDF export path threads `headerText`/`footerText` as short URL query params on the artboard
+  render URL (mirrors how `pageSize` already rides the URL there — the full `data` blob deliberately does
+  *not*, per the existing HTTP-431 comment in `pdf-renderer.service.ts`); the live iframe preview path
+  threads them through the `doc:update` postMessage payload (`ArtboardIframe.tsx` → `LivePreview.tsx`).
+  The freeform editor's own `PaginatedPreview.tsx` (doesn't reuse `<Page>`) got matching header/footer divs
+  using the same `resolvePageChromeText()` helper, to stay pixel-consistent with the exported PDF.
+- New shared `HeaderFooterDialog` (`apps/app/src/app/lib/header-footer-dialog.tsx`, self-contained
+  trigger+Dialog, mirrors `PageSizeSelect`'s "drop into a toolbar" ergonomics) wired into both
+  `TemplateEditor` (freeform, next to `PageSizeSelect`) and `BuilderShell` (structured docs, same spot) —
+  this is what makes the feature reach every document type, not just freeform.
+- Verified: `@org/app`/`@org/artboard` typecheck ✓, `@org/api` build ✓, `@org/document-templates` lint ✓
+  (0 new errors/warnings across all 17 patched template files), `pnpm prisma:migrate:dev` applied cleanly.
+  **Not yet manually verified in a running browser** — the Chrome extension bridge wasn't connected this
+  session; needs a live pass (freeform header/footer in editor+preview+PDF, then one structured doc type
+  e.g. rent-agreement via its Builder) before calling this fully done.

@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<ReceiptData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const MODE_LABEL: Record<string, string> = {
@@ -24,7 +26,7 @@ const MODE_LABEL: Record<string, string> = {
  * acknowledgement, with amount in words (INR), payment mode + reference, and an
  * optional running balance for part payments. No statutory citations.
  */
-export function ReceiptStandard({ data, pageSize }: Props) {
+export function ReceiptStandard({ data, pageSize, headerText, footerText }: Props) {
   const r = data.receipt;
   const payer = data.payer;
   const payee = data.payee;
@@ -40,7 +42,7 @@ export function ReceiptStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Receipt
         </h1>

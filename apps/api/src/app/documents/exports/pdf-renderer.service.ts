@@ -69,7 +69,7 @@ export class PdfRendererService {
     // in-container hostname resolution we moved away from).
     const doc = await this.db.document.findUnique({
       where: { id: documentId },
-      select: { data: true, title: true },
+      select: { data: true, title: true, headerText: true, footerText: true },
     });
     if (!doc) {
       await this.fail(exportId, `Document ${documentId} not found`);
@@ -102,9 +102,15 @@ export class PdfRendererService {
         ? '&paginationDebug=1'
         : '';
 
+    // Short strings — safe on the URL, unlike the full document `data`
+    // (see the HTTP 431 note above for why that one is injected instead).
+    const chromeQs =
+      (doc.headerText ? `&headerText=${encodeURIComponent(doc.headerText)}` : '') +
+      (doc.footerText ? `&footerText=${encodeURIComponent(doc.footerText)}` : '');
+
     const url = `${artboardUrl.replace(/\/$/, '')}/render/${encodeURIComponent(
       componentKey,
-    )}?pageSize=${encodeURIComponent(pageSize)}${debugQs}`;
+    )}?pageSize=${encodeURIComponent(pageSize)}${chromeQs}${debugQs}`;
 
     let acquired: { browser: Browser; dispose: () => Promise<void> } | null =
       null;

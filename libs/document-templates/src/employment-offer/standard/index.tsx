@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<EmploymentOfferData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -32,7 +34,7 @@ const EMPLOYMENT_LABEL: Record<string, string> = {
  * the candidate, with role, compensation, numbered terms, and acceptance
  * blocks. No statutory citations — the terms are contractual.
  */
-export function EmploymentOfferStandard({ data, pageSize }: Props) {
+export function EmploymentOfferStandard({ data, pageSize, headerText, footerText }: Props) {
   const offer = data.offer;
   const company = data.company;
   const candidate = data.candidate;
@@ -52,7 +54,7 @@ export function EmploymentOfferStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <section>
           <p style={{ textAlign: 'right' }}>
             <EditableField

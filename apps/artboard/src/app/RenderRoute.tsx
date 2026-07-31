@@ -24,6 +24,8 @@ import { useParams, useSearchParams } from 'react-router-dom';
 interface RenderState {
   data: unknown;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const VALID_PAGE_SIZES: PageSizeKey[] = [
@@ -68,13 +70,22 @@ export function RenderRoute() {
       const pageSize: PageSizeKey = isPageSize(pageSizeParam)
         ? pageSizeParam
         : 'a4';
+      // Short strings — safe on the URL, unlike the full document `data`
+      // (see the HTTP 431 note above for why that one is injected instead).
+      const headerText = search.get('headerText') ?? undefined;
+      const footerText = search.get('footerText') ?? undefined;
 
       try {
         // Preferred path: the PDF worker injects the data as a global before
         // any script runs (no URL size limit → no HTTP 431 on big docs).
         if (window.__ARTBOARD_DATA__ !== undefined) {
           if (!cancelled)
-            setState({ data: window.__ARTBOARD_DATA__, pageSize });
+            setState({
+              data: window.__ARTBOARD_DATA__,
+              pageSize,
+              headerText,
+              footerText,
+            });
           return;
         }
 
@@ -84,7 +95,8 @@ export function RenderRoute() {
           // on a clean base64 alphabet — but we recommend URL-encoded
           // JSON going forward (set by pdf-renderer.service.ts).
           const json = JSON.parse(decodeURIComponent(dataParam));
-          if (!cancelled) setState({ data: json, pageSize });
+          if (!cancelled)
+            setState({ data: json, pageSize, headerText, footerText });
           return;
         }
 
@@ -104,7 +116,12 @@ export function RenderRoute() {
         if (!res.ok) throw new Error(`API ${res.status}`);
         const body = await res.json();
         if (!cancelled) {
-          setState({ data: body.data, pageSize: body.pageSize ?? pageSize });
+          setState({
+            data: body.data,
+            pageSize: body.pageSize ?? pageSize,
+            headerText: body.headerText ?? headerText,
+            footerText: body.footerText ?? footerText,
+          });
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -169,6 +186,8 @@ export function RenderRoute() {
       componentKey={componentKey}
       data={state.data}
       pageSize={state.pageSize}
+      headerText={state.headerText}
+      footerText={state.footerText}
     />
   );
 }

@@ -16,6 +16,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<CreditNoteData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * reuses the shared invoice compute engine and parts. The heading and the
  * "amount credited/debited" wording branch on noteType. No statutory citations.
  */
-export function CreditNoteStandard({ data, pageSize }: Props) {
+export function CreditNoteStandard({ data, pageSize, headerText, footerText }: Props) {
   const n = data.note;
   const seller = data.seller;
   const buyer = data.buyer;
@@ -45,7 +47,7 @@ export function CreditNoteStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           {title}
         </h1>

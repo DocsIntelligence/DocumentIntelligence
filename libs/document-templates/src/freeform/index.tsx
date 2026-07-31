@@ -64,6 +64,8 @@ const useIsomorphicLayoutEffect =
 export function FreeformDocument({
   data,
   pageSize,
+  headerText,
+  footerText,
 }: TemplateProps<FreeformData>) {
   const profile = pageProfiles[pageSize];
   const values = data?.values ?? {};
@@ -162,6 +164,8 @@ export function FreeformDocument({
           isFirst={i === 0}
           pageNumber={i + 1}
           totalPages={pages.length}
+          headerText={headerText}
+          footerText={footerText}
         >
           <div dangerouslySetInnerHTML={{ __html: pageHtml }} />
         </Page>

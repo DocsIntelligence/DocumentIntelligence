@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<NdaData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const ENTITY_DESC: Record<string, string> = {
@@ -31,7 +33,7 @@ const ENTITY_DESC: Record<string, string> = {
  * Editable inline values use <EditableField/> (click-to-edit in preview, plain
  * in the PDF).
  */
-export function NdaStandard({ data, pageSize }: Props) {
+export function NdaStandard({ data, pageSize, headerText, footerText }: Props) {
   const ag = data.agreement;
   const a = data.partyA;
   const b = data.partyB;
@@ -88,7 +90,7 @@ export function NdaStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Non-Disclosure Agreement
         </h1>

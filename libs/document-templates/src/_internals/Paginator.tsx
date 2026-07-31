@@ -14,6 +14,10 @@ interface PaginatorProps {
   children: ReactNode;
   /** Header element repeated above content from page 2 onward. */
   continuedHeader?: ReactNode;
+  /** Repeated on every page (top, centered); supports `{{pageNumber}}` / `{{totalPages}}`. */
+  headerText?: string;
+  /** Repeated on every page (bottom-right); falls back to "Page N of M" when empty. */
+  footerText?: string;
 }
 
 /**
@@ -33,6 +37,8 @@ export function Paginator({
   pageSize,
   children,
   continuedHeader,
+  headerText,
+  footerText,
 }: PaginatorProps) {
   const profile = pageProfiles[pageSize];
   const childArray = Children.toArray(children);
@@ -110,6 +116,8 @@ export function Paginator({
           isFirst={i === 0}
           pageNumber={i + 1}
           totalPages={pages.length}
+          headerText={headerText}
+          footerText={footerText}
         >
           {i > 0 && continuedHeader}
           {blocks}

@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<AffidavitData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 const ID_LABEL: Record<string, string> = {
@@ -52,7 +54,7 @@ const ATTESTOR_LINE: Record<string, string> = {
  * Editable values use <EditableField/> (click-to-edit in preview, plain text in
  * the PDF/Puppeteer path).
  */
-export function AffidavitDefault({ data, pageSize }: Props) {
+export function AffidavitDefault({ data, pageSize, headerText, footerText }: Props) {
   const dep = data.deponent;
   const decl = data.declaration;
   const attestationType = data.attestation?.type ?? 'notary';
@@ -65,7 +67,7 @@ export function AffidavitDefault({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textDecoration: 'underline' }}>
           {heading}
         </h1>

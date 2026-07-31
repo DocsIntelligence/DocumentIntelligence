@@ -459,6 +459,8 @@ model Document {
   pageSize       PageSize          @default(a4)
   language       String            @default("en")
   jurisdiction   String?
+  headerText     String?
+  footerText     String?
   lockedAt       DateTime?
   groupId        String?
   createdAt      DateTime          @default(now())
@@ -515,6 +517,8 @@ model DocumentVersion {
   data        Json
   templateId  String
   pageSize    PageSize
+  headerText  String?
+  footerText  String?
   label       String?
   createdById String?
   createdAt   DateTime @default(now())

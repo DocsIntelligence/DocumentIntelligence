@@ -24,6 +24,8 @@ export function TemplateRenderer<T = unknown>({
   componentKey,
   data,
   pageSize,
+  headerText,
+  footerText,
   editable = false,
   onFieldClick,
 }: RendererProps<T>) {
@@ -40,7 +42,12 @@ export function TemplateRenderer<T = unknown>({
   }
   return (
     <EditContextProvider editable={editable} onFieldClick={onFieldClick}>
-      <C data={data} pageSize={pageSize} />
+      <C
+        data={data}
+        pageSize={pageSize}
+        headerText={headerText}
+        footerText={footerText}
+      />
     </EditContextProvider>
   );
 }

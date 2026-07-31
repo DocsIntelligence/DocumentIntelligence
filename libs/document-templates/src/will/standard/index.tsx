@@ -8,6 +8,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<WillData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * residue, guardianship, funeral wishes, and a two-witness attestation block.
  * Schedule-1: must be printed and signed by hand. No statutory text authored.
  */
-export function WillStandard({ data, pageSize }: Props) {
+export function WillStandard({ data, pageSize, headerText, footerText }: Props) {
   const meta = data.will;
   const t = data.testator;
   const exec = data.executor;
@@ -43,7 +45,7 @@ export function WillStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Last Will and Testament
         </h1>

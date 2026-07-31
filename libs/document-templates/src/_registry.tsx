@@ -29,6 +29,10 @@ import { FreeformDocument } from './freeform';
 export interface TemplateProps<TData = unknown> {
   data: TData;
   pageSize: PageSizeKey;
+  /** Repeated on every page (top, centered); supports `{{pageNumber}}` / `{{totalPages}}`. */
+  headerText?: string;
+  /** Repeated on every page (bottom-right); falls back to "Page N of M" when empty. */
+  footerText?: string;
 }
 
 export type TemplateComponent<TData = unknown> = ComponentType<

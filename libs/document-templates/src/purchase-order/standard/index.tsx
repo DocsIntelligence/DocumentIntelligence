@@ -16,6 +16,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<PurchaseOrderData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -24,7 +26,7 @@ interface Props {
  * issuing buyer, the vendor, a ship-to/required-by, the line items, totals, and
  * terms. No statutory citations are authored.
  */
-export function PurchaseOrderStandard({ data, pageSize }: Props) {
+export function PurchaseOrderStandard({ data, pageSize, headerText, footerText }: Props) {
   const po = data.po;
   const buyer = data.buyer;
   const vendor = data.vendor;
@@ -45,7 +47,7 @@ export function PurchaseOrderStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Purchase Order
         </h1>

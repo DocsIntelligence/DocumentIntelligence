@@ -16,6 +16,8 @@ import type { PageSizeKey } from '../../_internals/page-sizes';
 interface Props {
   data: Partial<QuotationData>;
   pageSize: PageSizeKey;
+  headerText?: string;
+  footerText?: string;
 }
 
 /**
@@ -24,7 +26,7 @@ interface Props {
  * items. Differs from an invoice: a "valid until" date, no payment/balance, and
  * a "Quotation"/"Estimate" heading. No statutory citations are authored.
  */
-export function QuotationStandard({ data, pageSize }: Props) {
+export function QuotationStandard({ data, pageSize, headerText, footerText }: Props) {
   const q = data.quote;
   const seller = data.seller;
   const buyer = data.buyer;
@@ -45,7 +47,7 @@ export function QuotationStandard({ data, pageSize }: Props) {
   return (
     <>
       <PagePrintStyles pageSize={pageSize} />
-      <Paginator pageSize={pageSize}>
+      <Paginator pageSize={pageSize} headerText={headerText} footerText={footerText}>
         <h1 style={{ textAlign: 'center', textTransform: 'uppercase' }}>
           Quotation
         </h1>

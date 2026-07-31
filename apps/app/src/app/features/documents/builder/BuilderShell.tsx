@@ -22,6 +22,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DEFAULT_LANGUAGE, LanguageSelect } from '../../../lib/languages';
 import { PageSizeSelect } from '../../../lib/page-sizes';
+import { HeaderFooterDialog } from '../../../lib/header-footer-dialog';
 import { ViewOriginalButton } from '../../intelligence/ViewOriginalButton';
 import { SignaturesDialog } from '../SignaturesDialog';
 import { CommentsPanel } from '../CommentsPanel';
@@ -567,6 +568,8 @@ export function BuilderShell({ documentId }: Props) {
         pageSize={doc.pageSize}
         language={doc.language}
         jurisdiction={doc.jurisdiction}
+        headerText={doc.headerText}
+        footerText={doc.footerText}
         onFieldClick={(event, iframeRect) =>
           setInlineEdit({ event, iframeRect })
         }
@@ -704,6 +707,11 @@ export function BuilderShell({ documentId }: Props) {
             <PageSizeSelect
               value={doc.pageSize}
               onChange={(size) => patchMutate({ pageSize: size })}
+            />
+            <HeaderFooterDialog
+              headerText={doc.headerText}
+              footerText={doc.footerText}
+              onSave={(v) => patchMutate(v)}
             />
             <LayoutPresetGroup
               showSidebar={showSidebar}

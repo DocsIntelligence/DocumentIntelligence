@@ -18,6 +18,7 @@ import {
   debugMeasure,
   formatPaginationDebug,
   isPaginationDebug,
+  resolvePageChromeText,
   type PageSizeKey,
 } from '@org/document-templates';
 
@@ -35,6 +36,10 @@ export type PaginatedPreviewProps = {
   /** Document-level font (any Google Fonts family). Loaded on demand; applied
    *  via the `--doc-font` CSS var. Must match what the exported PDF uses. */
   fontFamily?: string;
+  /** Repeated on every page (top, centered); supports `{{pageNumber}}` / `{{totalPages}}`. */
+  headerText?: string;
+  /** Repeated on every page (bottom-right); falls back to "Page N of M" when empty. */
+  footerText?: string;
   /** Currently-selected page (0-based) — highlighted and scrolled into view. */
   activePage?: number;
   /** Called when the user clicks a page, so selection stays in sync elsewhere. */
@@ -58,6 +63,8 @@ export function PaginatedPreview({
   pageSize = 'a4',
   appendHtml,
   fontFamily,
+  headerText,
+  footerText,
   activePage,
   onSelectPage,
   className,
@@ -246,10 +253,35 @@ export function PaginatedPreview({
                       Pre-printed stamp area — kept clear
                     </div>
                   )}
+                  {headerText && (
+                    <div
+                      aria-hidden
+                      className="absolute text-center text-[9pt] text-zinc-500"
+                      style={{
+                        top: `${p.marginTopMm / 2}mm`,
+                        left: `${p.marginLeftMm}mm`,
+                        right: `${p.marginRightMm}mm`,
+                      }}
+                    >
+                      {resolvePageChromeText(headerText, i + 1, pages.length)}
+                    </div>
+                  )}
                   <div
                     className="document-preview-page"
                     dangerouslySetInnerHTML={{ __html: pageHtml }}
                   />
+                  <div
+                    aria-hidden
+                    className="absolute text-[9pt] text-zinc-500"
+                    style={{
+                      bottom: `${p.marginBottomMm / 2}mm`,
+                      right: `${p.marginRightMm}mm`,
+                    }}
+                  >
+                    {footerText
+                      ? resolvePageChromeText(footerText, i + 1, pages.length)
+                      : `Page ${i + 1} of ${pages.length}`}
+                  </div>
                 </div>
                 <div className="mt-1.5 text-center text-[11px] font-medium text-foreground/45">
                   Page {i + 1} of {pages.length}

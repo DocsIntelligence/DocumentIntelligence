@@ -53,6 +53,8 @@ export interface DocumentSummary {
   pageSize: PageSize;
   language: string;
   jurisdiction: string | null;
+  headerText: string | null;
+  footerText: string | null;
   documentTypeId: string;
   templateId: string;
   updatedAt: string;
@@ -82,6 +84,8 @@ export interface CreateDocumentPayload {
   pageSize?: PageSize;
   language?: string;
   jurisdiction?: string;
+  headerText?: string;
+  footerText?: string;
   data?: Record<string, unknown>;
   ownerOrgId?: string;
   /** File the new document into this group on creation. */
@@ -94,6 +98,8 @@ export interface PatchDocumentPayload {
   pageSize?: PageSize;
   language?: string;
   jurisdiction?: string;
+  headerText?: string;
+  footerText?: string;
   templateKey?: string;
   status?: DocumentStatus;
 }
